@@ -1,6 +1,6 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -10,6 +10,7 @@ import { GlobalSearch } from "@/components/global-search";
 import { NotificationCenter } from "@/components/notification-center";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Competencies from "@/pages/competencies";
 import Courses from "@/pages/courses";
@@ -33,6 +34,19 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/certificates": "Sertifikat",
   "/app/analytics": "Analitik & Laporan",
 };
+
+function useCurrentUser() {
+  return useQuery({
+    queryKey: ["/api/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json() as Promise<{ id: string; username: string }>;
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
+}
 
 function AppRouter() {
   return (
@@ -86,14 +100,41 @@ function AppLayout() {
   );
 }
 
+function ProtectedApp() {
+  const { data: user, isLoading } = useCurrentUser();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  return <AppLayout />;
+}
+
 function App() {
   const [location] = useLocation();
   const isLanding = location === "/";
+  const isLogin = location === "/login";
+  const isApp = location.startsWith("/app");
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {isLanding ? <Landing /> : <AppLayout />}
+        {isLanding && <Landing />}
+        {isLogin && <Login />}
+        {isApp && <ProtectedApp />}
+        {!isLanding && !isLogin && !isApp && (
+          <Switch>
+            <Route component={NotFound} />
+          </Switch>
+        )}
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

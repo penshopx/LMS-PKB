@@ -1,7 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import createMemoryStore from "memorystore";
+import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { setupPassport, ensureAdminUser } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +25,21 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+const MemoryStore = createMemoryStore(session);
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "ecourse-secret-fallback",
+    resave: false,
+    saveUninitialized: false,
+    store: new MemoryStore({ checkPeriod: 86400000 }),
+    cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, sameSite: "lax" },
+  })
+);
+
+setupPassport();
+app.use(passport.initialize());
+app.use(passport.session());
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -63,6 +82,9 @@ app.use((req, res, next) => {
   // Seed the database with initial data if empty
   const { seedDatabase } = await import("./seed");
   await seedDatabase();
+
+  // Ensure a default admin user exists
+  await ensureAdminUser();
 
   await registerRoutes(httpServer, app);
 

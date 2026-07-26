@@ -10,9 +10,12 @@ import {
   ClipboardCheck,
   FileCheck,
   FileQuestion,
-  BarChart3
+  BarChart3,
+  LogOut
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import {
   Sidebar,
   SidebarContent,
@@ -84,6 +87,31 @@ const certificationMenu = [
     icon: FileCheck,
   },
 ];
+
+function LogoutButton() {
+  const [, navigate] = useLocation();
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/logout", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Logout failed");
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      navigate("/login");
+    },
+  });
+
+  return (
+    <button
+      onClick={() => logoutMutation.mutate()}
+      disabled={logoutMutation.isPending}
+      className="flex items-center gap-2 text-xs text-muted-foreground hover:text-destructive transition-colors w-full"
+    >
+      <LogOut className="h-3 w-3" />
+      <span>{logoutMutation.isPending ? "Keluar..." : "Keluar"}</span>
+    </button>
+  );
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
@@ -172,11 +200,12 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
+      <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Settings className="h-3 w-3" />
           <span>E-Course Builder v1.0</span>
         </div>
+        <LogoutButton />
       </SidebarFooter>
     </Sidebar>
   );
