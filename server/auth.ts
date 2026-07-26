@@ -2,9 +2,12 @@ import { scrypt, randomBytes, timingSafeEqual, randomUUID } from "crypto";
 import { promisify } from "util";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import type { Express, RequestHandler } from "express";
 import type { User } from "@shared/schema";
 
 const scryptAsync = promisify(scrypt);
@@ -25,6 +28,11 @@ export async function comparePassword(supplied: string, stored: string): Promise
 export async function getUserByUsername(username: string): Promise<User | undefined> {
   const rows = await db.select().from(users).where(eq(users.username, username));
   return rows[0];
+}
+
+export async function getUserById(id: string): Promise<User | undefined> {
+  const [user] = await db.select().from(users).where(eq(users.id, id));
+  return user;
 }
 
 export async function createUser(username: string, password: string): Promise<User> {
@@ -49,14 +57,40 @@ export async function ensureAdminUser(): Promise<void> {
   }
 }
 
-export function setupPassport(): void {
+export function setupAuth(app: Express): void {
+  const PgSession = connectPgSimple(session);
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    throw new Error("SESSION_SECRET environment variable is not set");
+  }
+
+  const sessionSettings: session.SessionOptions = {
+    secret,
+    resave: false,
+    saveUninitialized: false,
+    store: new PgSession({
+      conString: process.env.DATABASE_URL,
+      tableName: "session",
+      createTableIfMissing: true,
+    }),
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
+  };
+
+  app.use(session(sessionSettings));
+
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
         const user = await getUserByUsername(username);
-        if (!user) return done(null, false, { message: "Username tidak ditemukan" });
+        if (!user) return done(null, false, { message: "Username atau password salah" });
         const match = await comparePassword(password, user.password);
-        if (!match) return done(null, false, { message: "Password salah" });
+        if (!match) return done(null, false, { message: "Username atau password salah" });
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -70,10 +104,18 @@ export function setupPassport(): void {
 
   passport.deserializeUser(async (id: string, done) => {
     try {
-      const rows = await db.select().from(users).where(eq(users.id, id));
-      done(null, rows[0] ?? null);
+      const user = await getUserById(id);
+      done(null, user ?? null);
     } catch (err) {
       done(err);
     }
   });
+
+  app.use(passport.initialize());
+  app.use(passport.session());
 }
+
+export const requireAuth: RequestHandler = (req, res, next) => {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ message: "Unauthorized" });
+};

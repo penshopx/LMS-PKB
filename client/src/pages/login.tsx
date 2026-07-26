@@ -33,8 +33,8 @@ export default function Login() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/me"], data);
       navigate("/app");
     },
     onError: (err: Error) => {
@@ -83,6 +83,7 @@ export default function Login() {
                   type="text"
                   placeholder="admin"
                   autoComplete="username"
+                  autoFocus
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={loginMutation.isPending}

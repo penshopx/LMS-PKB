@@ -1,6 +1,7 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import passport from "passport";
+import { requireAuth } from "./auth";
 import { storage } from "./storage";
 import { 
   insertParticipantSchema, 
@@ -19,17 +20,12 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (req.isAuthenticated()) return next();
-  res.status(401).json({ message: "Unauthorized" });
-}
-
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // ============ AUTH ============
+  // ============ AUTH ROUTES (public) ============
   app.get("/api/me", (req, res) => {
     if (req.isAuthenticated()) {
       const user = req.user as any;
