@@ -730,3 +730,239 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// ============================================
+// DATABASE TABLES
+// ============================================
+
+export const clustersTable = pgTable("clusters", {
+  id: varchar("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull(),
+  name: text("name").notNull(),
+  fullName: text("full_name").notNull(),
+  description: text("description").notNull(),
+  color: text("color").notNull(),
+});
+
+export const unitsTable = pgTable("units", {
+  id: varchar("id").primaryKey(),
+  clusterId: varchar("cluster_id").notNull(),
+  code: varchar("code", { length: 20 }).notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  indicators: jsonb("indicators").notNull().$type<BehaviorIndicator[]>(),
+});
+
+export const coursesTable = pgTable("courses", {
+  id: varchar("id").primaryKey(),
+  unitId: varchar("unit_id").notNull(),
+  targetLevel: varchar("target_level", { length: 4 }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  duration: text("duration").notNull(),
+  lessons: jsonb("lessons").notNull().$type<Lesson[]>(),
+  preTestId: varchar("pre_test_id"),
+  postTestId: varchar("post_test_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const participantsTable = pgTable("participants", {
+  id: varchar("id").primaryKey(),
+  nip: text("nip").notNull(),
+  name: text("name").notNull(),
+  position: text("position").notNull(),
+  unit: text("unit").notNull(),
+  email: text("email").notNull(),
+  competencies: jsonb("competencies").notNull().$type<ParticipantCompetency[]>(),
+  learningHistory: jsonb("learning_history").notNull().$type<LearningRecord[]>(),
+  evidences: jsonb("evidences").notNull().$type<Evidence[]>(),
+});
+
+export const learningPathsTable = pgTable("learning_paths", {
+  id: varchar("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  targetRole: text("target_role").notNull(),
+  duration: text("duration").notNull(),
+  difficulty: text("difficulty").notNull(),
+  courseIds: jsonb("course_ids").notNull().$type<string[]>(),
+  prerequisites: jsonb("prerequisites").notNull().$type<string[]>(),
+  skills: jsonb("skills").notNull().$type<string[]>(),
+  isPublished: integer("is_published").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const enrollmentsTable = pgTable("enrollments", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  courseId: varchar("course_id"),
+  learningPathId: varchar("learning_path_id"),
+  enrolledAt: text("enrolled_at").notNull(),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  progress: integer("progress").notNull().default(0),
+  status: text("status").notNull().default("enrolled"),
+  lastAccessedAt: text("last_accessed_at"),
+});
+
+export const quizzesTable = pgTable("quizzes", {
+  id: varchar("id").primaryKey(),
+  courseId: varchar("course_id").notNull(),
+  lessonId: varchar("lesson_id"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  passingScore: integer("passing_score").notNull().default(70),
+  timeLimit: integer("time_limit"),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  shuffleQuestions: integer("shuffle_questions").notNull().default(0),
+  showResults: integer("show_results").notNull().default(1),
+  questions: jsonb("questions").notNull().$type<Question[]>(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const quizAttemptsTable = pgTable("quiz_attempts", {
+  id: varchar("id").primaryKey(),
+  quizId: varchar("quiz_id").notNull(),
+  participantId: varchar("participant_id").notNull(),
+  answers: jsonb("answers").notNull().$type<QuizAnswer[]>(),
+  score: integer("score").notNull(),
+  maxScore: integer("max_score").notNull(),
+  passed: integer("passed").notNull().default(0),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  timeSpent: integer("time_spent"),
+});
+
+export const certificatesTable = pgTable("certificates", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  courseId: varchar("course_id"),
+  learningPathId: varchar("learning_path_id"),
+  assessmentId: varchar("assessment_id"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  certificateNumber: text("certificate_number").notNull().unique(),
+  issuedAt: text("issued_at").notNull(),
+  expiresAt: text("expires_at"),
+  status: text("status").notNull().default("active"),
+  verificationUrl: text("verification_url").notNull(),
+  metadata: jsonb("metadata").notNull().$type<Record<string, string>>(),
+});
+
+export const assessorsTable = pgTable("assessors", {
+  id: varchar("id").primaryKey(),
+  registrationNumber: text("registration_number").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  lspId: varchar("lsp_id").notNull(),
+  competencySchemes: jsonb("competency_schemes").notNull().$type<string[]>(),
+  specializations: jsonb("specializations").notNull().$type<string[]>(),
+  status: text("status").notNull().default("active"),
+  validUntil: text("valid_until").notNull(),
+  totalAssessments: integer("total_assessments").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const assesseesTable = pgTable("assessees", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  nik: text("nik").notNull(),
+  birthPlace: text("birth_place").notNull(),
+  birthDate: text("birth_date").notNull(),
+  gender: text("gender").notNull(),
+  education: text("education").notNull(),
+  workExperience: text("work_experience").notNull(),
+  currentCompany: text("current_company").notNull(),
+  currentPosition: text("current_position").notNull(),
+  schemeId: varchar("scheme_id").notNull(),
+  registrationDate: text("registration_date").notNull(),
+  status: text("status").notNull().default("registered"),
+});
+
+export const schemesTable = pgTable("schemes", {
+  id: varchar("id").primaryKey(),
+  lspId: varchar("lsp_id").notNull(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  skkniCode: text("skkni_code"),
+  unitIds: jsonb("unit_ids").notNull().$type<string[]>(),
+  assessmentMethods: jsonb("assessment_methods").notNull().$type<string[]>(),
+  duration: text("duration").notNull(),
+  fee: integer("fee").notNull().default(0),
+  isActive: integer("is_active").notNull().default(1),
+});
+
+export const schedulesTable = pgTable("schedules", {
+  id: varchar("id").primaryKey(),
+  schemeId: varchar("scheme_id").notNull(),
+  assesseeId: varchar("assessee_id").notNull(),
+  assessorId: varchar("assessor_id").notNull(),
+  scheduledDate: text("scheduled_date").notNull(),
+  location: text("location").notNull(),
+  locationType: text("location_type").notNull(),
+  methods: jsonb("methods").notNull().$type<string[]>(),
+  duration: text("duration").notNull(),
+  status: text("status").notNull().default("scheduled"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const portfolioItemsTable = pgTable("portfolio_items", {
+  id: varchar("id").primaryKey(),
+  assesseeId: varchar("assessee_id").notNull(),
+  unitId: varchar("unit_id").notNull(),
+  elementId: varchar("element_id"),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  fileUrl: text("file_url"),
+  issuedDate: text("issued_date"),
+  issuedBy: text("issued_by"),
+  submittedAt: text("submitted_at").notNull(),
+  reviewedAt: text("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  status: text("status").notNull().default("submitted"),
+  feedback: text("feedback"),
+});
+
+export const certificationResultsTable = pgTable("certification_results", {
+  id: varchar("id").primaryKey(),
+  scheduleId: varchar("schedule_id").notNull(),
+  assesseeId: varchar("assessee_id").notNull(),
+  assessorId: varchar("assessor_id").notNull(),
+  schemeId: varchar("scheme_id").notNull(),
+  unitResults: jsonb("unit_results").notNull().$type<UnitAssessmentResult[]>(),
+  overallResult: text("overall_result").notNull(),
+  recommendations: text("recommendations"),
+  assessedAt: text("assessed_at").notNull(),
+  certificateId: varchar("certificate_id"),
+});
+
+export const lspOrganizationsTable = pgTable("lsp_organizations", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  licenseNumber: text("license_number").notNull(),
+  address: text("address").notNull(),
+  phone: text("phone").notNull(),
+  email: text("email").notNull(),
+  website: text("website"),
+  leadAssessorId: varchar("lead_assessor_id"),
+  competencySchemes: jsonb("competency_schemes").notNull().$type<CompetencyScheme[]>(),
+  status: text("status").notNull().default("active"),
+  validUntil: text("valid_until").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const notificationsTable = pgTable("notifications", {
+  id: varchar("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  link: text("link"),
+  isRead: integer("is_read").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
