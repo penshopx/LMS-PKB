@@ -19,6 +19,9 @@ import {
   certificationResultsTable,
   lspOrganizationsTable,
   notificationsTable,
+  participantCompetenciesTable,
+  evidencesTable,
+  learningRecordsTable,
 } from "@shared/schema";
 import type {
   CompetencyCluster,
@@ -102,7 +105,12 @@ function toCourse(row: typeof coursesTable.$inferSelect): ECourse {
   };
 }
 
-function toParticipant(row: typeof participantsTable.$inferSelect): Participant {
+function toParticipant(
+  row: typeof participantsTable.$inferSelect,
+  competencies: ParticipantCompetency[] = [],
+  evidences: Evidence[] = [],
+  learningHistory: LearningRecord[] = [],
+): Participant {
   return {
     id: row.id,
     nip: row.nip,
@@ -110,10 +118,48 @@ function toParticipant(row: typeof participantsTable.$inferSelect): Participant 
     position: row.position,
     unit: row.unit,
     email: row.email,
-    competencies: row.competencies as ParticipantCompetency[],
-    learningHistory: row.learningHistory as LearningRecord[],
-    evidences: row.evidences as Evidence[],
+    competencies,
+    learningHistory,
+    evidences,
   };
+}
+
+function mapCompetencyRows(rows: (typeof participantCompetenciesTable.$inferSelect)[]): ParticipantCompetency[] {
+  return rows.map(r => ({
+    unitId: r.unitId,
+    currentLevel: r.currentLevel as ParticipantCompetency["currentLevel"],
+    targetLevel: r.targetLevel as ParticipantCompetency["targetLevel"],
+    lastAssessed: r.lastAssessed,
+    status: r.status as ParticipantCompetency["status"],
+  }));
+}
+
+function mapEvidenceRows(rows: (typeof evidencesTable.$inferSelect)[]): Evidence[] {
+  return rows.map(r => ({
+    id: r.id,
+    unitId: r.unitId,
+    type: r.type as Evidence["type"],
+    title: r.title,
+    description: r.description,
+    fileUrl: r.fileUrl ?? undefined,
+    submittedAt: r.submittedAt,
+    assessedAt: r.assessedAt ?? undefined,
+    assessorId: r.assessorId ?? undefined,
+    score: r.score ?? undefined,
+    feedback: r.feedback ?? undefined,
+    status: r.status as Evidence["status"],
+  }));
+}
+
+function mapLearningRecordRows(rows: (typeof learningRecordsTable.$inferSelect)[]): LearningRecord[] {
+  return rows.map(r => ({
+    id: r.id,
+    courseId: r.courseId,
+    startedAt: r.startedAt,
+    completedAt: r.completedAt ?? undefined,
+    progress: r.progress,
+    status: r.status as LearningRecord["status"],
+  }));
 }
 
 function toLearningPath(row: typeof learningPathsTable.$inferSelect): LearningPath {
@@ -490,13 +536,35 @@ export class DrizzleStorage implements IStorage {
 
   // Participants
   async getParticipants(): Promise<Participant[]> {
-    const rows = await db.select().from(participantsTable);
-    return rows.map(toParticipant);
+    const [rows, allComps, allEvs, allLrs] = await Promise.all([
+      db.select().from(participantsTable),
+      db.select().from(participantCompetenciesTable),
+      db.select().from(evidencesTable),
+      db.select().from(learningRecordsTable),
+    ]);
+
+    return rows.map(row => {
+      const competencies = mapCompetencyRows(allComps.filter(c => c.participantId === row.id));
+      const evidences = mapEvidenceRows(allEvs.filter(e => e.participantId === row.id));
+      const learningHistory = mapLearningRecordRows(allLrs.filter(lr => lr.participantId === row.id));
+      return toParticipant(row, competencies, evidences, learningHistory);
+    });
   }
 
   async getParticipant(id: string): Promise<Participant | undefined> {
-    const rows = await db.select().from(participantsTable).where(eq(participantsTable.id, id));
-    return rows[0] ? toParticipant(rows[0]) : undefined;
+    const [rows, compRows, evRows, lrRows] = await Promise.all([
+      db.select().from(participantsTable).where(eq(participantsTable.id, id)),
+      db.select().from(participantCompetenciesTable).where(eq(participantCompetenciesTable.participantId, id)),
+      db.select().from(evidencesTable).where(eq(evidencesTable.participantId, id)),
+      db.select().from(learningRecordsTable).where(eq(learningRecordsTable.participantId, id)),
+    ]);
+    if (!rows[0]) return undefined;
+    return toParticipant(
+      rows[0],
+      mapCompetencyRows(compRows),
+      mapEvidenceRows(evRows),
+      mapLearningRecordRows(lrRows),
+    );
   }
 
   async createParticipant(data: InsertParticipant): Promise<Participant> {
@@ -513,27 +581,53 @@ export class DrizzleStorage implements IStorage {
       evidences: [] as Evidence[],
     };
     await db.insert(participantsTable).values(row);
-    return toParticipant(row);
+    return toParticipant(row, [], [], []);
   }
 
   async updateParticipantCompetencies(id: string, competencies: ParticipantCompetency[]): Promise<Participant | undefined> {
     const existing = await this.getParticipant(id);
     if (!existing) return undefined;
-    await db.update(participantsTable).set({ competencies }).where(eq(participantsTable.id, id));
+
+    // Replace all competency rows for this participant atomically
+    await db.transaction(async (tx) => {
+      await tx.delete(participantCompetenciesTable).where(eq(participantCompetenciesTable.participantId, id));
+      if (competencies.length > 0) {
+        await tx.insert(participantCompetenciesTable).values(
+          competencies.map(c => ({
+            id: `pc-${randomUUID()}`,
+            participantId: id,
+            unitId: c.unitId,
+            currentLevel: c.currentLevel,
+            targetLevel: c.targetLevel,
+            lastAssessed: c.lastAssessed,
+            status: c.status,
+          }))
+        );
+      }
+    });
+
     return { ...existing, competencies };
   }
 
   async deleteParticipant(id: string): Promise<boolean> {
     const existing = await this.getParticipant(id);
     if (!existing) return false;
-    await db.delete(participantsTable).where(eq(participantsTable.id, id));
+    // Cascade delete all relational records + parent in a single transaction
+    await db.transaction(async (tx) => {
+      await tx.delete(participantCompetenciesTable).where(eq(participantCompetenciesTable.participantId, id));
+      await tx.delete(evidencesTable).where(eq(evidencesTable.participantId, id));
+      await tx.delete(learningRecordsTable).where(eq(learningRecordsTable.participantId, id));
+      await tx.delete(participantsTable).where(eq(participantsTable.id, id));
+    });
     return true;
   }
 
   // Evidences
   async addEvidence(participantId: string, data: InsertEvidence): Promise<Evidence> {
-    const participant = await this.getParticipant(participantId);
-    if (!participant) throw new Error("Participant not found");
+    const participantExists = await db.select({ id: participantsTable.id })
+      .from(participantsTable)
+      .where(eq(participantsTable.id, participantId));
+    if (!participantExists[0]) throw new Error("Participant not found");
 
     const evidence: Evidence = {
       id: `ev-${randomUUID()}`,
@@ -545,29 +639,46 @@ export class DrizzleStorage implements IStorage {
       status: "pending",
     };
 
-    const updatedEvidences = [...participant.evidences, evidence];
-    await db.update(participantsTable).set({ evidences: updatedEvidences }).where(eq(participantsTable.id, participantId));
+    await db.insert(evidencesTable).values({
+      id: evidence.id,
+      participantId,
+      unitId: evidence.unitId,
+      type: evidence.type,
+      title: evidence.title,
+      description: evidence.description,
+      fileUrl: null,
+      submittedAt: evidence.submittedAt,
+      assessedAt: null,
+      assessorId: null,
+      score: null,
+      feedback: null,
+      status: evidence.status,
+    });
+
     return evidence;
   }
 
   async updateEvidenceStatus(participantId: string, evidenceId: string, status: Evidence["status"], score?: number, feedback?: string): Promise<Evidence | undefined> {
-    const participant = await this.getParticipant(participantId);
-    if (!participant) return undefined;
+    const evRows = await db.select().from(evidencesTable)
+      .where(eq(evidencesTable.id, evidenceId));
+    if (!evRows[0] || evRows[0].participantId !== participantId) return undefined;
 
-    const evidenceIndex = participant.evidences.findIndex(e => e.id === evidenceId);
-    if (evidenceIndex === -1) return undefined;
+    const assessedAt = new Date().toISOString().split("T")[0];
+    const dbUpdates: Partial<typeof evidencesTable.$inferInsert> = { status, assessedAt };
+    if (score !== undefined) dbUpdates.score = score;
+    if (feedback) dbUpdates.feedback = feedback;
 
-    const updatedEvidence = {
-      ...participant.evidences[evidenceIndex],
+    await db.update(evidencesTable).set(dbUpdates).where(eq(evidencesTable.id, evidenceId));
+
+    // Build the return value with explicit casts to preserve narrow types
+    const base = mapEvidenceRows([evRows[0]])[0];
+    const updatedEvidence: Evidence = {
+      ...base,
       status,
-      assessedAt: new Date().toISOString().split("T")[0],
-      ...(score !== undefined && { score }),
-      ...(feedback && { feedback }),
+      assessedAt,
+      score: score !== undefined ? score : base.score,
+      feedback: feedback !== undefined ? feedback : base.feedback,
     };
-
-    const updatedEvidences = [...participant.evidences];
-    updatedEvidences[evidenceIndex] = updatedEvidence;
-    await db.update(participantsTable).set({ evidences: updatedEvidences }).where(eq(participantsTable.id, participantId));
     return updatedEvidence;
   }
 

@@ -966,3 +966,43 @@ export const notificationsTable = pgTable("notifications", {
   isRead: integer("is_read").notNull().default(0),
   createdAt: text("created_at").notNull(),
 });
+
+// ============================================
+// RELATIONAL TABLES (replaces JSONB arrays in participantsTable)
+// ============================================
+
+export const participantCompetenciesTable = pgTable("participant_competencies", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  unitId: varchar("unit_id").notNull(),
+  currentLevel: varchar("current_level", { length: 4 }).notNull(),
+  targetLevel: varchar("target_level", { length: 4 }).notNull(),
+  lastAssessed: text("last_assessed").notNull(),
+  status: text("status").notNull().default("gap"),
+});
+
+export const evidencesTable = pgTable("evidences", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  unitId: varchar("unit_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  fileUrl: text("file_url"),
+  submittedAt: text("submitted_at").notNull(),
+  assessedAt: text("assessed_at"),
+  assessorId: varchar("assessor_id"),
+  score: integer("score"),
+  feedback: text("feedback"),
+  status: text("status").notNull().default("pending"),
+});
+
+export const learningRecordsTable = pgTable("learning_records", {
+  id: varchar("id").primaryKey(),
+  participantId: varchar("participant_id").notNull(),
+  courseId: varchar("course_id").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  progress: integer("progress").notNull().default(0),
+  status: text("status").notNull().default("not_started"),
+});

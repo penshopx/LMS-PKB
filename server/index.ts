@@ -67,6 +67,10 @@ app.use((req, res, next) => {
   const { seedDatabase } = await import("./seed");
   await seedDatabase();
 
+  // Migrate existing JSONB data into relational tables (idempotent)
+  const { migrateParticipantRelations } = await import("./migrate-participant-relations");
+  await migrateParticipantRelations();
+
   // Ensure a default admin user exists
   await ensureAdminUser();
 
