@@ -65,15 +65,22 @@ export function setupAuth(app: Express): void {
     throw new Error("SESSION_SECRET environment variable is not set");
   }
 
+  const pgStore = new PgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: "session",
+    createTableIfMissing: true,
+  });
+
+  // Prevent unhandled EventEmitter error from crashing the process
+  pgStore.on("error", (err: Error) => {
+    console.error("[session] Session store error:", err);
+  });
+
   const sessionSettings: session.SessionOptions = {
     secret,
     resave: false,
     saveUninitialized: false,
-    store: new PgSession({
-      conString: process.env.DATABASE_URL,
-      tableName: "session",
-      createTableIfMissing: true,
-    }),
+    store: pgStore,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
