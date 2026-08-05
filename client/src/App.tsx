@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -8,6 +9,17 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { GlobalSearch } from "@/components/global-search";
 import { NotificationCenter } from "@/components/notification-center";
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { UserCircle, KeyRound, LogOut } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -66,6 +78,69 @@ function AppRouter() {
   );
 }
 
+function UserMenu() {
+  const { data: user } = useCurrentUser();
+  const [, navigate] = useLocation();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/logout", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Logout gagal");
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      navigate("/login");
+    },
+  });
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            data-testid="button-user-menu"
+          >
+            <UserCircle className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48" data-testid="menu-user">
+          <DropdownMenuLabel className="font-normal">
+            <p className="text-xs text-muted-foreground">Masuk sebagai</p>
+            <p className="font-semibold text-sm truncate" data-testid="text-username">{user?.username}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setChangePasswordOpen(true)}
+            data-testid="menu-item-change-password"
+          >
+            <KeyRound className="h-4 w-4 mr-2" />
+            Ganti Password
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            className="text-destructive focus:text-destructive"
+            data-testid="menu-item-logout"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Keluar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
+    </>
+  );
+}
+
 function AppLayout() {
   const [location] = useLocation();
   const style = {
@@ -90,6 +165,7 @@ function AppLayout() {
             <GlobalSearch />
             <NotificationCenter />
             <ThemeToggle />
+            <UserMenu />
           </header>
           <main className="flex-1 overflow-auto">
             <AppRouter />
