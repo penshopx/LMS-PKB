@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { setupAuth, ensureAdminUser } from "./auth";
+import { setupAuth, ensureAdminUser, checkDefaultAdminPassword } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -80,6 +80,9 @@ process.on("unhandledRejection", (reason) => {
 
     // Ensure a default admin user exists
     await ensureAdminUser();
+
+    // In production, refuse to start if the default password is still in use
+    await checkDefaultAdminPassword();
 
     await registerRoutes(httpServer, app);
 

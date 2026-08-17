@@ -57,6 +57,54 @@ export async function ensureAdminUser(): Promise<void> {
   }
 }
 
+const DEFAULT_PASSWORD = "admin123";
+
+/**
+ * Checks whether the admin account still uses the default password.
+ * In production this is a critical security risk — the function throws so
+ * the server refuses to serve traffic until the password is changed.
+ * In development / test it only prints a prominent warning.
+ */
+export async function checkDefaultAdminPassword(): Promise<void> {
+  try {
+    const rows = await db.select().from(users).where(eq(users.username, "admin"));
+    if (rows.length === 0) return; // no admin user — nothing to check
+
+    const admin = rows[0];
+    const isDefault = await comparePassword(DEFAULT_PASSWORD, admin.password);
+    if (!isDefault) return; // password has been changed — all good
+
+    const warning = [
+      "",
+      "╔══════════════════════════════════════════════════════════════╗",
+      "║          ⚠  CRITICAL SECURITY WARNING  ⚠                   ║",
+      "║                                                              ║",
+      "║  The admin account is still using the default password.     ║",
+      "║  Anyone who knows this password can log in to your app.     ║",
+      "║                                                              ║",
+      "║  Log in as admin and change the password immediately.       ║",
+      "╚══════════════════════════════════════════════════════════════╝",
+      "",
+    ].join("\n");
+
+    if (process.env.NODE_ENV === "production") {
+      console.error(warning);
+      throw new Error(
+        "Server refused to start: admin account is using the default password. " +
+          "Change the password and restart the server."
+      );
+    } else {
+      console.warn(warning);
+    }
+  } catch (err) {
+    // Re-throw only errors we deliberately raised above; swallow DB / lookup errors
+    if (err instanceof Error && err.message.startsWith("Server refused to start")) {
+      throw err;
+    }
+    console.error("[auth] Could not verify admin password security:", err);
+  }
+}
+
 export function setupAuth(app: Express): void {
   const PgSession = connectPgSimple(session);
 
