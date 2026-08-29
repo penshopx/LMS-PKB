@@ -25,6 +25,7 @@ import {
   FileCheck,
   Shield
 } from "lucide-react";
+import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 
 const features = [
   {
@@ -107,10 +108,11 @@ export default function Landing() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-              <GraduationCap className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-xl">E-Course Builder</span>
+             <BrandMark size="sm" />
+             <div className="flex flex-col">
+               <span className="font-bold text-sm sm:text-lg lg:text-xl leading-tight">{BRAND_NAME}</span>
+               <span className="hidden sm:block text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
+             </div>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -130,16 +132,16 @@ export default function Landing() {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <Badge variant="secondary" className="mb-4">
               <Sparkles className="h-3 w-3 mr-1" />
-              Platform Pembelajaran Berbasis Kompetensi
+               LMS PUB ASPEKINDO · Pembelajaran Bisnis Konstruksi
             </Badge>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-              Bangun E-Course dari{" "}
-              <span className="text-primary">Kompetensi</span>,{" "}
-              Bukan Materi
+               Kembangkan <span className="text-primary">Kompetensi Konstruksi</span>{" "}
+               untuk Bisnis yang Lebih Tangguh
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Platform lengkap untuk membangun, mengelola, dan melacak e-course berbasis kompetensi 
-              dengan struktur 6 langkah yang terukur dan evidence-based learning.
+               Platform pembelajaran bisnis konstruksi untuk memperkuat kompetensi kontraktor,
+               sekaligus mendukung pengembangan tenaga kerja konstruksi melalui pembelajaran
+               yang terukur, praktis, dan berbasis evidensi.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Link href="/app">
@@ -243,7 +245,7 @@ export default function Landing() {
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold">Prinsip Utama E-Course Builder</h2>
+              <h2 className="text-3xl font-bold">Prinsip Utama Pembelajaran Bisnis Konstruksi</h2>
               <div className="space-y-4">
                 <div className="flex items-start gap-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
                   <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
@@ -324,10 +326,10 @@ export default function Landing() {
           <Card className="bg-primary text-primary-foreground">
             <CardContent className="py-12 text-center">
               <h2 className="text-2xl md:text-3xl font-bold mb-4">
-                Siap Membangun E-Course Berbasis Kompetensi?
+                 Siap Mengembangkan Kompetensi Konstruksi?
               </h2>
               <p className="text-primary-foreground/80 max-w-xl mx-auto mb-8">
-                Mulai bangun ekosistem pembelajaran yang terukur dan evidence-based untuk organisasi Anda
+                 Bangun kompetensi kontraktor dan tenaga kerja konstruksi melalui pembelajaran yang terukur
               </p>
               <Link href="/app">
                 <Button size="lg" variant="secondary" data-testid="button-cta-mulai">
@@ -344,13 +346,11 @@ export default function Landing() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <GraduationCap className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="font-semibold">E-Course Builder</span>
+               <BrandMark size="sm" />
+               <span className="font-semibold">{BRAND_NAME}</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Platform Pembelajaran Berbasis Kompetensi
+               {BRAND_TAGLINE} · LMS PUB ASPEKINDO
             </p>
           </div>
         </div>

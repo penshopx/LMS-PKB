@@ -37,7 +37,7 @@ import Analytics from "@/pages/analytics";
 const PAGE_TITLES: Record<string, string> = {
   "/app": "Dashboard",
   "/app/competencies": "Kompetensi",
-  "/app/courses": "E-Course Builder",
+  "/app/courses": "Pembelajaran",
   "/app/learning-paths": "Jalur Pembelajaran",
   "/app/quizzes": "Quiz Engine",
   "/app/participants": "Peserta",

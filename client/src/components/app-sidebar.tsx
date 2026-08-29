@@ -5,7 +5,6 @@ import {
   Award,
   FolderOpen,
   Settings,
-  GraduationCap,
   Route,
   ClipboardCheck,
   FileCheck,
@@ -16,6 +15,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -46,7 +46,7 @@ const mainMenu = [
     icon: FolderOpen,
   },
   {
-    title: "E-Course Builder",
+    title: "Pembelajaran",
     url: "/app/courses",
     icon: BookOpen,
   },
@@ -120,13 +120,11 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link href="/" data-testid="link-home">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-              <GraduationCap className="h-6 w-6 text-primary-foreground" />
-            </div>
+           <div className="flex items-center gap-3">
+             <BrandMark />
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">E-Course Builder</span>
-              <span className="text-xs text-muted-foreground">Ekosistem Kompetensi</span>
+               <span className="font-semibold text-sm leading-tight">{BRAND_NAME}</span>
+               <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
             </div>
           </div>
         </Link>
@@ -203,7 +201,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Settings className="h-3 w-3" />
-          <span>E-Course Builder v1.0</span>
+          <span>Pembelajaran Bisnis Konstruksi v1.0</span>
         </div>
         <LogoutButton />
       </SidebarFooter>

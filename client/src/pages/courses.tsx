@@ -226,7 +226,7 @@ function CourseBuilderTemplate({ onStartBuild }: { onStartBuild?: () => void }) 
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BookOpen className="h-5 w-5" />
-          Template E-Course Builder
+          Template Pembelajaran
         </CardTitle>
         <CardDescription>
           Klik setiap langkah untuk menambahkan konten. {completedSteps}/6 langkah selesai.
@@ -529,8 +529,8 @@ export default function Courses() {
     <div className="p-6 space-y-6" data-testid="page-courses">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">E-Course Builder</h1>
-          <p className="text-muted-foreground">Bangun dan kelola kursus berbasis kompetensi</p>
+          <h1 className="text-2xl font-bold">Pembelajaran Bisnis Konstruksi</h1>
+          <p className="text-muted-foreground">Bangun dan kelola pembelajaran berbasis kompetensi kontraktor</p>
         </div>
         <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
           <DialogTrigger asChild>
@@ -595,7 +595,7 @@ export default function Courses() {
             
             <Card data-testid="card-principles">
               <CardHeader>
-                <CardTitle>Prinsip E-Course Builder</CardTitle>
+                <CardTitle>Prinsip Pembelajaran Berbasis Kompetensi</CardTitle>
                 <CardDescription>
                   Panduan membangun kursus yang efektif
                 </CardDescription>

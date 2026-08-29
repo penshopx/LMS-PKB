@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 
 interface LoginError {
   message: string;
@@ -57,10 +58,11 @@ export default function Login() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-lg text-foreground">E-Course Builder</span>
+           <BrandMark size="sm" />
+           <div className="flex flex-col">
+             <span className="font-bold text-sm sm:text-lg leading-tight text-foreground">{BRAND_NAME}</span>
+             <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
+           </div>
         </div>
         <ThemeToggle />
       </header>
@@ -129,7 +131,7 @@ export default function Login() {
       </div>
 
       <footer className="text-center py-4 text-xs text-muted-foreground">
-        Platform Pembelajaran Berbasis Kompetensi
+        Pembelajaran bisnis konstruksi untuk kompetensi kontraktor dan tenaga kerja konstruksi
       </footer>
     </div>
   );
