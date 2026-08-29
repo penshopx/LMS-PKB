@@ -1,0 +1,118 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+=== 2024pmpupr7_1788020600443.pdf ===
+pages: 169 metadata: {'format': 'PDF 1.7', 'title': '', 'author': 'CRESCO', 'subject': '', 'keywords': '', 'creator': 'Microsoft® Word 2019', 'producer': 'Microsoft® Word 2019; modified using iText® 5.5.13.2 ©2000-2020 iText Group NV (AGPL-version)', 'creationDate': "D:20240704145841+07'00'", 'modDate': "D:20240705160632+07'00'", 'trapped': '', 'encryption': None}
+toc_entries: 0
+keyword_hit_pages: 45
+PAGE 1
+  Peraturan Menteri: - 1 - PERATURAN MENTERI PEKERJAAN UMUM DAN PERUMAHAN RAKYAT REPUBLIK INDONESIA NOMOR 7 TAHUN 2024 TENTANG PENGEMBANGAN USAHA BERKELANJUTAN DENGAN RAHMAT TUHAN YANG MAHA ESA MENTERI PEKERJAAN UMUM DAN PERUMAHAN RAKYAT REPUBLIK INDONESIA, Menimbang : bahwa untuk melaksanakan ketentuan Pa
+PAGE 2
+  Peraturan Menteri: Pekerjaan Umum dan Perumahan Rakyat (Lembaran Negara Republik Indonesia Tahun 2024 Nomor 37); 6. Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 13 Tahun 2020 tentang Organisasi dan Tata Kerja Kementerian Pekerjaan Umum dan Perumahan Rakyat (Berita Negara Republik Indonesia Tahun 2020 Nomor 473) sebagaimana telah diubah dengan Peraturan Menteri Pekerjaan Umum dan Perumahan Raky
+PAGE 3
+  pelatihan: vinsi; c. pemerintah kabupaten/kota; d. perguruan tinggi; e. lembaga penelitian; f. lembaga pelatihan; g. asosiasi profesi; dan/atau h. Asosiasi Badan Usaha lain. Bagian Kedua Pelaksanaan Pasal 4 (1) Penyelenggaraan PUB sebagaimana dimaksud dalam Pasal 3 ayat (2) terdiri atas: a. PUB umum; dan b. PUB khusus. (2) PUB umum sebagaimana dimaksud pada ayat (1) huruf a dila
+  Peraturan Menteri: - 3 - Pasal 2 (1) Peraturan Menteri ini dimaksudkan sebagai panduan bagi Asosiasi Badan Usaha dalam melaksanakan pembinaan kepada anggotanya untuk mempertahankan dan/atau meningkatkan kemampuan BUJK. (2) Peraturan Menteri ini bertujuan untuk: a. meningkatkan partisipasi Asosiasi Badan Usaha dalam pembinaan an
+PAGE 4
+  SIAP: si, dan/atau kegiatan sejenis lainnya. (2) Tahapan penyelenggaraan PUB umum terdiri atas: a. persiapan; b. pelaksanaan; c. pelaporan; dan d. evaluasi. (3) Tahapan persiapan sebagaimana dimaksud pada ayat (2) huruf a meliputi: a. melakukan inventarisasi kebutuhan atas produk pengaturan terbaru; dan/atau b. menyusun inisiatif mandiri. (4) Tahapan pelaksanaan sebagaimana dimak
+PAGE 5
+  Laporan Kegiatan Usaha Tahunan: K sebagaimana dimaksud pada ayat (1) merupakan bagian dari laporan kegiatan usaha tahunan. (3) Laporan kegiatan usaha tahunan sebagaimana dimaksud pada ayat (2) disampaikan kepada Menteri melalui Direktur Jenderal paling lambat tanggal 30 bulan April tahun berikutnya melalui sistem informasi jasa konstruksi terintegrasi. (4) Rincian isian laporan kegiatan usaha tahunan tercantum d
+  pembelajaran: PUB khusus sebagaimana dimaksud dalam Pasal 4 ayat (1) huruf b diselenggarakan dalam bentuk: a. pembelajaran tekstual; b. pembelajaran interaktif berbasis teknologi informasi jarak jauh; c. bimbingan teknis; dan/atau d. pendampingan intensif. (2) PUB khusus sebagaimana dimaksud pada ayat (1) diselenggarakan sesuai dengan modul peningkatan kinerja badan usaha. Pasal 9 Asosia
+  SIAP: 2) penyampaian materi oleh instruktur; b. tingkat pelayanan penyelenggara, mulai dari persiapan, pelaksanaan, dan pasca pelaksanaan. Bagian Keempat Pengembangan Usaha Berkelanjutan Khusus Pasal 8 (1) PUB khusus sebagaimana dimaksud dalam Pasal 4 ayat (1) huruf b diselenggarakan dalam bentuk: a. pembelajaran tekstual; b. pembelajaran interaktif berbasis teknologi informasi
+  Peraturan Menteri: kegiatan usaha tahunan tercantum dalam lampiran yang merupakan bagian tidak terpisahkan dari Peraturan Menteri ini. Pasal 11 (1) Hasil pemetaan nilai kinerja penyedia jasa tahunan sebagaimana dimaksud dalam Pasal 10 ayat (1) menjadi acuan untuk menyusun daftar prioritas BUJK yang akan mengikuti PUB khusus. (2) Penilaian kinerja penyedia jasa tahunan terdiri atas kondisi dan grade
+PAGE 6
+  SIAP: Peraturan Menteri ini. Pasal 12 (1) Tahapan penyelenggaraan PUB khusus terdiri atas: a. persiapan; b. pelaksanaan; c. pelaporan; dan d. evaluasi. (2) Tahapan persiapan sebagaimana dimaksud pada ayat (1) huruf a terdiri atas: a. melakukan pemetaan hasil penilaian kinerja berdasarkan informasi dalam sistem informasi jasa konstruksi terintegrasi; dan b. menyusun daftar
+  Peraturan Menteri: nerja penyedia jasa tahunan tercantum dalam lampiran yang merupakan bagian tidak terpisahkan dari Peraturan Menteri ini. Pasal 12 (1) Tahapan penyelenggaraan PUB khusus terdiri atas: a. persiapan; b. pelaksanaan; c. pelaporan; dan d. evaluasi. (2) Tahapan persiapan sebagaimana dimaksud pada ayat (1) huruf a terdiri atas: a. melakukan pemetaan hasil penilaian kinerja berd
+PAGE 7
+  SIAP: n b) penyampaian materi oleh instruktur; dan 2) tingkat pelayanan penyelenggara, mulai dari persiapan, pelaksanaan, dan pasca pelaksanaan. b. dengan menyusun profil peningkatan nilai kinerja bagi BUJK yang telah melakukan PUB khusus. Pasal 13 (1) Asosiasi Badan Usaha melakukan tahapan evaluasi sebagaimana dimaksud dalam Pasal 12 ayat (5) huruf b pada bulan Juni tahun berikutnya
+PAGE 9
+  Laporan Kegiatan Usaha Tahunan: ikan anggota memenuhi kewajibannya. Pasal 17 (1) BUJK bertanggung jawab atas: a. pengisian laporan kegiatan usaha tahunan; b. pengisian kinerja penyedia jasa tahunan untuk BUJK kualifikasi menengah, besar, dan spesialis; c. keikutsertaan dalam PUB sesuai daftar prioritas yang dikeluarkan Asosiasi Badan Usaha; dan d. pemenuhan kewajiban sebagai anggota. (2) Pelaksanaan tanggung
+  Peraturan Menteri: inaan kepada asosiasi yang melaksanakan PUB. BAB IV KETENTUAN PENUTUP Pasal 19 Pada saat Peraturan Menteri ini mulai berlaku: a. ketentuan mengenai penilaian kinerja penyedia jasa tahunan dan laporan kegiatan usaha tahunan mengikuti ketentuan dalam lampiran yang merupakan bagian tidak terpisahkan dari Peraturan Menteri ini. b. ketentuan mengenai penilaian kinerja penyedia jasa
+PAGE 10
+  Peraturan Menteri: - 10 - Agar setiap orang mengetahuinya, memerintahkan pengundangan Peraturan Menteri ini dengan penempatannya dalam Berita Negara Republik Indonesia. Ditetapkan di Jakarta pada tanggal 19 Juni 2024 MENTERI PEKERJAAN UMUM DAN PERUMAHAN RAKYAT REPUBLIK INDONESIA, Œ M. BASUKI HADIMULJONO Diundangkan di Jakarta pada tanggal Д DIREKTUR
+PAGE 11
+  Laporan Kegiatan Usaha Tahunan: N PERUMAHAN RAKYAT NOMOR TAHUN 2024 TENTANG PENGEMBANGAN USAHA BERKELANJUTAN A. FORMAT LAPORAN KEGIATAN USAHA TAHUNAN 1. Data Informasi Kepatuhan Pelaksanaan Perizinan Berusaha No. Isian Data Laporan Kegiatan Usaha Tahunan Keterangan 1. Usaha orang perseorangan Bukti a. Kepemilikan SKK Konstruksi Isian Nomor SKK Konstruksi b. Kepatuhan waktu perpanjangan SKK Konstruksi
+  Peraturan Menteri: - 11 - LAMPIRAN PERATURAN MENTERI PEKERJAAN UMUM DAN PERUMAHAN RAKYAT NOMOR TAHUN 2024 TENTANG PENGEMBANGAN USAHA BERKELANJUTAN A. FORMAT LAPORAN KEGIATAN USAHA TAHUNAN 1. Data Informasi Kepatuhan Pelaksanaan Perizinan Berusaha No. Isian Data Laporan Kegiatan Usaha Tahunan Keterangan 1. Usaha o
+PAGE 16
+  pelatihan: (tetap + kontrak) isian jumlah total karyawan terlatih (tetap + kontrak) yang pernah mengikuti pelatihan paling sedikit 3 hari pada tahun N 27. Tenaga ahli kontrak isian jumlah tenaga ahli kontrak pada tahun N 28. Tenaga ahli tetap isian jumlah tenaga ahli tetap pada tahun N b. Data Manajemen Perusahaan Jasa Konsultansi Konstruksi No. JENIS ISIAN DATA KETERANGAN A. DATA KEUA
+PAGE 17
+  pelatihan: (tetap + kontrak) isian jumlah total karyawan terlatih (tetap + kontrak) yang pernah mengikuti pelatihan paling sedikit 3 hari pada tahun N 17. Tenaga ahli kontrak isian jumlah tenaga ahli kontrak pada tahun N 18. Tenaga ahli tetap isian jumlah tenaga ahli tetap pada tahun N
+PAGE 31
+  Laporan Kegiatan Usaha Tahunan: milik proyek) dan/atau keadaan memaksa (force majeure), jika ada 4. Ketentuan Pengisian Data Laporan Kegiatan Usaha Tahunan Penanggung jawab badan usaha (PJBU) dan/atau pemilik proyek menyatakan dengan sesungguhnya bahwa: a. Segala dokumen/data yang diisikan/diberikan adalah benar; dan b. Apabila di kemudian hari ditemui bahwa dokumen/data yang telah diisikan/diberikan tidak benar, m
+PAGE 43
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 46
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/ Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 3 3) Nilai Ambang Batas Indikator No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60 61-80 81-100 1. Aspek Ke
+PAGE 49
+  pelatihan: 500 – 1.999 2.000 – 2.499 2.500 – 2.999 3.000 – 3.500 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 4,6 – 13,6 13,7 – 22,7 22,8 - 31,8 31,9 – 40,9 41 - 50 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20,3 – 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 51
+  pelatihan: ktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10 … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 3 … … NILAI KINERJA MANAJEMEN PERUSAHAAN PEKERJAAN KONSTRUKSI BERSIFAT UMUM ATAU SPESIALIS 100% …
+PAGE 66
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 69
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 3 3) Nilai Ambang Batas Indikator No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60 61-80 81-100 1. Aspek Ke
+PAGE 72
+  pelatihan: 00 – 1.999 2.000 – 2.499 2.500 – 2.999 3.000 – 3.500 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 4,6 – 13,6 13,7 – 22,7 22,8 - 31,8 31,9 – 40,9 41 - 50 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20,3 – 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 74
+  pelatihan: tivitas Sumberdaya Manusia (Juta Rupiah / Orang) 10 … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 3 … … NILAI KINERJA MANAJEMEN PERUSAHAAN PEKERJAAN KONSTRUKSI TERINTEGRASI 100% xxx
+PAGE 83
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 85
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 6 3) Nilai Ambang Batas Indikator No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60 61-80 81-100 1. Aspek Ke
+PAGE 87
+  pelatihan: Orang 51 -100 101 - 150 151 - 200 201 - 250 251 – 300 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 18,7 18,8- 27,8 27,9 – 36,9 37 - 46 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20 ,3– 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 89
+  pelatihan: tivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10% … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8% … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 6% … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT UMUM LAYANAN USAHA PENGKAJIAN 100% XXX
+PAGE 98
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 100
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (juta rupiah/orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 6 3) Nilai Ambang Batas Indikator Jasa Konsultansi Konstruksi Bersifat Umum Layanan Usaha Perencanaan No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi
+PAGE 102
+  pelatihan: Orang 51 -100 101 - 150 151 - 200 201 - 250 251 – 300 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 18,7 18,8- 27,8 27,9 – 36,9 37 - 46 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20 ,3– 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 104
+  pelatihan: tivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10% … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8% … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 6% … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT UMUM LAYANAN USAHA PERENCANAAN 100% XXX
+PAGE 113
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 115
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/ Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 6 3) Nilai Ambang Batas Indikator Kinerja Manajemen Perusahaan No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60
+PAGE 117
+  pelatihan: Orang 51 -100 101 - 150 151 - 200 201 - 250 251 – 300 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 18,7 18,8- 27,8 27,9 – 36,9 37 - 46 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20 ,3– 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 119
+  pelatihan: ktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10% … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8% … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 6% … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT UMUM LAYANAN USAHA PERANCANGAN 100% XXX
+PAGE 130
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 132
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 6 3) Nilai Ambang Batas Indikator Kinerja Manajemen Perusahaan No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60
+PAGE 134
+  pelatihan: Orang 51 -100 101 - 150 151 - 200 201 - 250 251 – 300 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 18,7 18,8- 27,8 27,9 – 36,9 37 - 46 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20 ,3– 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0 4) Cara Penilaian Kinerja Manajemen Perusahaan Jasa Konsulta
+PAGE 136
+  pelatihan: tivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10% … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8% … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 6% … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT UMUM LAYANAN USAHA PENGAWASAN 100% XXX c. Kinerja Penyedia Jasa Tahunan Jasa
+PAGE 147
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100%
+PAGE 149
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 6
+PAGE 152
+  pelatihan: Orang 51 -100 101 - 150 151 - 200 201 - 250 251 – 300 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 18,7 18,8- 27,8 27,9 – 36,9 37 - 46 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % 25,4 – 20,4 20 ,3– 15,3 15,2 – 10,2 10,1 – 5,1 5 - 0
+PAGE 154
+  pelatihan: ktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 10% … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8% … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 6% … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT UMUM LAYANAN USAHA MANAJEMEN PENYELENGGARAAN KONSTRUKSI 100% … c. Kinerja P
+PAGE 162
+  pelatihan: Pejualan Tahun N (juta Rp) Total Karyawan (tetap + kontrak) 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % Total Karyawan terlatik (tetap + kontrak) Total Karyawan (tetap + kontrak) × 100% 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap % Tenaga ahli kontrak Tenaga ahli tetap × 100%
+PAGE 164
+  pelatihan: 1) Produktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 14 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 3) Kapasitas Perusahaan dengan memperhatikan jumlah tenaga ahli tetap 3 3) Nilai Ambang Batas Indikator No. Indikator Sat. Nilai Konversi Sangat Rendah Rendah Cukup Tinggi Sangat Tinggi % 0-20 21-40 41-60 61-80 81-100 1. Aspek Ke
+PAGE 166
+  pelatihan: 43,6 43,7 – 72,7 72,8 – 101,8 101,9 – 130,9 131 – 160 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) % 0 – 9,6 9,7 – 19,7 19,8- 29,8 29,9 – 39,9 40 - 50
+PAGE 168
+  pelatihan: ktivitas Sumberdaya Manusia (Juta Rupiah/Orang) 14 … … 2) Pemberdayaan Sumberdaya Manusia (pelatihan karyawan paling sedikit 3 hari) 8 … … 3) Kapasitas Perusahaan dengan meperhatikan jumlah tenaga ahli tetap 3 … … NILAI KINERJA MANAJEMEN PERUSAHAAN JASA KONSULTANSI KONSTRUKSI BERSIFAT SPESIALIS 100% … c. Kinerja Penyedia Jasa Tahunan Jasa Konsultansi Konstruksi B
+
+=== Modernisasi_Digital_PUB_ASPEKINDO_1788020849615.pdf ===
+pages: 15 metadata: {'format': 'PDF 1.4', 'title': '', 'author': '', 'subject': '', 'keywords': '', 'creator': '', 'producer': '', 'creationDate': '', 'modDate': '', 'trapped': '', 'encryption': None}
+toc_entries: 0
+keyword_hit_pages: 0
+
+=== PUB_ASPEKINDO_Digital_Blueprint_1788020872382.pdf ===
+pages: 15 metadata: {'format': 'PDF 1.4', 'title': '', 'author': '', 'subject': '', 'keywords': '', 'creator': '', 'producer': '', 'creationDate': '', 'modDate': '', 'trapped': '', 'encryption': None}
+toc_entries: 0
+keyword_hit_pages: 0
+
+=== PUB_ASPEKINDO_Digital_Transformation_1788020872383.pdf ===
+pages: 15 metadata: {'format': 'PDF 1.4', 'title': '', 'author': '', 'subject': '', 'keywords': '', 'creator': '', 'producer': '', 'creationDate': '', 'modDate': '', 'trapped': '', 'encryption': None}
+toc_entries: 0
+keyword_hit_pages: 0
+
