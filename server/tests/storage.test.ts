@@ -616,9 +616,29 @@ describe("Quizzes", () => {
     expect(await storage.getQuiz("nonexistent-quiz")).toBeUndefined();
   });
 
-  it("deleteQuiz — removes the quiz", async () => {
-    await storage.deleteQuiz(quizId);
+  it("deleteQuiz — removes the quiz and all associated attempts", async () => {
+    const attemptIds: string[] = [];
+    for (const score of [80, 65]) {
+      const attempt = await storage.createQuizAttempt({
+        quizId,
+        participantId: "p-001",
+        answers: [],
+        score,
+        maxScore: 100,
+        passed: score >= 70,
+        startedAt: new Date().toISOString(),
+      });
+      attemptIds.push(attempt.id);
+    }
+
+    expect(await storage.getQuizAttempts(quizId)).toHaveLength(attemptIds.length);
+    expect(await storage.deleteQuiz(quizId)).toBe(true);
     expect(await storage.getQuiz(quizId)).toBeUndefined();
+    expect(await storage.getQuizAttempts(quizId)).toEqual([]);
+    expect(
+      await db.select().from(quizAttemptsTable)
+        .where(eq(quizAttemptsTable.quizId, quizId)),
+    ).toEqual([]);
     quizId = "";
   });
 });
