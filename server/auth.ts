@@ -129,9 +129,17 @@ export async function checkDefaultAdminPassword(): Promise<void> {
 export function setupAuth(app: Express): void {
   const PgSession = connectPgSimple(session);
 
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
+  const configuredSecret = process.env.SESSION_SECRET;
+  const secret = configuredSecret?.trim() ? configuredSecret : undefined;
+  if (!secret && process.env.NODE_ENV === "production") {
     throw new Error("SESSION_SECRET environment variable is not set");
+  }
+  const sessionSecret = secret ?? randomBytes(32).toString("hex");
+  if (!secret) {
+    console.warn(
+      "[startup] SESSION_SECRET is not set; using a temporary development secret. " +
+        "Sessions will not survive a server restart.",
+    );
   }
 
   const pgStore = new PgSession({
@@ -146,7 +154,7 @@ export function setupAuth(app: Express): void {
   });
 
   const sessionSettings: session.SessionOptions = {
-    secret,
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     store: pgStore,

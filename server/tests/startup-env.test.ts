@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getMissingStartupEnvironment,
   validateStartupEnvironment,
 } from "../startup-env";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("startup environment validation", () => {
   it("reports every missing required variable without exposing values", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const environment = {
       NODE_ENV: "production",
       DATABASE_URL: "   ",
@@ -17,7 +22,7 @@ describe("startup environment validation", () => {
       "SESSION_SECRET",
     ]);
     expect(() => validateStartupEnvironment(environment)).toThrow(
-      "Missing required environment variable(s) for production: DATABASE_URL, SESSION_SECRET",
+      "[startup] Missing required environment variable(s): DATABASE_URL, SESSION_SECRET",
     );
   });
 
@@ -31,12 +36,18 @@ describe("startup environment validation", () => {
     expect(() => validateStartupEnvironment(environment)).not.toThrow();
   });
 
-  it("uses the same required checks outside production", () => {
+  it("warns and continues outside production", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     expect(() =>
       validateStartupEnvironment({
         NODE_ENV: "development",
         DATABASE_URL: "postgresql://configured-host/database",
       }),
-    ).toThrow("SESSION_SECRET");
+    ).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[startup] WARNING: Missing required environment variable(s): SESSION_SECRET. " +
+        "Continuing in development.",
+    );
   });
 });

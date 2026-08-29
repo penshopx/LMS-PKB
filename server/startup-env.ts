@@ -19,9 +19,12 @@ export function validateStartupEnvironment(
   const missing = getMissingStartupEnvironment(environment);
   if (missing.length === 0) return;
 
-  const mode = environment.NODE_ENV === "production" ? "production" : "this environment";
-  throw new Error(
-    `Missing required environment variable(s) for ${mode}: ${missing.join(", ")}. ` +
-      "Set them before starting the application.",
-  );
+  const message = `Missing required environment variable(s): ${missing.join(", ")}`;
+
+  if (environment.NODE_ENV === "production") {
+    console.error(`[startup] ${message}. Server will not start in production.`);
+    throw new Error(`[startup] ${message}`);
+  }
+
+  console.warn(`[startup] WARNING: ${message}. Continuing in development.`);
 }

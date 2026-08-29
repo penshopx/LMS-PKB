@@ -1,5 +1,4 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { serveStatic } from "./static";
 import { createServer } from "http";
 import { validateStartupEnvironment } from "./startup-env";
 
@@ -73,7 +72,6 @@ process.on("unhandledRejection", (reason) => {
 
     const { setupAuth, ensureAdminUser, checkDefaultAdminPassword } =
       await import("./auth");
-    const { registerRoutes } = await import("./routes");
     setupAuth(app);
 
     // Run SQL migrations (idempotent — backfills JSONB data, applies FKs/indexes)
@@ -91,6 +89,7 @@ process.on("unhandledRejection", (reason) => {
     // In production, refuse to start if the default password is still in use
     await checkDefaultAdminPassword();
 
+    const { registerRoutes } = await import("./routes");
     await registerRoutes(httpServer, app);
 
     app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -110,6 +109,7 @@ process.on("unhandledRejection", (reason) => {
     // setting up all the other routes so the catch-all route
     // doesn't interfere with the other routes
     if (process.env.NODE_ENV === "production") {
+      const { serveStatic } = await import("./static");
       serveStatic(app);
     } else {
       const { setupVite } = await import("./vite");

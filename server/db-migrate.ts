@@ -14,10 +14,6 @@ import * as fs from "fs";
 import * as path from "path";
 import pg from "pg";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set");
-}
-
 const PARTICIPANT_RELATIONS_MIGRATION = "001_participant_relations.sql";
 
 function resolveMigrationsDir(): string {
