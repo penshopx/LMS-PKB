@@ -24,6 +24,7 @@ import {
   CompetencyLevelNames
 } from "@/lib/data";
 import type { DashboardStats, HeatmapData, CompetencyCluster, CompetencyLevelType, LearningPath, Quiz, Certificate } from "@shared/schema";
+import { GustaftaEcosystem } from "@/components/gustafta-ecosystem";
 
 function StatCard({ 
   title, 
@@ -440,6 +441,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <GustaftaEcosystem compact />
     </div>
   );
 }

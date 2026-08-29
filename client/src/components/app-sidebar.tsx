@@ -10,12 +10,14 @@ import {
   FileCheck,
   FileQuestion,
   BarChart3,
-  LogOut
+  LogOut,
+  ExternalLink
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
+import { GUSTAFTA_HOME_URL } from "@/lib/gustafta";
 import {
   Sidebar,
   SidebarContent,
@@ -87,6 +89,12 @@ const certificationMenu = [
     icon: FileCheck,
   },
 ];
+
+const ecosystemMenu = {
+  title: "Gustafta",
+  url: GUSTAFTA_HOME_URL,
+  icon: ExternalLink,
+};
 
 function LogoutButton() {
   const [, navigate] = useLocation();
@@ -193,6 +201,27 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Ekosistem Kerja</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild data-testid="nav-gustafta">
+                  <a
+                    href={ecosystemMenu.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Buka ekosistem Gustafta di tab baru"
+                  >
+                    <ecosystemMenu.icon className="h-4 w-4" />
+                    <span>{ecosystemMenu.title}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
