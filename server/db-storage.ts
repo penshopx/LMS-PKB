@@ -585,11 +585,17 @@ export class DrizzleStorage implements IStorage {
   }
 
   async updateParticipantCompetencies(id: string, competencies: ParticipantCompetency[]): Promise<Participant | undefined> {
-    const existing = await this.getParticipant(id);
-    if (!existing) return undefined;
+    return db.transaction(async (tx) => {
+      // Serialize replacements for the same participant. Without this lock,
+      // two calls that both start from an empty competency set can each insert
+      // their payload and leave a mixture of both sets behind.
+      const participantRows = await tx
+        .select()
+        .from(participantsTable)
+        .where(eq(participantsTable.id, id))
+        .for("update");
+      if (!participantRows[0]) return undefined;
 
-    // Replace all competency rows for this participant atomically
-    await db.transaction(async (tx) => {
       await tx.delete(participantCompetenciesTable).where(eq(participantCompetenciesTable.participantId, id));
       if (competencies.length > 0) {
         await tx.insert(participantCompetenciesTable).values(
@@ -604,9 +610,23 @@ export class DrizzleStorage implements IStorage {
           }))
         );
       }
-    });
 
-    return { ...existing, competencies };
+      const [competencyRows, evidenceRows, learningRecordRows] = await Promise.all([
+        tx.select().from(participantCompetenciesTable)
+          .where(eq(participantCompetenciesTable.participantId, id)),
+        tx.select().from(evidencesTable)
+          .where(eq(evidencesTable.participantId, id)),
+        tx.select().from(learningRecordsTable)
+          .where(eq(learningRecordsTable.participantId, id)),
+      ]);
+
+      return toParticipant(
+        participantRows[0],
+        mapCompetencyRows(competencyRows),
+        mapEvidenceRows(evidenceRows),
+        mapLearningRecordRows(learningRecordRows),
+      );
+    });
   }
 
   async deleteParticipant(id: string): Promise<boolean> {

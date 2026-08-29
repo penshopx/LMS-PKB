@@ -1,0 +1,1 @@
+- [PostgreSQL concurrency test coordination](postgres-concurrency-tests.md) — managed DB hides session activity; coordinate overlapping transactions inside the test harness.
