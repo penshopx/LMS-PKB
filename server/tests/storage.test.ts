@@ -768,6 +768,169 @@ describe("Certificates", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Parent deletion cascades
+// ---------------------------------------------------------------------------
+describe("Parent deletion cascades", () => {
+  let clusterId: string;
+  let unitId: string;
+  let courseId: string;
+  let participantId: string;
+  let secondParticipantId: string;
+  let quizId: string;
+  let participantEnrollmentId: string;
+  let secondParticipantEnrollmentId: string;
+  let participantAttemptId: string;
+  let secondParticipantAttemptId: string;
+  let certificateId: string;
+  let secondParticipantCertificateId: string;
+  let secondParticipantCertificateNumber: string;
+
+  beforeAll(async () => {
+    const tag = tid();
+    const cluster = await storage.createCluster({
+      code: `PD${tag}`.slice(0, 10),
+      name: `Parent Deletion Cluster ${tag}`,
+      fullName: `Parent Deletion Cluster Full ${tag}`,
+      description: "For parent deletion tests",
+      color: "hsl(0 0% 25%)",
+    });
+    clusterId = cluster.id;
+
+    const unit = await storage.createUnit({
+      clusterId,
+      code: `PDU${tag}`.slice(0, 10),
+      name: `Parent Deletion Unit ${tag}`,
+      description: "For parent deletion tests",
+    });
+    unitId = unit.id;
+
+    const course = await storage.createCourse({
+      unitId,
+      targetLevel: "L2",
+      title: `Parent Deletion Course ${tag}`,
+      description: "For parent deletion tests",
+      duration: "1 jam",
+    });
+    courseId = course.id;
+
+    const participant = await storage.createParticipant({
+      nip: `PD${tag}`.slice(0, 18),
+      name: `Parent Deletion Participant ${tag}`,
+      position: "Staf",
+      unit: "Test",
+      email: `pd${tag}@test.go.id`,
+    });
+    participantId = participant.id;
+
+    const secondParticipant = await storage.createParticipant({
+      nip: `PD2${tag}`.slice(0, 18),
+      name: `Second Parent Deletion Participant ${tag}`,
+      position: "Staf",
+      unit: "Test",
+      email: `pd2${tag}@test.go.id`,
+    });
+    secondParticipantId = secondParticipant.id;
+
+    const quiz = await storage.createQuiz({
+      courseId,
+      title: `Parent Deletion Quiz ${tag}`,
+      description: "For parent deletion tests",
+      passingScore: 70,
+      maxAttempts: 3,
+      shuffleQuestions: false,
+      showResults: true,
+      questions: [],
+    });
+    quizId = quiz.id;
+
+    participantEnrollmentId = (await storage.createEnrollment(participantId, courseId)).id;
+    secondParticipantEnrollmentId = (await storage.createEnrollment(secondParticipantId, courseId)).id;
+    participantAttemptId = (await storage.createQuizAttempt({
+      quizId,
+      participantId,
+      answers: [],
+      score: 80,
+      maxScore: 100,
+      passed: true,
+      startedAt: new Date().toISOString(),
+    })).id;
+    secondParticipantAttemptId = (await storage.createQuizAttempt({
+      quizId,
+      participantId: secondParticipantId,
+      answers: [],
+      score: 40,
+      maxScore: 100,
+      passed: false,
+      startedAt: new Date().toISOString(),
+    })).id;
+    certificateId = (await storage.createCertificate({
+      participantId,
+      courseId,
+      title: "Parent Deletion Certificate",
+      description: "For parent deletion tests",
+    })).id;
+    const secondParticipantCertificate = await storage.createCertificate({
+      participantId: secondParticipantId,
+      courseId,
+      title: "Course Deletion Certificate",
+      description: "For course deletion tests",
+    });
+    secondParticipantCertificateId = secondParticipantCertificate.id;
+    secondParticipantCertificateNumber = secondParticipantCertificate.certificateNumber;
+  });
+
+  afterAll(async () => {
+    if (participantAttemptId) {
+      await db.delete(quizAttemptsTable).where(eq(quizAttemptsTable.id, participantAttemptId));
+    }
+    if (secondParticipantAttemptId) {
+      await db.delete(quizAttemptsTable).where(eq(quizAttemptsTable.id, secondParticipantAttemptId));
+    }
+    if (certificateId) {
+      await db.delete(certificatesTable).where(eq(certificatesTable.id, certificateId));
+    }
+    if (secondParticipantCertificateId) {
+      await db.delete(certificatesTable).where(eq(certificatesTable.id, secondParticipantCertificateId));
+    }
+    if (participantEnrollmentId) {
+      await db.delete(enrollmentsTable).where(eq(enrollmentsTable.id, participantEnrollmentId));
+    }
+    if (secondParticipantEnrollmentId) {
+      await db.delete(enrollmentsTable).where(eq(enrollmentsTable.id, secondParticipantEnrollmentId));
+    }
+    if (quizId) await db.delete(quizzesTable).where(eq(quizzesTable.id, quizId));
+    if (courseId) await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
+    if (participantId) await db.delete(participantsTable).where(eq(participantsTable.id, participantId));
+    if (secondParticipantId) await db.delete(participantsTable).where(eq(participantsTable.id, secondParticipantId));
+    if (unitId) await db.delete(unitsTable).where(eq(unitsTable.id, unitId));
+    if (clusterId) await db.delete(clustersTable).where(eq(clustersTable.id, clusterId));
+  });
+
+  it("deleteParticipant — removes enrollments, quiz attempts, and certificates", async () => {
+    expect(await storage.deleteParticipant(participantId)).toBe(true);
+
+    expect(await storage.getParticipant(participantId)).toBeUndefined();
+    expect(await storage.getEnrollmentsByParticipant(participantId)).toEqual([]);
+    expect(await storage.getQuizAttemptsByParticipant(participantId)).toEqual([]);
+    expect(await storage.getCertificatesByParticipant(participantId)).toEqual([]);
+    expect(await storage.getCertificate(certificateId)).toBeUndefined();
+  });
+
+  it("deleteCourse — removes course quizzes, attempts, enrollments, and certificates", async () => {
+    expect(await storage.deleteCourse(courseId)).toBe(true);
+
+    expect(await storage.getCourse(courseId)).toBeUndefined();
+    expect(await storage.getQuizzesByCourse(courseId)).toEqual([]);
+    expect(await storage.getQuizAttempts(quizId)).toEqual([]);
+    expect(await storage.getQuizAttemptsByParticipant(secondParticipantId)).toEqual([]);
+    expect(await storage.getEnrollmentsByParticipant(secondParticipantId)).toEqual([]);
+    expect(await storage.getCertificatesByParticipant(secondParticipantId)).toEqual([]);
+    expect(await storage.getCertificate(secondParticipantCertificateId)).toBeUndefined();
+    expect(await storage.verifyCertificate(secondParticipantCertificateNumber)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Assessors
 // ---------------------------------------------------------------------------
 describe("Assessors", () => {

@@ -530,6 +530,7 @@ export class DrizzleStorage implements IStorage {
   async deleteCourse(id: string): Promise<boolean> {
     const existing = await this.getCourse(id);
     if (!existing) return false;
+
     await db.transaction(async (tx) => {
       const quizRows = await tx
         .select({ id: quizzesTable.id })
@@ -544,9 +545,7 @@ export class DrizzleStorage implements IStorage {
 
       await tx.delete(enrollmentsTable).where(eq(enrollmentsTable.courseId, id));
       await tx.delete(learningRecordsTable).where(eq(learningRecordsTable.courseId, id));
-      await tx.update(certificatesTable)
-        .set({ courseId: null })
-        .where(eq(certificatesTable.courseId, id));
+      await tx.delete(certificatesTable).where(eq(certificatesTable.courseId, id));
       await tx.delete(coursesTable).where(eq(coursesTable.id, id));
     });
     return true;
