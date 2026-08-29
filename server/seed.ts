@@ -8,6 +8,9 @@ import {
   unitsTable,
   coursesTable,
   participantsTable,
+  participantCompetenciesTable,
+  evidencesTable,
+  learningRecordsTable,
   assessorsTable,
   schemesTable,
   learningPathsTable,
@@ -19,9 +22,6 @@ import { hashPassword } from "./auth";
 import { eq } from "drizzle-orm";
 import type {
   BehaviorIndicator,
-  ParticipantCompetency,
-  LearningRecord,
-  Evidence,
   Lesson,
 } from "@shared/schema";
 
@@ -179,106 +179,55 @@ export async function seedDatabase() {
   ]);
 
   // Participants
-  const p1Competencies: ParticipantCompetency[] = [
-    { unitId: "smap-01", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
-    { unitId: "smap-02", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
-    { unitId: "pan-01", currentLevel: "L2", targetLevel: "L2", lastAssessed: "2025-01-10", status: "achieved" },
-    { unitId: "pan-03", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
-  ];
-  const p1LearningHistory: LearningRecord[] = [
-    { id: "lr-1", courseId: "course-pan03-l2", startedAt: "2025-01-15", progress: 60, status: "in_progress" },
-  ];
-
-  const p2Competencies: ParticipantCompetency[] = [
-    { unitId: "smap-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
-    { unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
-    { unitId: "pan-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
-    { unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "on_track" },
-  ];
-  const p2LearningHistory: LearningRecord[] = [
-    { id: "lr-2", courseId: "course-smap01-l2", startedAt: "2025-01-12", completedAt: "2025-01-18", progress: 100, status: "completed" },
-  ];
-  const p2Evidences: Evidence[] = [
-    { id: "ev-1", unitId: "smap-01", type: "document", title: "Analisis Kasus Unit", description: "Analisis masalah strategis unit operasional", submittedAt: "2025-01-18", status: "approved", score: 85, feedback: "Analisis komprehensif" },
-  ];
-
   await db.insert(participantsTable).values([
-    {
-      id: "p-001",
-      nip: "198501012010011001",
-      name: "Andi Pratama",
-      position: "Staf Senior",
-      unit: "Operasional",
-      email: "andi.pratama@org.go.id",
-      competencies: p1Competencies,
-      learningHistory: p1LearningHistory,
-      evidences: [],
-    },
-    {
-      id: "p-002",
-      nip: "198702152012012002",
-      name: "Budi Santoso",
-      position: "Supervisor",
-      unit: "Operasional",
-      email: "budi.santoso@org.go.id",
-      competencies: p2Competencies,
-      learningHistory: p2LearningHistory,
-      evidences: p2Evidences,
-    },
-    {
-      id: "p-003",
-      nip: "198303032008032003",
-      name: "Citra Dewi",
-      position: "Manager",
-      unit: "Support",
-      email: "citra.dewi@org.go.id",
-      competencies: [
-        { unitId: "smap-01", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
-        { unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-05", status: "gap" },
-        { unitId: "smap-03", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
-        { unitId: "pan-02", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
-      ],
-      learningHistory: [],
-      evidences: [
-        { id: "ev-2", unitId: "smap-01", type: "presentation", title: "Strategic Analysis Presentation", description: "Presentasi analisis strategis Q4", submittedAt: "2025-01-05", status: "approved", score: 90 },
-      ],
-    },
-    {
-      id: "p-004",
-      nip: "198004042005041004",
-      name: "Dedi Kurniawan",
-      position: "Manager",
-      unit: "Operasional",
-      email: "dedi.kurniawan@org.go.id",
-      competencies: [
-        { unitId: "smap-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "on_track" },
-        { unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
-        { unitId: "pan-01", currentLevel: "L1", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
-        { unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
-      ],
-      learningHistory: [
-        { id: "lr-3", courseId: "course-smap01-l2", startedAt: "2025-01-14", progress: 80, status: "in_progress" },
-      ],
-      evidences: [],
-    },
-    {
-      id: "p-005",
-      nip: "197505052000051005",
-      name: "Eka Putra",
-      position: "Senior Manager",
-      unit: "Strategi",
-      email: "eka.putra@org.go.id",
-      competencies: [
-        { unitId: "smap-01", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
-        { unitId: "smap-02", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
-        { unitId: "smap-03", currentLevel: "L3", targetLevel: "L4", lastAssessed: "2025-01-01", status: "on_track" },
-        { unitId: "smap-04", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
-      ],
-      learningHistory: [],
-      evidences: [
-        { id: "ev-3", unitId: "smap-01", type: "document", title: "Strategic Brief 2025", description: "Dokumen strategi organisasi 2025", submittedAt: "2025-01-01", status: "approved", score: 95 },
-      ],
-    },
+    { id: "p-001", nip: "198501012010011001", name: "Andi Pratama", position: "Staf Senior", unit: "Operasional", email: "andi.pratama@org.go.id" },
+    { id: "p-002", nip: "198702152012012002", name: "Budi Santoso", position: "Supervisor", unit: "Operasional", email: "budi.santoso@org.go.id" },
+    { id: "p-003", nip: "198303032008032003", name: "Citra Dewi", position: "Manager", unit: "Support", email: "citra.dewi@org.go.id" },
+    { id: "p-004", nip: "198004042005041004", name: "Dedi Kurniawan", position: "Manager", unit: "Operasional", email: "dedi.kurniawan@org.go.id" },
+    { id: "p-005", nip: "197505052000051005", name: "Eka Putra", position: "Senior Manager", unit: "Strategi", email: "eka.putra@org.go.id" },
+  ]);
+
+  // Participant competencies (relational)
+  await db.insert(participantCompetenciesTable).values([
+    // p-001
+    { id: "pc-p001-1", participantId: "p-001", unitId: "smap-01", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
+    { id: "pc-p001-2", participantId: "p-001", unitId: "smap-02", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
+    { id: "pc-p001-3", participantId: "p-001", unitId: "pan-01", currentLevel: "L2", targetLevel: "L2", lastAssessed: "2025-01-10", status: "achieved" },
+    { id: "pc-p001-4", participantId: "p-001", unitId: "pan-03", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2025-01-10", status: "gap" },
+    // p-002
+    { id: "pc-p002-1", participantId: "p-002", unitId: "smap-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
+    { id: "pc-p002-2", participantId: "p-002", unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
+    { id: "pc-p002-3", participantId: "p-002", unitId: "pan-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "gap" },
+    { id: "pc-p002-4", participantId: "p-002", unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-08", status: "on_track" },
+    // p-003
+    { id: "pc-p003-1", participantId: "p-003", unitId: "smap-01", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
+    { id: "pc-p003-2", participantId: "p-003", unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-05", status: "gap" },
+    { id: "pc-p003-3", participantId: "p-003", unitId: "smap-03", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
+    { id: "pc-p003-4", participantId: "p-003", unitId: "pan-02", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2025-01-05", status: "achieved" },
+    // p-004
+    { id: "pc-p004-1", participantId: "p-004", unitId: "smap-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "on_track" },
+    { id: "pc-p004-2", participantId: "p-004", unitId: "smap-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
+    { id: "pc-p004-3", participantId: "p-004", unitId: "pan-01", currentLevel: "L1", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
+    { id: "pc-p004-4", participantId: "p-004", unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2025-01-12", status: "gap" },
+    // p-005
+    { id: "pc-p005-1", participantId: "p-005", unitId: "smap-01", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
+    { id: "pc-p005-2", participantId: "p-005", unitId: "smap-02", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
+    { id: "pc-p005-3", participantId: "p-005", unitId: "smap-03", currentLevel: "L3", targetLevel: "L4", lastAssessed: "2025-01-01", status: "on_track" },
+    { id: "pc-p005-4", participantId: "p-005", unitId: "smap-04", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2025-01-01", status: "achieved" },
+  ]);
+
+  // Evidences (relational)
+  await db.insert(evidencesTable).values([
+    { id: "ev-1", participantId: "p-002", unitId: "smap-01", type: "document", title: "Analisis Kasus Unit", description: "Analisis masalah strategis unit operasional", submittedAt: "2025-01-18", status: "approved", score: 85, feedback: "Analisis komprehensif" },
+    { id: "ev-2", participantId: "p-003", unitId: "smap-01", type: "presentation", title: "Strategic Analysis Presentation", description: "Presentasi analisis strategis Q4", submittedAt: "2025-01-05", status: "approved", score: 90, feedback: null },
+    { id: "ev-3", participantId: "p-005", unitId: "smap-01", type: "document", title: "Strategic Brief 2025", description: "Dokumen strategi organisasi 2025", submittedAt: "2025-01-01", status: "approved", score: 95, feedback: null },
+  ]);
+
+  // Learning records (relational)
+  await db.insert(learningRecordsTable).values([
+    { id: "lr-1", participantId: "p-001", courseId: "course-pan03-l2", startedAt: "2025-01-15", progress: 60, status: "in_progress" },
+    { id: "lr-2", participantId: "p-002", courseId: "course-smap01-l2", startedAt: "2025-01-12", completedAt: "2025-01-18", progress: 100, status: "completed" },
+    { id: "lr-3", participantId: "p-004", courseId: "course-smap01-l2", startedAt: "2025-01-14", progress: 80, status: "in_progress" },
   ]);
 
   // LSP Organization

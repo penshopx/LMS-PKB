@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -773,9 +773,6 @@ export const participantsTable = pgTable("participants", {
   position: text("position").notNull(),
   unit: text("unit").notNull(),
   email: text("email").notNull(),
-  competencies: jsonb("competencies").notNull().$type<ParticipantCompetency[]>(),
-  learningHistory: jsonb("learning_history").notNull().$type<LearningRecord[]>(),
-  evidences: jsonb("evidences").notNull().$type<Evidence[]>(),
 });
 
 export const learningPathsTable = pgTable("learning_paths", {
@@ -971,38 +968,53 @@ export const notificationsTable = pgTable("notifications", {
 // RELATIONAL TABLES (replaces JSONB arrays in participantsTable)
 // ============================================
 
-export const participantCompetenciesTable = pgTable("participant_competencies", {
-  id: varchar("id").primaryKey(),
-  participantId: varchar("participant_id").notNull(),
-  unitId: varchar("unit_id").notNull(),
-  currentLevel: varchar("current_level", { length: 4 }).notNull(),
-  targetLevel: varchar("target_level", { length: 4 }).notNull(),
-  lastAssessed: text("last_assessed").notNull(),
-  status: text("status").notNull().default("gap"),
-});
+export const participantCompetenciesTable = pgTable(
+  "participant_competencies",
+  {
+    id: varchar("id").primaryKey(),
+    participantId: varchar("participant_id").notNull().references(() => participantsTable.id, { onDelete: "cascade" }),
+    // RESTRICT: deleting a unit must not silently remove participant competency records
+    unitId: varchar("unit_id").notNull().references(() => unitsTable.id, { onDelete: "restrict" }),
+    currentLevel: varchar("current_level", { length: 4 }).notNull(),
+    targetLevel: varchar("target_level", { length: 4 }).notNull(),
+    lastAssessed: text("last_assessed").notNull(),
+    status: text("status").notNull().default("gap"),
+  },
+  (t) => [index("idx_participant_competencies_participant_id").on(t.participantId)],
+);
 
-export const evidencesTable = pgTable("evidences", {
-  id: varchar("id").primaryKey(),
-  participantId: varchar("participant_id").notNull(),
-  unitId: varchar("unit_id").notNull(),
-  type: text("type").notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  fileUrl: text("file_url"),
-  submittedAt: text("submitted_at").notNull(),
-  assessedAt: text("assessed_at"),
-  assessorId: varchar("assessor_id"),
-  score: integer("score"),
-  feedback: text("feedback"),
-  status: text("status").notNull().default("pending"),
-});
+export const evidencesTable = pgTable(
+  "evidences",
+  {
+    id: varchar("id").primaryKey(),
+    participantId: varchar("participant_id").notNull().references(() => participantsTable.id, { onDelete: "cascade" }),
+    // RESTRICT: deleting a unit must not silently remove participant evidence records
+    unitId: varchar("unit_id").notNull().references(() => unitsTable.id, { onDelete: "restrict" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    fileUrl: text("file_url"),
+    submittedAt: text("submitted_at").notNull(),
+    assessedAt: text("assessed_at"),
+    assessorId: varchar("assessor_id"),
+    score: integer("score"),
+    feedback: text("feedback"),
+    status: text("status").notNull().default("pending"),
+  },
+  (t) => [index("idx_evidences_participant_id").on(t.participantId)],
+);
 
-export const learningRecordsTable = pgTable("learning_records", {
-  id: varchar("id").primaryKey(),
-  participantId: varchar("participant_id").notNull(),
-  courseId: varchar("course_id").notNull(),
-  startedAt: text("started_at").notNull(),
-  completedAt: text("completed_at"),
-  progress: integer("progress").notNull().default(0),
-  status: text("status").notNull().default("not_started"),
-});
+export const learningRecordsTable = pgTable(
+  "learning_records",
+  {
+    id: varchar("id").primaryKey(),
+    participantId: varchar("participant_id").notNull().references(() => participantsTable.id, { onDelete: "cascade" }),
+    // RESTRICT: deleting a course must not silently remove participant learning records
+    courseId: varchar("course_id").notNull().references(() => coursesTable.id, { onDelete: "restrict" }),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    progress: integer("progress").notNull().default(0),
+    status: text("status").notNull().default("not_started"),
+  },
+  (t) => [index("idx_learning_records_participant_id").on(t.participantId)],
+);

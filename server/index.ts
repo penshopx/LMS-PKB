@@ -70,13 +70,13 @@ process.on("unhandledRejection", (reason) => {
 
 (async () => {
   try {
+    // Run SQL migrations (idempotent — backfills JSONB data, applies FKs/indexes)
+    const { runMigrations } = await import("./db-migrate");
+    await runMigrations();
+
     // Seed the database with initial data if empty
     const { seedDatabase } = await import("./seed");
     await seedDatabase();
-
-    // Migrate existing JSONB data into relational tables (idempotent)
-    const { migrateParticipantRelations } = await import("./migrate-participant-relations");
-    await migrateParticipantRelations();
 
     // Ensure a default admin user exists
     await ensureAdminUser();

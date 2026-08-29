@@ -34,7 +34,7 @@ import {
   lspOrganizationsTable,
   notificationsTable,
 } from "@shared/schema";
-import { eq, like } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 
 const storage = new DrizzleStorage();
 
@@ -1293,6 +1293,211 @@ describe("searchAll", () => {
     expect(result.participants.length).toBeLessThanOrEqual(5);
     expect(result.courses.length).toBeLessThanOrEqual(5);
     expect(result.units.length).toBeLessThanOrEqual(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Relational data integrity — seeded participants
+// ---------------------------------------------------------------------------
+describe("Seeded participant relational data", () => {
+  /**
+   * After the JSONB columns were removed, data should still be accessible
+   * exclusively via the relational tables. These tests verify that the seed
+   * correctly populated participant_competencies, evidences, and
+   * learning_records for the well-known seed participants.
+   */
+
+  it("p-001 has competencies and a learning record in relational tables", async () => {
+    const p = await storage.getParticipant("p-001");
+    expect(p).toBeDefined();
+    // seed inserts 4 competency rows for p-001
+    expect(p!.competencies.length).toBeGreaterThanOrEqual(1);
+    expect(p!.competencies.some(c => c.unitId === "smap-01")).toBe(true);
+    // seed inserts lr-1 for p-001
+    expect(p!.learningHistory.length).toBeGreaterThanOrEqual(1);
+    expect(p!.learningHistory.some(lr => lr.id === "lr-1")).toBe(true);
+    expect(p!.evidences).toEqual([]);
+  });
+
+  it("p-002 has competencies, a learning record, and an evidence in relational tables", async () => {
+    const p = await storage.getParticipant("p-002");
+    expect(p).toBeDefined();
+    expect(p!.competencies.length).toBeGreaterThanOrEqual(1);
+    // seed inserts lr-2 (completed) for p-002
+    expect(p!.learningHistory.some(lr => lr.id === "lr-2" && lr.status === "completed")).toBe(true);
+    // seed inserts ev-1 for p-002
+    expect(p!.evidences.some(e => e.id === "ev-1")).toBe(true);
+  });
+
+  it("p-003 has competencies and an evidence, no learning records", async () => {
+    const p = await storage.getParticipant("p-003");
+    expect(p).toBeDefined();
+    expect(p!.competencies.length).toBeGreaterThanOrEqual(1);
+    expect(p!.evidences.some(e => e.id === "ev-2")).toBe(true);
+    expect(p!.learningHistory).toEqual([]);
+  });
+
+  it("p-005 has the highest-level competencies and an evidence", async () => {
+    const p = await storage.getParticipant("p-005");
+    expect(p).toBeDefined();
+    const smap01 = p!.competencies.find(c => c.unitId === "smap-01");
+    expect(smap01).toBeDefined();
+    expect(smap01!.currentLevel).toBe("L4");
+    expect(p!.evidences.some(e => e.id === "ev-3")).toBe(true);
+  });
+
+  it("participant_id FK enforced — inserting a competency for a nonexistent participant rejects", async () => {
+    await expect(
+      db.insert(participantCompetenciesTable).values({
+        id: `test-fk-${randomUUID()}`,
+        participantId: "nonexistent-participant-xyz",
+        unitId: "smap-01",
+        currentLevel: "L1",
+        targetLevel: "L2",
+        lastAssessed: "2025-01-01",
+        status: "gap",
+      })
+    ).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Upgrade simulation — JSONB → relational migration path
+// ---------------------------------------------------------------------------
+describe("JSONB migration upgrade path", () => {
+  /**
+   * Simulates the scenario where a database still has the legacy JSONB columns
+   * on participants. We temporarily re-add those columns, insert a participant
+   * with non-seed JSONB data, run the backfill query (the same logic used in
+   * server/migrations/001_participant_relations.sql), then verify that every
+   * competency, evidence, and learning-history row survived.
+   */
+
+  const participantId = `p-upgrade-${randomUUID().slice(0, 8)}`;
+
+  afterAll(async () => {
+    // Clean up test data and temporary columns regardless of test outcome
+    await db.execute(sql.raw(`DELETE FROM participant_competencies WHERE participant_id = '${participantId}'`));
+    await db.execute(sql.raw(`DELETE FROM evidences WHERE participant_id = '${participantId}'`));
+    await db.execute(sql.raw(`DELETE FROM learning_records WHERE participant_id = '${participantId}'`));
+    await db.execute(sql.raw(`DELETE FROM participants WHERE id = '${participantId}'`));
+    await db.execute(sql.raw(`ALTER TABLE participants DROP COLUMN IF EXISTS _test_competencies`));
+    await db.execute(sql.raw(`ALTER TABLE participants DROP COLUMN IF EXISTS _test_evidences`));
+    await db.execute(sql.raw(`ALTER TABLE participants DROP COLUMN IF EXISTS _test_learning_history`));
+  });
+
+  it("backfills competencies, evidences, and learning records from JSONB values", async () => {
+    // 1. Add temporary JSONB columns to simulate the legacy schema state
+    await db.execute(sql.raw(`
+      ALTER TABLE participants
+        ADD COLUMN IF NOT EXISTS _test_competencies   jsonb DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS _test_evidences      jsonb DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS _test_learning_history jsonb DEFAULT '[]'::jsonb
+    `));
+
+    // 2. Insert a legacy participant (no FK on our temporary columns — this is fine)
+    await db.execute(sql.raw(`
+      INSERT INTO participants (id, nip, name, position, unit, email,
+                                _test_competencies, _test_evidences, _test_learning_history)
+      VALUES (
+        '${participantId}',
+        '111222333444',
+        'Upgrade Test Participant',
+        'Staf',
+        'Test Unit',
+        'upgrade-test@test.id',
+        '[{"unitId":"smap-01","currentLevel":"L2","targetLevel":"L3","lastAssessed":"2025-06-01","status":"gap"}]',
+        '[{"id":"ev-upg-1","unitId":"smap-01","type":"document","title":"Test Evidence","description":"Desc","submittedAt":"2025-06-01","status":"pending"}]',
+        '[{"id":"lr-upg-1","courseId":"course-smap01-l2","startedAt":"2025-06-01","progress":50,"status":"in_progress"}]'
+      )
+    `));
+
+    // 3. Run backfill — same logic as 001_participant_relations.sql but against
+    //    the _test_ columns so we don't interfere with the real schema state.
+    await db.execute(sql.raw(`
+      INSERT INTO participant_competencies
+             (id, participant_id, unit_id, current_level, target_level, last_assessed, status)
+      SELECT
+        'pc-upg-' || gen_random_uuid(),
+        p.id,
+        elem ->> 'unitId',
+        elem ->> 'currentLevel',
+        elem ->> 'targetLevel',
+        COALESCE(elem ->> 'lastAssessed', to_char(now(), 'YYYY-MM-DD')),
+        COALESCE(elem ->> 'status', 'gap')
+      FROM participants p
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(p._test_competencies, '[]'::jsonb)
+      ) AS elem
+      WHERE p.id = '${participantId}'
+        AND jsonb_array_length(COALESCE(p._test_competencies, '[]'::jsonb)) > 0
+        AND p.id NOT IN (SELECT DISTINCT participant_id FROM participant_competencies)
+    `));
+
+    await db.execute(sql.raw(`
+      INSERT INTO evidences
+             (id, participant_id, unit_id, type, title, description,
+              submitted_at, status)
+      SELECT
+        COALESCE(elem ->> 'id', 'ev-upg-' || gen_random_uuid()),
+        p.id,
+        elem ->> 'unitId',
+        elem ->> 'type',
+        elem ->> 'title',
+        COALESCE(elem ->> 'description', ''),
+        COALESCE(elem ->> 'submittedAt', to_char(now(), 'YYYY-MM-DD')),
+        COALESCE(elem ->> 'status', 'pending')
+      FROM participants p
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(p._test_evidences, '[]'::jsonb)
+      ) AS elem
+      WHERE p.id = '${participantId}'
+        AND jsonb_array_length(COALESCE(p._test_evidences, '[]'::jsonb)) > 0
+        AND p.id NOT IN (SELECT DISTINCT participant_id FROM evidences)
+      ON CONFLICT (id) DO NOTHING
+    `));
+
+    await db.execute(sql.raw(`
+      INSERT INTO learning_records
+             (id, participant_id, course_id, started_at, progress, status)
+      SELECT
+        COALESCE(elem ->> 'id', 'lr-upg-' || gen_random_uuid()),
+        p.id,
+        elem ->> 'courseId',
+        COALESCE(elem ->> 'startedAt', to_char(now(), 'YYYY-MM-DD')),
+        COALESCE((elem ->> 'progress')::integer, 0),
+        COALESCE(elem ->> 'status', 'not_started')
+      FROM participants p
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(p._test_learning_history, '[]'::jsonb)
+      ) AS elem
+      WHERE p.id = '${participantId}'
+        AND jsonb_array_length(COALESCE(p._test_learning_history, '[]'::jsonb)) > 0
+        AND p.id NOT IN (SELECT DISTINCT participant_id FROM learning_records)
+      ON CONFLICT (id) DO NOTHING
+    `));
+
+    // 4. Verify all relational rows were created
+    const p = await storage.getParticipant(participantId);
+    expect(p).toBeDefined();
+
+    // Competency migrated correctly
+    expect(p!.competencies).toHaveLength(1);
+    expect(p!.competencies[0].unitId).toBe("smap-01");
+    expect(p!.competencies[0].currentLevel).toBe("L2");
+    expect(p!.competencies[0].targetLevel).toBe("L3");
+    expect(p!.competencies[0].status).toBe("gap");
+
+    // Evidence migrated correctly
+    expect(p!.evidences).toHaveLength(1);
+    expect(p!.evidences[0].id).toBe("ev-upg-1");
+    expect(p!.evidences[0].type).toBe("document");
+
+    // Learning record migrated correctly
+    expect(p!.learningHistory).toHaveLength(1);
+    expect(p!.learningHistory[0].id).toBe("lr-upg-1");
+    expect(p!.learningHistory[0].progress).toBe(50);
+    expect(p!.learningHistory[0].status).toBe("in_progress");
   });
 });
 
