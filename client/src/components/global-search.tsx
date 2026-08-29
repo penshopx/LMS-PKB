@@ -138,7 +138,7 @@ export function GlobalSearch() {
               {(data?.courses?.length || 0) > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">
-                    <BookOpen className="h-3 w-3" /> E-Course
+                    <BookOpen className="h-3 w-3" /> Pembelajaran
                   </div>
                   {data!.courses.map(c => (
                     <button

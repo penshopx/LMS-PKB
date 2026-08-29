@@ -119,7 +119,7 @@ export default function LearningPaths() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Jalur Pembelajaran</h1>
-          <p className="text-muted-foreground">Kelola jalur pembelajaran terstruktur untuk pengembangan kompetensi</p>
+          <p className="text-muted-foreground">Kelola jalur SIAP dan Kepatuhan untuk pengembangan kompetensi konstruksi</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -137,7 +137,7 @@ export default function LearningPaths() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="title">Judul Jalur</Label>
-                  <Input id="title" name="title" placeholder="Contoh: Jalur Manajer Strategis" required data-testid="input-path-title" />
+                    <Input id="title" name="title" placeholder="Contoh: SIAP Tender" required data-testid="input-path-title" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Deskripsi</Label>
@@ -146,7 +146,7 @@ export default function LearningPaths() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="targetRole">Target Role</Label>
-                    <Input id="targetRole" name="targetRole" placeholder="Contoh: Manager" required data-testid="input-path-role" />
+                    <Input id="targetRole" name="targetRole" placeholder="Contoh: Tim Tender" required data-testid="input-path-role" />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="duration">Durasi</Label>
@@ -168,7 +168,7 @@ export default function LearningPaths() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="skills">Keterampilan (pisahkan dengan koma)</Label>
-                  <Input id="skills" name="skills" placeholder="Contoh: Strategic Analysis, Decision Making" data-testid="input-path-skills" />
+                  <Input id="skills" name="skills" placeholder="Contoh: Kualifikasi, Dokumen Pemilihan" data-testid="input-path-skills" />
                 </div>
               </div>
               <DialogFooter>

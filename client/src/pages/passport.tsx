@@ -40,95 +40,64 @@ const evidenceTypeIcons: Record<string, React.ElementType> = {
 
 function CompetencyRadar({ participant, units, clusters }: { participant: Participant; units?: UnitCompetency[]; clusters?: CompetencyCluster[] }) {
   const getUnit = (unitId: string) => units?.find(u => u.id === unitId);
-  
-  const smapComps = participant.competencies.filter(c => getUnit(c.unitId)?.clusterId === "cluster-smap");
-  const pancekComps = participant.competencies.filter(c => getUnit(c.unitId)?.clusterId === "cluster-pancek");
-
   const getLevelNum = (level: string) => parseInt(level.replace("L", ""));
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-blue-500" />
-            SMAP
-          </CardTitle>
-          <CardDescription className="text-xs">Strategic Management & Analytical Planning</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {smapComps.length > 0 ? smapComps.map((comp) => {
-            const unit = getUnit(comp.unitId);
-            const currentNum = getLevelNum(comp.currentLevel);
-            const progress = (currentNum / 4) * 100;
-            
-            return (
-              <div key={comp.unitId} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{unit?.code}</span>
-                  <div className="flex items-center gap-1">
-                    <Badge className={`${getLevelColor(comp.currentLevel)} text-xs`}>
-                      {comp.currentLevel}
-                    </Badge>
-                    {comp.status !== "achieved" && (
-                      <>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                        <Badge variant="outline" className="text-xs">
-                          {comp.targetLevel}
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-            );
-          }) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Tidak ada data SMAP</p>
-          )}
-        </CardContent>
-      </Card>
+      {clusters?.map(cluster => {
+        const competencies = participant.competencies.filter(
+          competency => getUnit(competency.unitId)?.clusterId === cluster.id,
+        );
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-teal-500" />
-            PANCEK
-          </CardTitle>
-          <CardDescription className="text-xs">Planning, Action, Negotiation, Communication, Execution</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {pancekComps.length > 0 ? pancekComps.map((comp) => {
-            const unit = getUnit(comp.unitId);
-            const currentNum = getLevelNum(comp.currentLevel);
-            const progress = (currentNum / 4) * 100;
-            
-            return (
-              <div key={comp.unitId} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{unit?.code}</span>
-                  <div className="flex items-center gap-1">
-                    <Badge className={`${getLevelColor(comp.currentLevel)} text-xs`}>
-                      {comp.currentLevel}
-                    </Badge>
-                    {comp.status !== "achieved" && (
-                      <>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                        <Badge variant="outline" className="text-xs">
-                          {comp.targetLevel}
+        return (
+          <Card key={cluster.id}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{ backgroundColor: cluster.color }}
+                  aria-hidden="true"
+                />
+                {cluster.name}
+              </CardTitle>
+              <CardDescription className="text-xs">{cluster.fullName}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {competencies.length > 0 ? competencies.map(comp => {
+                const unit = getUnit(comp.unitId);
+                const currentNum = getLevelNum(comp.currentLevel);
+                const progress = (currentNum / 4) * 100;
+
+                return (
+                  <div key={comp.unitId} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{unit?.code}</span>
+                      <div className="flex items-center gap-1">
+                        <Badge className={`${getLevelColor(comp.currentLevel)} text-xs`}>
+                          {comp.currentLevel}
                         </Badge>
-                      </>
-                    )}
+                        {comp.status !== "achieved" && (
+                          <>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="outline" className="text-xs">
+                              {comp.targetLevel}
+                            </Badge>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <Progress value={progress} className="h-2" />
                   </div>
-                </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-            );
-          }) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Tidak ada data PANCEK</p>
-          )}
-        </CardContent>
-      </Card>
+                );
+              }) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Belum ada asesmen pada klaster ini
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -372,8 +341,8 @@ export default function Passport() {
       <div className="p-6 space-y-6" data-testid="page-passport">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Competency Passport</h1>
-            <p className="text-muted-foreground">Profil kompetensi individu</p>
+            <h1 className="text-2xl font-bold">Paspor Kompetensi Konstruksi</h1>
+            <p className="text-muted-foreground">Profil kompetensi SIAP dan Kepatuhan individu</p>
           </div>
           <Skeleton className="h-10 w-64" />
         </div>
@@ -410,8 +379,8 @@ export default function Passport() {
     <div className="p-6 space-y-6" data-testid="page-passport">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Competency Passport</h1>
-          <p className="text-muted-foreground">Profil kompetensi individu</p>
+          <h1 className="text-2xl font-bold">Paspor Kompetensi Konstruksi</h1>
+          <p className="text-muted-foreground">Profil kompetensi SIAP dan Kepatuhan individu</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedParticipant || participant.id} onValueChange={setSelectedParticipant}>

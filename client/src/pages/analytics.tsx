@@ -82,7 +82,7 @@ export default function Analytics() {
     <div className="p-6 space-y-6" data-testid="page-analytics">
       <div>
         <h1 className="text-2xl font-bold">Analitik & Laporan</h1>
-        <p className="text-muted-foreground">Visualisasi data kompetensi dan pembelajaran organisasi secara mendalam</p>
+        <p className="text-muted-foreground">Visualisasi perkembangan pembelajaran bisnis konstruksi pada seluruh domain PUB-ASPEKINDO</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -142,7 +142,7 @@ export default function Analytics() {
               <BarChart3 className="h-5 w-5 text-purple-500" />
               Distribusi Level per Klaster
             </CardTitle>
-            <CardDescription>Perbandingan level kompetensi antar klaster SMAP dan PANCEK</CardDescription>
+            <CardDescription>Perbandingan level kompetensi antar klaster SIAP dan Kepatuhan</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton /> : (
@@ -245,7 +245,7 @@ export default function Analytics() {
               <Activity className="h-5 w-5 text-violet-500" />
               Radar Kompetensi Level
             </CardTitle>
-            <CardDescription>Perbandingan level SMAP vs PANCEK dalam format radar</CardDescription>
+            <CardDescription>Perbandingan level seluruh klaster kompetensi dalam format radar</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton height={200} /> : (

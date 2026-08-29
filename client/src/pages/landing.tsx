@@ -60,6 +60,29 @@ const features = [
   }
 ];
 
+const pubDomains = [
+  {
+    icon: FileCheck,
+    title: "SIAP Legalitas dan Perizinan",
+    description: "Legalitas BUJK, perizinan berusaha, serta kepatuhan data dan pelaporan sektor jasa konstruksi."
+  },
+  {
+    icon: Award,
+    title: "SIAP Sertifikasi",
+    description: "Kesiapan SBU dan pengelolaan SKK bagi tenaga kerja konstruksi sesuai kebutuhan badan usaha dan proyek."
+  },
+  {
+    icon: ClipboardCheck,
+    title: "SIAP Tender",
+    description: "Kualifikasi, dokumen pemilihan, penawaran, klarifikasi, dan pengendalian risiko kontraktual."
+  },
+  {
+    icon: Target,
+    title: "SIAP Proyek",
+    description: "Administrasi kontrak, pengendalian kinerja, mutu, keselamatan konstruksi, keuangan, dan pelaporan proyek."
+  }
+];
+
 const lspFeatures = [
   {
     icon: Shield,
@@ -158,6 +181,35 @@ export default function Landing() {
               </Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <Badge variant="outline" className="mb-4">Domain Pembelajaran PUB-ASPEKINDO</Badge>
+            <h2 className="text-3xl font-bold mb-4">Empat Kesiapan Utama Kontraktor</h2>
+            <p className="text-muted-foreground max-w-3xl mx-auto">
+              Materi mengacu pada konteks Pengembangan Usaha Berkelanjutan dalam Permen PUPR Nomor 7 Tahun 2024.
+              SMAP dan PANCEK melengkapi keempat domain ini sebagai pembelajaran Kepatuhan.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {pubDomains.map((domain) => (
+              <Card key={domain.title} className="hover-elevate">
+                <CardHeader>
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                    <domain.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-lg">{domain.title}</CardTitle>
+                  <CardDescription>{domain.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground text-center mt-8">
+            LKUT digunakan sebagai konteks pemetaan kebutuhan belajar, bukan sebagai formulir, modul penyusunan, atau proses pelaporan di dalam LMS.
+          </p>
         </div>
       </section>
 

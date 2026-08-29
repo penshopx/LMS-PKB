@@ -132,7 +132,7 @@ export default function Dashboard() {
     <div className="p-6 space-y-6" data-testid="page-dashboard">
       <div>
         <h1 className="text-2xl font-bold">Dashboard Kompetensi</h1>
-        <p className="text-muted-foreground">Pantau perkembangan kompetensi SMAP & PANCEK organisasi</p>
+        <p className="text-muted-foreground">Pantau kompetensi kontraktor dan tenaga kerja konstruksi pada seluruh domain PUB-ASPEKINDO</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -199,7 +199,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2">
                             <Badge 
                               variant="outline" 
-                              className={row.clusterCode === 'SMAP' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-teal-500 text-teal-600 dark:text-teal-400'}
+                              className="border-primary/50 text-primary"
                             >
                               {row.unitCode}
                             </Badge>
@@ -260,7 +260,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <Badge 
                         variant="outline"
-                        className={gap.clusterCode === 'SMAP' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-teal-500 text-teal-600 dark:text-teal-400'}
+                        className="border-primary/50 text-primary"
                       >
                         {gap.clusterCode}
                       </Badge>

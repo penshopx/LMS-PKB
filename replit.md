@@ -1,12 +1,21 @@
-# E-Course Builder - Platform Pembelajaran Berbasis Kompetensi
+# LMS PUB ASPEKINDO - Pembelajaran Bisnis Konstruksi
 
 ## Overview
 
-E-Course Builder is a generic competency-based learning management platform designed for Indonesian organizations. It enables the creation and management of e-courses tied to any competency framework. SMAP and PANCEK are included as sample frameworks, but organizations can create their own custom competency clusters and units.
+LMS PUB ASPEKINDO adalah platform Pembelajaran Bisnis Konstruksi untuk memperkuat kompetensi kontraktor dan mendukung pengembangan tenaga kerja konstruksi. Materi utamanya mengikuti konteks Pengembangan Usaha Berkelanjutan pada Permen PUPR Nomor 7 Tahun 2024.
+
+Ruang lingkup katalog:
+- **SIAP Legalitas dan Perizinan**
+- **SIAP Sertifikasi**
+- **SIAP Tender**
+- **SIAP Proyek**
+- **Kepatuhan** melalui materi SMAP (Sistem Manajemen Anti Penyuapan) dan PANCEK
+
+LKUT hanya menjadi konteks pemetaan kebutuhan belajar. Aplikasi tidak menyediakan fitur penyusunan, pengisian, penilaian, atau pelaporan LKUT.
 
 Key features:
-- **Generic Competency Framework**: Create custom competency clusters and units (SMAP & PANCEK as samples)
-- **E-Course builder**: 6-step template (Orientation, Context, Microlearning, Practice, Assessment, Reflection)
+- **PUB-ASPEKINDO Competency Framework**: Domain SIAP dan Kepatuhan dengan cluster/unit yang tetap dapat dikelola
+- **Pembelajaran 6 langkah**: Orientation, Context, Microlearning, Practice, Assessment, Reflection
 - **4-Level Progression**: L1 (Awareness) → L2 (Application) → L3 (Mastery) → L4 (Strategic)
 - **Evidence-based Assessment**: Track and document competency evidence
 - **Competency Passport**: Generate competency documentation for talent decisions
@@ -38,7 +47,7 @@ Key features:
 - `/` - Landing page (public) with LMS and LSP feature showcase
 - `/app` - Dashboard with competency analytics and quick access cards
 - `/app/competencies` - Competency cluster and unit management
-- `/app/courses` - E-Course Builder with 6-step template
+- `/app/courses` - Katalog dan builder pembelajaran dengan template 6 langkah
 - `/app/learning-paths` - Learning paths with enrollment and progress tracking
 - `/app/quizzes` - Quiz Engine with multiple question types (pilihan ganda, benar/salah, esai)
 - `/app/participants` - Participant management
@@ -70,7 +79,7 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Location**: `shared/schema.ts` (shared between client and server)
 - **Validation**: Zod schemas generated from Drizzle schemas via drizzle-zod
-- **Current Storage**: In-memory storage with sample data (PostgreSQL-ready schema)
+- **Current Storage**: PostgreSQL melalui Drizzle ORM; penyimpanan in-memory tetap tersedia untuk kompatibilitas pengujian
 
 ### Project Structure
 ```

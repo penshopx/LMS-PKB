@@ -468,8 +468,8 @@ export default function Competencies() {
     <div className="p-6 space-y-6" data-testid="page-competencies">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Ekosistem Kompetensi</h1>
-          <p className="text-muted-foreground">Kelola klaster dan unit kompetensi</p>
+          <h1 className="text-2xl font-bold">Kompetensi PUB-ASPEKINDO</h1>
+          <p className="text-muted-foreground">Kelola domain SIAP dan Kepatuhan untuk bisnis serta tenaga kerja konstruksi</p>
         </div>
         <div className="flex items-center gap-2">
           <AddClusterDialog onSuccess={() => {}} />

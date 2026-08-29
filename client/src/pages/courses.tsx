@@ -191,10 +191,10 @@ function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitC
 }
 
 const templateSteps = [
-  { type: "orientation", title: "Orientasi Kompetensi", desc: "Deskripsi standar & indikator perilaku", placeholder: "Jelaskan standar kompetensi, indikator perilaku, dan kriteria keberhasilan..." },
-  { type: "context", title: "Konteks Dunia Nyata", desc: "Studi kasus & tantangan kerja aktual", placeholder: "Tambahkan studi kasus nyata, skenario kerja, atau tantangan yang relevan..." },
-  { type: "microlearning", title: "Micro Learning", desc: "Video, artikel, simulasi (5-10 menit)", placeholder: "Masukkan link video, artikel, atau konten pembelajaran singkat..." },
-  { type: "practice", title: "Aktivitas Praktik", desc: "Tugas berbasis pekerjaan nyata", placeholder: "Jelaskan tugas praktik yang harus dikerjakan peserta..." },
+  { type: "orientation", title: "Orientasi Kompetensi", desc: "Standar, indikator, peran, dan evidensi", placeholder: "Jelaskan kompetensi bisnis konstruksi, indikator perilaku, peran, dan kriteria keberhasilan..." },
+  { type: "context", title: "Konteks Usaha Konstruksi", desc: "Kasus badan usaha atau proyek aktual", placeholder: "Tambahkan studi kasus legalitas, sertifikasi, tender, proyek, atau kepatuhan. LKUT hanya boleh digunakan sebagai konteks kebutuhan belajar..." },
+  { type: "microlearning", title: "Regulasi dan Praktik Utama", desc: "Regulasi, video, artikel, dan checklist", placeholder: "Masukkan ringkasan regulasi dan praktik konstruksi yang relevan..." },
+  { type: "practice", title: "Praktik Berbasis Pekerjaan", desc: "Tugas pada skenario usaha atau proyek", placeholder: "Jelaskan tugas praktik konstruksi tanpa membuat proses penyusunan atau pelaporan LKUT..." },
   { type: "assessment", title: "Asesmen", desc: "Project, studi kasus, observasi", placeholder: "Tentukan metode asesmen: project, studi kasus, atau observasi..." },
   { type: "reflection", title: "Evidensi & Refleksi", desc: "Dokumentasi & portofolio kompetensi", placeholder: "Jelaskan jenis evidensi dan format refleksi yang diperlukan..." }
 ];
@@ -272,7 +272,7 @@ function CourseBuilderTemplate({ onStartBuild }: { onStartBuild?: () => void }) 
               data-testid="button-generate-course"
             >
               <GraduationCap className="h-4 w-4 mr-2" />
-              {completedSteps < 6 ? `Selesaikan ${6 - completedSteps} langkah lagi` : "Buat E-Course dari Template"}
+              {completedSteps < 6 ? `Selesaikan ${6 - completedSteps} langkah lagi` : "Buat Pembelajaran dari Template"}
             </Button>
           </div>
         )}

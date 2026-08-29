@@ -334,7 +334,7 @@ export default function Assessment() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="specializations">Spesialisasi (pisahkan dengan koma)</Label>
-                      <Input id="specializations" name="specializations" placeholder="Strategic Management, Leadership" data-testid="input-assessor-spec" />
+                      <Input id="specializations" name="specializations" placeholder="Manajemen Proyek, Administrasi Kontrak" data-testid="input-assessor-spec" />
                     </div>
                   </div>
                   <DialogFooter>

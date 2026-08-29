@@ -257,7 +257,7 @@ function CreateParticipantForm({ onClose }: { onClose: () => void }) {
         <Input 
           id="email" 
           type="email" 
-          placeholder="email@org.go.id" 
+          placeholder="nama@perusahaan.id"
           value={formData.email}
           onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
           data-testid="input-email" 

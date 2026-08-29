@@ -735,7 +735,7 @@ export class DrizzleStorage implements IStorage {
         return {
           unitId,
           unitName: unit?.name || unitId,
-          clusterCode: (cluster?.code || "SMAP") as "SMAP" | "PANCEK",
+          clusterCode: cluster?.code || "LAINNYA",
           gapCount: data.count,
           avgCurrentLevel: data.currentSum / data.count,
           avgTargetLevel: data.targetSum / data.count,
@@ -774,7 +774,7 @@ export class DrizzleStorage implements IStorage {
         unitId: unit.id,
         unitCode: unit.code,
         unitName: unit.name,
-        clusterCode: (cluster?.code || "SMAP") as "SMAP" | "PANCEK",
+        clusterCode: cluster?.code || "LAINNYA",
         l1Count: competencies.filter(c => c.currentLevel === "L1").length,
         l2Count: competencies.filter(c => c.currentLevel === "L2").length,
         l3Count: competencies.filter(c => c.currentLevel === "L3").length,

@@ -42,6 +42,7 @@ import type {
   Achievement,
   Notification
 } from "@shared/schema";
+import { PUB_CLUSTERS, PUB_COURSES, PUB_LEARNING_PATHS, PUB_PARTICIPANTS, PUB_UNITS } from "./pub-catalog";
 
 // Sample data imports (replicated from client for server use)
 const competencyClusters: CompetencyCluster[] = [
@@ -450,10 +451,10 @@ export class MemStorage implements IStorage {
   private notifications: Map<string, Notification>;
 
   constructor() {
-    this.clusters = new Map(competencyClusters.map(c => [c.id, c]));
-    this.units = new Map([...smapUnits, ...pancekUnits].map(u => [u.id, u]));
-    this.courses = new Map(initialCourses.map(c => [c.id, c]));
-    this.participants = new Map(initialParticipants.map(p => [p.id, p]));
+    this.clusters = new Map(PUB_CLUSTERS.map(c => [c.id, c]));
+    this.units = new Map(PUB_UNITS.map(u => [u.id, u]));
+    this.courses = new Map(PUB_COURSES.map(c => [c.id, c]));
+    this.participants = new Map(PUB_PARTICIPANTS.map(p => [p.id, p]));
     this.learningPaths = new Map();
     this.enrollments = new Map();
     this.quizzes = new Map();
@@ -480,7 +481,7 @@ export class MemStorage implements IStorage {
         type: "warning",
         category: "assessment",
         title: "Gap Kompetensi Terdeteksi",
-        message: "3 peserta memiliki gap kompetensi kritis di unit SMAP-01. Segera jadwalkan pelatihan.",
+        message: "Terdapat gap kompetensi pada SIAP Proyek. Jadwalkan pembelajaran pengendalian proyek dan keselamatan konstruksi.",
         link: "/app/competencies",
         isRead: false,
         createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
@@ -491,7 +492,7 @@ export class MemStorage implements IStorage {
         type: "success",
         category: "certificate",
         title: "Sertifikat Baru Diterbitkan",
-        message: "Sertifikat kompetensi berhasil diterbitkan untuk Budi Santoso pada skema SMAP.",
+        message: "Sertifikat kompetensi konstruksi berhasil diterbitkan untuk peserta yang telah menyelesaikan asesmen.",
         link: "/app/certificates",
         isRead: false,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
@@ -513,7 +514,7 @@ export class MemStorage implements IStorage {
         type: "info",
         category: "course",
         title: "E-Course Baru Ditambahkan",
-        message: "Kursus 'Pengambilan Keputusan Berbasis Data L2' telah dipublikasikan dan siap diakses peserta.",
+        message: "Kursus 'SIAP Tender: Kualifikasi dan Dokumen Pemilihan' telah dipublikasikan dan siap diakses peserta.",
         link: "/app/courses",
         isRead: true,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
@@ -535,7 +536,7 @@ export class MemStorage implements IStorage {
         type: "success",
         category: "assessment",
         title: "Asesi Lulus Uji Kompetensi",
-        message: "Siti Rahayu dinyatakan KOMPETEN pada skema SKM-SMAP-01. Sertifikat dapat diterbitkan.",
+        message: "Asesi dinyatakan KOMPETEN pada skema manajemen pelaksanaan proyek konstruksi. Sertifikat dapat diterbitkan.",
         link: "/app/assessment",
         isRead: true,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString()
@@ -547,11 +548,11 @@ export class MemStorage implements IStorage {
   private initializeSampleLMSData() {
     const sampleLSP: LSPOrganization = {
       id: "lsp-001",
-      name: "LSP Training Indonesia",
-      licenseNumber: "BNSP-LSP-2024-001",
+      name: "LSP Konstruksi Indonesia",
+      licenseNumber: "BNSP-LSP-KONSTRUKSI-001",
       address: "Jakarta, Indonesia",
       phone: "+62-21-12345678",
-      email: "info@lsp-training.id",
+      email: "info@example.id",
       competencySchemes: [],
       status: "active",
       validUntil: "2027-12-31",
@@ -562,11 +563,11 @@ export class MemStorage implements IStorage {
     const sampleScheme: CompetencyScheme = {
       id: "scheme-001",
       lspId: "lsp-001",
-      code: "SKM-SMAP-01",
-      name: "Skema Sertifikasi Manajer Strategis",
-      description: "Sertifikasi untuk kompetensi manajemen strategis dan analisis",
-      skkniCode: "SKKNI-2024-001",
-      unitIds: ["smap-01", "smap-02", "smap-03", "smap-04"],
+      code: "SKK-PROYEK-01",
+      name: "Skema Manajemen Pelaksanaan Proyek Konstruksi",
+      description: "Sertifikasi kompetensi pengelolaan administrasi kontrak, kinerja, mutu, dan keselamatan proyek konstruksi",
+      skkniCode: "SKKNI-KONSTRUKSI",
+      unitIds: ["proyek-01", "proyek-02", "pan-03", "smap-01"],
       assessmentMethods: ["written_test", "portfolio", "oral_interview", "observation"],
       duration: "2 hari",
       fee: 2500000,
@@ -578,11 +579,11 @@ export class MemStorage implements IStorage {
       id: "assessor-001",
       registrationNumber: "NRA-2024-0001",
       name: "Dr. Ahmad Wijaya",
-      email: "ahmad.wijaya@lsp.id",
+      email: "ahmad.wijaya@example.id",
       phone: "+62-812-3456789",
       lspId: "lsp-001",
       competencySchemes: ["scheme-001"],
-      specializations: ["Strategic Management", "Leadership"],
+      specializations: ["Manajemen Proyek Konstruksi", "Administrasi Kontrak", "Keselamatan Konstruksi"],
       status: "active",
       validUntil: "2026-12-31",
       totalAssessments: 45,
@@ -590,20 +591,7 @@ export class MemStorage implements IStorage {
     };
     this.assessors.set(sampleAssessor.id, sampleAssessor);
 
-    const samplePath: LearningPath = {
-      id: "path-001",
-      title: "Jalur Manajer Strategis",
-      description: "Jalur pembelajaran lengkap untuk menjadi manajer strategis yang kompeten",
-      targetRole: "Strategic Manager",
-      duration: "3 bulan",
-      difficulty: "advanced",
-      courseIds: ["course-smap01-l2", "course-pan03-l2"],
-      prerequisites: [],
-      skills: ["Strategic Analysis", "Decision Making", "Problem Solving"],
-      isPublished: true,
-      createdAt: "2025-01-01"
-    };
-    this.learningPaths.set(samplePath.id, samplePath);
+    PUB_LEARNING_PATHS.forEach(path => this.learningPaths.set(path.id, path));
   }
 
   // Clusters
