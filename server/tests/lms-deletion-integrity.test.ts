@@ -115,6 +115,32 @@ describe("LMS deletion integrity", () => {
     ).toEqual([]);
   });
 
+  it("direct database quiz deletion cascades its attempts", async () => {
+    const participantId = await createParticipant("direct-quiz");
+    const quiz = await storage.createQuiz({
+      courseId,
+      title: "Directly deleted quiz",
+      description: "Direct deletion fixture",
+      questions: [],
+    });
+    const attempt = await storage.createQuizAttempt({
+      quizId: quiz.id,
+      participantId,
+      answers: [],
+      score: 70,
+      maxScore: 100,
+      passed: true,
+      startedAt: new Date().toISOString(),
+    });
+
+    await db.delete(quizzesTable).where(eq(quizzesTable.id, quiz.id));
+
+    expect(
+      await db.select().from(quizAttemptsTable)
+        .where(eq(quizAttemptsTable.id, attempt.id)),
+    ).toEqual([]);
+  });
+
   it("deleting a course removes quizzes and attempts but preserves certificates", async () => {
     const participantId = await createParticipant("course");
     const quiz = await storage.createQuiz({
