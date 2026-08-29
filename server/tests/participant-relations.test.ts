@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import pg from "pg";
 import { db } from "../db";
 import { DrizzleStorage } from "../db-storage";
+import { seedDatabase } from "../seed";
 import {
   clustersTable,
   coursesTable,
@@ -316,5 +317,54 @@ describe("participant relational persistence", () => {
       evidences: 0,
       learningRecords: 0,
     });
+  });
+
+  it("seed synchronization preserves participant evidence", async () => {
+    const evidenceId = `rel-seed-preserve-${tag}`;
+    const [originalParticipant] = await db.select()
+      .from(participantsTable)
+      .where(eq(participantsTable.id, "p-001"));
+    expect(originalParticipant).toBeDefined();
+
+    await db.update(participantsTable)
+      .set({ email: "andi.pratama@org.go.id" })
+      .where(eq(participantsTable.id, "p-001"));
+
+    await db.insert(evidencesTable).values({
+      id: evidenceId,
+      participantId: "p-001",
+      unitId: "smap-01",
+      type: "document",
+      title: "Evidence added after onboarding",
+      description: "Must survive the next startup seed synchronization",
+      submittedAt: "2026-08-29",
+      status: "pending",
+    });
+
+    try {
+      await seedDatabase();
+
+      const [preservedEvidence] = await db.select()
+        .from(evidencesTable)
+        .where(eq(evidencesTable.id, evidenceId));
+      expect(preservedEvidence).toMatchObject({
+        participantId: "p-001",
+        title: "Evidence added after onboarding",
+      });
+
+      const [migratedParticipant] = await db.select()
+        .from(participantsTable)
+        .where(eq(participantsTable.id, "p-001"));
+      expect(migratedParticipant.email).toBe("andi.pratama@example.id");
+    } finally {
+      await db.delete(evidencesTable).where(eq(evidencesTable.id, evidenceId));
+      await db.update(participantsTable).set({
+        nip: originalParticipant.nip,
+        name: originalParticipant.name,
+        position: originalParticipant.position,
+        unit: originalParticipant.unit,
+        email: originalParticipant.email,
+      }).where(eq(participantsTable.id, originalParticipant.id));
+    }
   });
 });

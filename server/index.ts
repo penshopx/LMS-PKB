@@ -71,8 +71,9 @@ process.on("unhandledRejection", (reason) => {
 (async () => {
   try {
     // Run SQL migrations (idempotent — backfills JSONB data, applies FKs/indexes)
-    const { runMigrations } = await import("./db-migrate");
+    const { runMigrations, verifyRequiredTables } = await import("./db-migrate");
     await runMigrations();
+    await verifyRequiredTables();
 
     // Seed the database with initial data if empty
     const { seedDatabase } = await import("./seed");

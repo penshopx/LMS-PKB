@@ -29,11 +29,11 @@ import {
 } from "./pub-catalog";
 
 const LEGACY_FIXTURE_EMAILS: Record<string, string[]> = {
-  "p-001": ["andi.pratama@org.go.id", "andi.pratama@example.id"],
-  "p-002": ["budi.santoso@org.go.id", "budi.santoso@example.id"],
-  "p-003": ["citra.dewi@org.go.id", "citra.dewi@example.id"],
-  "p-004": ["dedi.kurniawan@org.go.id", "dedi.kurniawan@example.id"],
-  "p-005": ["eka.putra@org.go.id", "eka.putra@example.id"],
+  "p-001": ["andi.pratama@org.go.id"],
+  "p-002": ["budi.santoso@org.go.id"],
+  "p-003": ["citra.dewi@org.go.id"],
+  "p-004": ["dedi.kurniawan@org.go.id"],
+  "p-005": ["eka.putra@org.go.id"],
 };
 
 async function synchronizePubCatalog() {
@@ -100,41 +100,6 @@ async function synchronizePubCatalog() {
         unit: participant.unit,
         email: participant.email,
       }).where(eq(participantsTable.id, participant.id));
-
-      await tx.delete(participantCompetenciesTable)
-        .where(eq(participantCompetenciesTable.participantId, participant.id));
-      await tx.delete(evidencesTable)
-        .where(eq(evidencesTable.participantId, participant.id));
-      await tx.delete(learningRecordsTable)
-        .where(eq(learningRecordsTable.participantId, participant.id));
-
-      if (participant.competencies.length > 0) {
-        await tx.insert(participantCompetenciesTable).values(
-          participant.competencies.map((competency, index) => ({
-            id: `pc-${participant.id}-${index + 1}`,
-            participantId: participant.id,
-            ...competency,
-          })),
-        );
-      }
-
-      if (participant.evidences.length > 0) {
-        await tx.insert(evidencesTable).values(
-          participant.evidences.map(evidence => ({
-            participantId: participant.id,
-            ...evidence,
-          })),
-        );
-      }
-
-      if (participant.learningHistory.length > 0) {
-        await tx.insert(learningRecordsTable).values(
-          participant.learningHistory.map(record => ({
-            participantId: participant.id,
-            ...record,
-          })),
-        );
-      }
     });
   }
 }

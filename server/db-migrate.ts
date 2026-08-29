@@ -12,18 +12,105 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { fileURLToPath } from "url";
 import pg from "pg";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set");
 }
 
-// __dirname is not available in ESM; derive it from import.meta.url instead.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const PARTICIPANT_RELATIONS_MIGRATION = "001_participant_relations.sql";
 
-const MIGRATIONS_DIR = path.join(__dirname, "migrations");
+function resolveMigrationsDir(): string {
+  const candidateDirectories = [
+    ...(typeof __dirname !== "undefined"
+      ? [path.join(__dirname, "migrations")]
+      : []),
+    path.join(process.cwd(), "server", "migrations"),
+  ];
+
+  return candidateDirectories.find((directory) =>
+    fs.existsSync(path.join(directory, PARTICIPANT_RELATIONS_MIGRATION))
+  ) ?? path.join(process.cwd(), "server", "migrations");
+}
+
+const MIGRATIONS_DIR = resolveMigrationsDir();
+
+const REQUIRED_PARTICIPANT_RELATION_TABLES = [
+  "participant_competencies",
+  "evidences",
+  "learning_records",
+] as const;
+
+const LEGACY_PARTICIPANT_COLUMNS = [
+  "competencies",
+  "evidences",
+  "learning_history",
+] as const;
+
+/**
+ * Verify the tables used by participant detail and learning flows exist.
+ *
+ * This check intentionally runs after migrations and before seeding/routes are
+ * set up. A missing table must stop startup instead of making participant
+ * reads appear to succeed with incomplete data or fail later with a 500.
+ */
+export async function verifyRequiredTables(
+  { schemaName = "public" }: { schemaName?: string } = {},
+): Promise<void> {
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+
+  try {
+    const { rows } = await client.query<{ table_name: string }>(
+      `
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = $1
+          AND table_type = 'BASE TABLE'
+          AND table_name = ANY($2::text[])
+      `,
+      [schemaName, REQUIRED_PARTICIPANT_RELATION_TABLES],
+    );
+
+    const existingTables = new Set(rows.map(({ table_name }) => table_name));
+    const missingTables = REQUIRED_PARTICIPANT_RELATION_TABLES.filter(
+      (tableName) => !existingTables.has(tableName),
+    );
+
+    if (missingTables.length > 0) {
+      throw new Error(
+        `Required database table(s) are missing: ${missingTables.join(", ")}. ` +
+        "Run `npm run db:push` or apply the database migrations before starting the server.",
+      );
+    }
+
+    const legacyColumnsResult = await client.query<{ column_name: string }>(
+      `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = 'participants'
+          AND column_name = ANY($2::text[])
+      `,
+      [schemaName, LEGACY_PARTICIPANT_COLUMNS],
+    );
+    const legacyColumns = legacyColumnsResult.rows.map(({ column_name }) => column_name);
+
+    if (legacyColumns.length > 0) {
+      throw new Error(
+        `Participant data migration is incomplete. Legacy column(s) still exist on ${schemaName}.participants: ` +
+        `${legacyColumns.join(", ")}. Apply ${PARTICIPANT_RELATIONS_MIGRATION} before starting the server ` +
+        "so existing participant data is backfilled safely.",
+      );
+    }
+
+    console.log(
+      `[db-check] Required participant relation tables present: ${REQUIRED_PARTICIPANT_RELATION_TABLES.join(", ")}`,
+    );
+  } finally {
+    await client.end();
+  }
+}
 
 export async function runMigrations(): Promise<void> {
   // Use a dedicated client (not the pool) so we control the transaction ourselves.
