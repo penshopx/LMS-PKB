@@ -1,7 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import passport from "passport";
-import { requireAuth, changeUserPassword } from "./auth";
+import {
+  requireAuth,
+  changeUserPassword,
+  passwordChangeAttemptLimiter,
+} from "./auth";
 import { storage } from "./storage";
 import { 
   insertParticipantSchema, 
@@ -76,6 +80,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Password baru minimal 6 karakter" });
       }
 
+      const source = req.ip || req.socket.remoteAddress || "unknown";
+      const attempt = await passwordChangeAttemptLimiter.tryAcquire(user.id, source);
+      if (!attempt.allowed) {
+        res.set("Retry-After", String(attempt.retryAfterSeconds));
+        return res.status(429).json({
+          message: "Terlalu banyak percobaan. Silakan coba lagi nanti.",
+        });
+      }
+
       const result = await changeUserPassword(user.id, currentPassword, newPassword);
       if (result === "user_not_found") {
         return res.status(404).json({ message: "User tidak ditemukan" });
@@ -84,6 +97,11 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Password saat ini tidak benar" });
       }
 
+      try {
+        await passwordChangeAttemptLimiter.recordSuccessfulChange(user.id, source);
+      } catch (error) {
+        console.error("[auth] Failed to clear successful password-change attempt:", error);
+      }
       res.json({ message: "Password berhasil diubah" });
     } catch (error) {
       res.status(500).json({ message: "Gagal mengubah password" });

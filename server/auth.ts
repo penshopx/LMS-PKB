@@ -4,7 +4,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { Express, RequestHandler } from "express";
@@ -47,6 +47,145 @@ export type ChangePasswordResult =
   | "updated"
   | "user_not_found"
   | "invalid_current_password";
+
+export const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
+export const PASSWORD_CHANGE_WINDOW_MS = 15 * 60 * 1000;
+
+type PasswordChangeAttemptBucket = {
+  attempt_count: number;
+  retry_after_seconds: number;
+};
+
+type PasswordChangeAttemptResult =
+  | { allowed: true }
+  | { allowed: false; retryAfterSeconds: number };
+
+/**
+ * Limits password-change attempts independently by account and source.
+ *
+ * PostgreSQL keeps counters shared across server instances and restarts. Both
+ * reservations are committed or rolled back together, so concurrent requests
+ * cannot partially consume one bucket or exceed the limit.
+ */
+class PasswordChangeAttemptLimiter {
+  async tryAcquire(userId: string, source: string): Promise<PasswordChangeAttemptResult> {
+    const accountKey = `account:${userId}`;
+    const sourceKey = `source:${source}`;
+    await pool.query(
+      `
+        DELETE FROM password_change_attempts
+        WHERE window_started_at <= now() - ($1::bigint * interval '1 millisecond')
+      `,
+      [PASSWORD_CHANGE_WINDOW_MS],
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      try {
+        const { rows } = await client.query<PasswordChangeAttemptBucket>(
+          `
+            INSERT INTO password_change_attempts
+              (attempt_key, attempt_count, window_started_at)
+            VALUES
+              ($1, 1, now()),
+              ($2, 1, now())
+            ON CONFLICT (attempt_key) DO UPDATE
+            SET
+              attempt_count = CASE
+                WHEN password_change_attempts.window_started_at
+                  <= now() - ($3::bigint * interval '1 millisecond')
+                THEN 1
+                ELSE password_change_attempts.attempt_count + 1
+              END,
+              window_started_at = CASE
+                WHEN password_change_attempts.window_started_at
+                  <= now() - ($3::bigint * interval '1 millisecond')
+                THEN now()
+                ELSE password_change_attempts.window_started_at
+              END
+            RETURNING
+              attempt_count,
+              GREATEST(
+                1,
+                CEIL(EXTRACT(EPOCH FROM (
+                  window_started_at
+                  + ($3::bigint * interval '1 millisecond')
+                  - now()
+                )))
+              )::integer AS retry_after_seconds
+          `,
+          [accountKey, sourceKey, PASSWORD_CHANGE_WINDOW_MS],
+        );
+
+        const blockedBuckets = rows.filter(
+          ({ attempt_count }) => attempt_count > PASSWORD_CHANGE_MAX_ATTEMPTS,
+        );
+        if (blockedBuckets.length > 0) {
+          await client.query("ROLLBACK");
+          return {
+            allowed: false,
+            retryAfterSeconds: Math.max(
+              ...blockedBuckets.map(({ retry_after_seconds }) => retry_after_seconds),
+            ),
+          };
+        }
+
+        await client.query("COMMIT");
+        return { allowed: true };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  async recordSuccessfulChange(userId: string, source: string): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      try {
+        await client.query(
+          "DELETE FROM password_change_attempts WHERE attempt_key = $1",
+          [`account:${userId}`],
+        );
+        await client.query(
+          `
+            UPDATE password_change_attempts
+            SET attempt_count = GREATEST(attempt_count - 1, 0)
+            WHERE attempt_key = $1
+          `,
+          [`source:${source}`],
+        );
+        await client.query(
+          `
+            DELETE FROM password_change_attempts
+            WHERE attempt_key = $1 AND attempt_count = 0
+          `,
+          [`source:${source}`],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  async reset(): Promise<void> {
+    await pool.query("DELETE FROM password_change_attempts");
+  }
+}
+
+export const passwordChangeAttemptLimiter = new PasswordChangeAttemptLimiter();
+
+export async function resetPasswordChangeAttemptLimiter(): Promise<void> {
+  await passwordChangeAttemptLimiter.reset();
+}
 
 export async function changeUserPassword(
   userId: string,
@@ -127,6 +266,11 @@ export async function checkDefaultAdminPassword(): Promise<void> {
 }
 
 export function setupAuth(app: Express): void {
+  // Replit ingress connects to the application through a local sidecar. Trust
+  // only loopback proxy hops so req.ip uses the edge-appended client address
+  // without accepting an arbitrary leftmost X-Forwarded-For value.
+  app.set("trust proxy", "loopback");
+
   const PgSession = connectPgSimple(session);
 
   const configuredSecret = process.env.SESSION_SECRET;
