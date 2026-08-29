@@ -1,11 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import passport from "passport";
-import { requireAuth, comparePassword, hashPassword } from "./auth";
+import { requireAuth, changeUserPassword } from "./auth";
 import { storage } from "./storage";
-import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
 import { 
   insertParticipantSchema, 
   insertEvidenceSchema, 
@@ -64,28 +61,28 @@ export async function registerRoutes(
   // ============ CHANGE PASSWORD ============
   app.post("/api/me/password", async (req, res) => {
     try {
-      const user = req.user as any;
-      const { currentPassword, newPassword } = req.body;
+      const user = req.user as { id: string };
+      const { currentPassword, newPassword } = req.body ?? {};
 
-      if (!currentPassword || !newPassword) {
+      if (
+        typeof currentPassword !== "string" ||
+        typeof newPassword !== "string" ||
+        !currentPassword ||
+        !newPassword
+      ) {
         return res.status(400).json({ message: "currentPassword dan newPassword wajib diisi" });
       }
-      if (typeof newPassword !== "string" || newPassword.length < 6) {
+      if (newPassword.length < 6) {
         return res.status(400).json({ message: "Password baru minimal 6 karakter" });
       }
 
-      const [storedUser] = await db.select().from(users).where(eq(users.id, user.id));
-      if (!storedUser) {
+      const result = await changeUserPassword(user.id, currentPassword, newPassword);
+      if (result === "user_not_found") {
         return res.status(404).json({ message: "User tidak ditemukan" });
       }
-
-      const match = await comparePassword(currentPassword, storedUser.password);
-      if (!match) {
+      if (result === "invalid_current_password") {
         return res.status(401).json({ message: "Password saat ini tidak benar" });
       }
-
-      const hashed = await hashPassword(newPassword);
-      await db.update(users).set({ password: hashed }).where(eq(users.id, user.id));
 
       res.json({ message: "Password berhasil diubah" });
     } catch (error) {

@@ -43,6 +43,27 @@ export async function createUser(username: string, password: string): Promise<Us
   return row;
 }
 
+export type ChangePasswordResult =
+  | "updated"
+  | "user_not_found"
+  | "invalid_current_password";
+
+export async function changeUserPassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResult> {
+  const [storedUser] = await db.select().from(users).where(eq(users.id, userId));
+  if (!storedUser) return "user_not_found";
+
+  const currentPasswordMatches = await comparePassword(currentPassword, storedUser.password);
+  if (!currentPasswordMatches) return "invalid_current_password";
+
+  const hashed = await hashPassword(newPassword);
+  await db.update(users).set({ password: hashed }).where(eq(users.id, userId));
+  return "updated";
+}
+
 /** Creates a default admin account if no users exist. */
 export async function ensureAdminUser(): Promise<void> {
   try {
