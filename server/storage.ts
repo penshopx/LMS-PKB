@@ -1340,10 +1340,10 @@ export class MemStorage implements IStorage {
   }
 
   async markAllNotificationsRead(): Promise<void> {
-    for (const [id, notif] of this.notifications.entries()) {
+    this.notifications.forEach((notif, id) => {
       notif.isRead = true;
       this.notifications.set(id, notif);
-    }
+    });
   }
 
   // Search
