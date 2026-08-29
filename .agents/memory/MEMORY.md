@@ -1,1 +1,2 @@
 - [PostgreSQL concurrency test coordination](postgres-concurrency-tests.md) — managed DB hides session activity; coordinate overlapping transactions inside the test harness.
+- [Foreign-key delete-policy normalization](foreign-key-delete-policy.md) — replace FK behavior by catalog-discovering every constraint on the column, not one assumed name.

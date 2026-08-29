@@ -743,6 +743,30 @@ export class MemStorage implements IStorage {
 
   async deleteCourse(id: string): Promise<boolean> {
     if (!this.courses.has(id)) return false;
+    const quizIds = new Set(
+      Array.from(this.quizzes.values())
+        .filter(quiz => quiz.courseId === id)
+        .map(quiz => quiz.id),
+    );
+    this.quizAttempts.forEach((attempt, attemptId) => {
+      if (quizIds.has(attempt.quizId)) this.quizAttempts.delete(attemptId);
+    });
+    quizIds.forEach(quizId => this.quizzes.delete(quizId));
+    this.certificates.forEach((certificate, certificateId) => {
+      if (certificate.courseId === id) {
+        this.certificates.set(certificateId, { ...certificate, courseId: undefined });
+      }
+    });
+    this.enrollments.forEach((enrollment, enrollmentId) => {
+      if (enrollment.courseId === id) this.enrollments.delete(enrollmentId);
+    });
+    this.participants.forEach((participant, participantId) => {
+      const learningHistory = participant.learningHistory
+        .filter(record => record.courseId !== id);
+      if (learningHistory.length !== participant.learningHistory.length) {
+        this.participants.set(participantId, { ...participant, learningHistory });
+      }
+    });
     return this.courses.delete(id);
   }
 
@@ -784,6 +808,15 @@ export class MemStorage implements IStorage {
 
   async deleteParticipant(id: string): Promise<boolean> {
     if (!this.participants.has(id)) return false;
+    this.quizAttempts.forEach((attempt, attemptId) => {
+      if (attempt.participantId === id) this.quizAttempts.delete(attemptId);
+    });
+    this.certificates.forEach((certificate, certificateId) => {
+      if (certificate.participantId === id) this.certificates.delete(certificateId);
+    });
+    this.enrollments.forEach((enrollment, enrollmentId) => {
+      if (enrollment.participantId === id) this.enrollments.delete(enrollmentId);
+    });
     return this.participants.delete(id);
   }
 
@@ -1022,6 +1055,19 @@ export class MemStorage implements IStorage {
   }
 
   async deleteQuiz(id: string): Promise<boolean> {
+    if (!this.quizzes.has(id)) return false;
+    this.quizAttempts.forEach((attempt, attemptId) => {
+      if (attempt.quizId === id) this.quizAttempts.delete(attemptId);
+    });
+    this.courses.forEach((course, courseId) => {
+      if (course.preTestId === id || course.postTestId === id) {
+        this.courses.set(courseId, {
+          ...course,
+          preTestId: course.preTestId === id ? undefined : course.preTestId,
+          postTestId: course.postTestId === id ? undefined : course.postTestId,
+        });
+      }
+    });
     return this.quizzes.delete(id);
   }
 

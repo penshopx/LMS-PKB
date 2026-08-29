@@ -175,6 +175,28 @@ BEGIN
 END;
 $$;
 
+-- Remove invalid rows left by older code/tests before enforcing ownership.
+-- These rows cannot be surfaced because their parent record no longer exists.
+DELETE FROM participant_competencies child
+WHERE NOT EXISTS (
+  SELECT 1 FROM participants parent WHERE parent.id = child.participant_id
+);
+
+DELETE FROM evidences child
+WHERE NOT EXISTS (
+  SELECT 1 FROM participants parent WHERE parent.id = child.participant_id
+);
+
+DELETE FROM learning_records child
+WHERE NOT EXISTS (
+  SELECT 1 FROM participants parent WHERE parent.id = child.participant_id
+);
+
+DELETE FROM learning_records child
+WHERE NOT EXISTS (
+  SELECT 1 FROM courses parent WHERE parent.id = child.course_id
+);
+
 -- 4. Add foreign-key constraints (idempotent via exception handler)
 -- -----------------------------------------------------------
 DO $$ BEGIN

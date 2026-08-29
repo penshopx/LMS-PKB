@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { eq, like, or, sql as drizzleSql } from "drizzle-orm";
+import { eq, inArray, like, or, sql as drizzleSql } from "drizzle-orm";
 import { db } from "./db";
 import {
   clustersTable,
@@ -530,7 +530,25 @@ export class DrizzleStorage implements IStorage {
   async deleteCourse(id: string): Promise<boolean> {
     const existing = await this.getCourse(id);
     if (!existing) return false;
-    await db.delete(coursesTable).where(eq(coursesTable.id, id));
+    await db.transaction(async (tx) => {
+      const quizRows = await tx
+        .select({ id: quizzesTable.id })
+        .from(quizzesTable)
+        .where(eq(quizzesTable.courseId, id));
+      const quizIds = quizRows.map(({ id: quizId }) => quizId);
+
+      if (quizIds.length > 0) {
+        await tx.delete(quizAttemptsTable).where(inArray(quizAttemptsTable.quizId, quizIds));
+        await tx.delete(quizzesTable).where(inArray(quizzesTable.id, quizIds));
+      }
+
+      await tx.delete(enrollmentsTable).where(eq(enrollmentsTable.courseId, id));
+      await tx.delete(learningRecordsTable).where(eq(learningRecordsTable.courseId, id));
+      await tx.update(certificatesTable)
+        .set({ courseId: null })
+        .where(eq(certificatesTable.courseId, id));
+      await tx.delete(coursesTable).where(eq(coursesTable.id, id));
+    });
     return true;
   }
 
@@ -632,8 +650,12 @@ export class DrizzleStorage implements IStorage {
   async deleteParticipant(id: string): Promise<boolean> {
     const existing = await this.getParticipant(id);
     if (!existing) return false;
-    // Cascade delete all relational records + parent in a single transaction
+    // Delete every participant-owned record in one transaction. Database
+    // cascades provide a second line of defense for direct SQL deletions.
     await db.transaction(async (tx) => {
+      await tx.delete(quizAttemptsTable).where(eq(quizAttemptsTable.participantId, id));
+      await tx.delete(certificatesTable).where(eq(certificatesTable.participantId, id));
+      await tx.delete(enrollmentsTable).where(eq(enrollmentsTable.participantId, id));
       await tx.delete(participantCompetenciesTable).where(eq(participantCompetenciesTable.participantId, id));
       await tx.delete(evidencesTable).where(eq(evidencesTable.participantId, id));
       await tx.delete(learningRecordsTable).where(eq(learningRecordsTable.participantId, id));
@@ -915,7 +937,18 @@ export class DrizzleStorage implements IStorage {
   }
 
   async deleteQuiz(id: string): Promise<boolean> {
-    await db.delete(quizzesTable).where(eq(quizzesTable.id, id));
+    const existing = await this.getQuiz(id);
+    if (!existing) return false;
+    await db.transaction(async (tx) => {
+      await tx.delete(quizAttemptsTable).where(eq(quizAttemptsTable.quizId, id));
+      await tx.update(coursesTable)
+        .set({ preTestId: null })
+        .where(eq(coursesTable.preTestId, id));
+      await tx.update(coursesTable)
+        .set({ postTestId: null })
+        .where(eq(coursesTable.postTestId, id));
+      await tx.delete(quizzesTable).where(eq(quizzesTable.id, id));
+    });
     return true;
   }
 
