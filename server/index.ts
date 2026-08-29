@@ -1,8 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { setupAuth, ensureAdminUser, checkDefaultAdminPassword } from "./auth";
+import { validateStartupEnvironment } from "./startup-env";
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,8 +21,6 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
-
-setupAuth(app);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -70,6 +67,15 @@ process.on("unhandledRejection", (reason) => {
 
 (async () => {
   try {
+    // Validate before importing database/auth modules so missing production
+    // configuration is reported as one controlled startup failure.
+    validateStartupEnvironment();
+
+    const { setupAuth, ensureAdminUser, checkDefaultAdminPassword } =
+      await import("./auth");
+    const { registerRoutes } = await import("./routes");
+    setupAuth(app);
+
     // Run SQL migrations (idempotent — backfills JSONB data, applies FKs/indexes)
     const { runMigrations, verifyRequiredTables } = await import("./db-migrate");
     await runMigrations();
