@@ -936,7 +936,7 @@ describe("Parent deletion cascades", () => {
     expect(await storage.getCertificate(certificateId)).toBeUndefined();
   });
 
-  it("deleteCourse — removes course quizzes, attempts, enrollments, and certificates", async () => {
+  it("deleteCourse — removes active course data but preserves issued certificates", async () => {
     expect(await storage.deleteCourse(courseId)).toBe(true);
 
     expect(await storage.getCourse(courseId)).toBeUndefined();
@@ -944,9 +944,20 @@ describe("Parent deletion cascades", () => {
     expect(await storage.getQuizAttempts(quizId)).toEqual([]);
     expect(await storage.getQuizAttemptsByParticipant(secondParticipantId)).toEqual([]);
     expect(await storage.getEnrollmentsByParticipant(secondParticipantId)).toEqual([]);
-    expect(await storage.getCertificatesByParticipant(secondParticipantId)).toEqual([]);
-    expect(await storage.getCertificate(secondParticipantCertificateId)).toBeUndefined();
-    expect(await storage.verifyCertificate(secondParticipantCertificateNumber)).toBeUndefined();
+    expect(await storage.getCertificatesByParticipant(secondParticipantId)).toEqual([
+      expect.objectContaining({
+        id: secondParticipantCertificateId,
+        courseId: undefined,
+      }),
+    ]);
+    expect(await storage.getCertificate(secondParticipantCertificateId)).toMatchObject({
+      id: secondParticipantCertificateId,
+      courseId: undefined,
+    });
+    expect(await storage.verifyCertificate(secondParticipantCertificateNumber)).toMatchObject({
+      id: secondParticipantCertificateId,
+      courseId: undefined,
+    });
   });
 });
 

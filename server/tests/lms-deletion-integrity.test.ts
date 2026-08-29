@@ -233,7 +233,7 @@ describe("LMS deletion integrity", () => {
     await storage.deleteCourse(replacementCourse.id);
   });
 
-  it("direct course deletion cascades learning records through the database FK", async () => {
+  it("direct course deletion cascades learning records and preserves certificates", async () => {
     const directCourse = await storage.createCourse({
       unitId,
       targetLevel: "L2",
@@ -252,6 +252,12 @@ describe("LMS deletion integrity", () => {
       progress: 25,
       status: "in_progress",
     });
+    const certificate = await storage.createCertificate({
+      participantId,
+      courseId: directCourse.id,
+      title: "Direct deletion certificate",
+      description: "Must remain verifiable after direct course deletion",
+    });
 
     await db.delete(coursesTable).where(eq(coursesTable.id, directCourse.id));
 
@@ -259,6 +265,11 @@ describe("LMS deletion integrity", () => {
       await db.select().from(learningRecordsTable)
         .where(eq(learningRecordsTable.id, learningRecordId)),
     ).toEqual([]);
+    expect(await storage.verifyCertificate(certificate.certificateNumber))
+      .toMatchObject({
+        id: certificate.id,
+        courseId: undefined,
+      });
   });
 });
 

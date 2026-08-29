@@ -545,7 +545,9 @@ export class DrizzleStorage implements IStorage {
 
       await tx.delete(enrollmentsTable).where(eq(enrollmentsTable.courseId, id));
       await tx.delete(learningRecordsTable).where(eq(learningRecordsTable.courseId, id));
-      await tx.delete(certificatesTable).where(eq(certificatesTable.courseId, id));
+      await tx.update(certificatesTable)
+        .set({ courseId: null })
+        .where(eq(certificatesTable.courseId, id));
       await tx.delete(coursesTable).where(eq(coursesTable.id, id));
     });
     return true;
