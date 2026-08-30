@@ -55,6 +55,19 @@ Key features:
 - `/app/assessment` - LSP Assessment with Assessor, Assessee, Schedule, and Scheme management
 - `/app/certificates` - Certificate issuance and verification with unique codes
 
+## Analytics Gustafta
+
+Klik tautan Gustafta dicatat sebagai event anonim `gustafta_link_click` dengan dimensi
+`domain`, `destination`, dan `location`. Event hanya memakai nilai tujuan yang sudah
+ditentukan aplikasi; tidak ada data pribadi, isi pembelajaran, atau data peserta yang
+dikirim. Jika tracker analytics belum tersedia, pencatatan otomatis menjadi no-op dan
+tidak mengganggu navigasi.
+
+Untuk mengaktifkan pengukuran pada deployment, buka **Publishing settings**, aktifkan
+analytics, lalu **publish atau republish** aplikasi. Replit akan menyuntikkan tracker
+analytics pada hasil publish; mode development tidak memerlukan konfigurasi script atau
+environment variable tambahan.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
