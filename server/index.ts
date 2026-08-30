@@ -70,7 +70,12 @@ process.on("unhandledRejection", (reason) => {
     // configuration is reported as one controlled startup failure.
     validateStartupEnvironment();
 
-    const { setupAuth, ensureAdminUser, checkDefaultAdminPassword } =
+    const {
+      setupAuth,
+      ensureAdminUser,
+      recoverDefaultAdminPassword,
+      checkDefaultAdminPassword,
+    } =
       await import("./auth");
     setupAuth(app);
 
@@ -85,6 +90,10 @@ process.on("unhandledRejection", (reason) => {
 
     // Ensure a default admin user exists
     await ensureAdminUser();
+
+    // If production is locked out by the default-password guard, allow a
+    // one-time reset from a Replit Secret before enforcing the guard.
+    await recoverDefaultAdminPassword();
 
     // In production, refuse to start if the default password is still in use
     await checkDefaultAdminPassword();

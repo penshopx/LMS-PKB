@@ -218,6 +218,54 @@ export async function ensureAdminUser(): Promise<void> {
 }
 
 const DEFAULT_PASSWORD = "admin123";
+export const ADMIN_RECOVERY_PASSWORD_ENV = "ADMIN_RECOVERY_PASSWORD";
+export const ADMIN_RECOVERY_PASSWORD_MIN_LENGTH = 12;
+
+export function getAdminRecoveryPassword(
+  environment: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (environment.NODE_ENV !== "production") return undefined;
+
+  const password = environment[ADMIN_RECOVERY_PASSWORD_ENV];
+  if (!password?.trim()) return undefined;
+
+  if (password.length < ADMIN_RECOVERY_PASSWORD_MIN_LENGTH) {
+    throw new Error(
+      `${ADMIN_RECOVERY_PASSWORD_ENV} must contain at least ` +
+        `${ADMIN_RECOVERY_PASSWORD_MIN_LENGTH} characters.`,
+    );
+  }
+
+  if (password === DEFAULT_PASSWORD) {
+    throw new Error(`${ADMIN_RECOVERY_PASSWORD_ENV} must not use the default admin password.`);
+  }
+
+  return password;
+}
+
+/**
+ * One-time production recovery for a database whose admin account still uses
+ * the known default password. The secret is ignored after the admin password
+ * has changed, and its value is never logged.
+ */
+export async function recoverDefaultAdminPassword(): Promise<boolean> {
+  const recoveryPassword = getAdminRecoveryPassword();
+  if (!recoveryPassword) return false;
+
+  const [admin] = await db.select().from(users).where(eq(users.username, "admin"));
+  if (!admin) return false;
+
+  const isDefault = await comparePassword(DEFAULT_PASSWORD, admin.password);
+  if (!isDefault) return false;
+
+  const hashed = await hashPassword(recoveryPassword);
+  await db.update(users).set({ password: hashed }).where(eq(users.id, admin.id));
+  console.log(
+    `[auth] Admin password recovered from ${ADMIN_RECOVERY_PASSWORD_ENV}. ` +
+      "Remove this secret after the deployment is healthy.",
+  );
+  return true;
+}
 
 /**
  * Checks whether the admin account still uses the default password.

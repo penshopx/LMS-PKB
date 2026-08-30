@@ -2,9 +2,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import {
+  ADMIN_RECOVERY_PASSWORD_ENV,
+  ADMIN_RECOVERY_PASSWORD_MIN_LENGTH,
   changeUserPassword,
   comparePassword,
   createUser,
+  getAdminRecoveryPassword,
 } from "../auth";
 import { users } from "@shared/schema";
 
@@ -49,5 +52,58 @@ describe("changeUserPassword", () => {
     await expect(
       changeUserPassword("missing-user-id", "current-password", "new-password"),
     ).resolves.toBe("user_not_found");
+  });
+});
+
+describe("admin password recovery configuration", () => {
+  it("is disabled outside production", () => {
+    expect(
+      getAdminRecoveryPassword({
+        NODE_ENV: "development",
+        [ADMIN_RECOVERY_PASSWORD_ENV]: "a-secure-recovery-password",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("is optional in production", () => {
+    expect(
+      getAdminRecoveryPassword({
+        NODE_ENV: "production",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("rejects weak recovery passwords without exposing their values", () => {
+    const weakPassword = "short";
+
+    expect(() =>
+      getAdminRecoveryPassword({
+        NODE_ENV: "production",
+        [ADMIN_RECOVERY_PASSWORD_ENV]: weakPassword,
+      }),
+    ).toThrow(
+      `${ADMIN_RECOVERY_PASSWORD_ENV} must contain at least ` +
+        `${ADMIN_RECOVERY_PASSWORD_MIN_LENGTH} characters.`,
+    );
+
+    try {
+      getAdminRecoveryPassword({
+        NODE_ENV: "production",
+        [ADMIN_RECOVERY_PASSWORD_ENV]: weakPassword,
+      });
+    } catch (error) {
+      expect((error as Error).message).not.toContain(weakPassword);
+    }
+  });
+
+  it("accepts a strong production recovery password", () => {
+    const recoveryPassword = "a-secure-recovery-password";
+
+    expect(
+      getAdminRecoveryPassword({
+        NODE_ENV: "production",
+        [ADMIN_RECOVERY_PASSWORD_ENV]: recoveryPassword,
+      }),
+    ).toBe(recoveryPassword);
   });
 });
