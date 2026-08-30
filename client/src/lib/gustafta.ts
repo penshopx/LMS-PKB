@@ -1,4 +1,5 @@
 export type GustaftaDomainId = "legalitas" | "sertifikasi" | "tender" | "proyek";
+export type GustaftaLinkLocation = "landing" | "dashboard" | "sidebar";
 
 export interface GustaftaDomain {
   id: GustaftaDomainId;

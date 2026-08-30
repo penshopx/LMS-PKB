@@ -18,6 +18,7 @@ import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 import { GUSTAFTA_HOME_URL } from "@/lib/gustafta";
+import { trackGustaftaLinkClick } from "@/lib/analytics";
 import {
   Sidebar,
   SidebarContent,
@@ -215,6 +216,13 @@ export function AppSidebar() {
                     href={ecosystemMenu.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() =>
+                      trackGustaftaLinkClick({
+                        domain: "all",
+                        destination: "home",
+                        location: "sidebar",
+                      })
+                    }
                     aria-label="Buka ekosistem Gustafta di tab baru"
                   >
                     <ecosystemMenu.icon className="h-4 w-4" />

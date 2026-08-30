@@ -442,7 +442,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <GustaftaEcosystem compact />
+      <GustaftaEcosystem compact location="dashboard" />
     </div>
   );
 }

@@ -15,7 +15,9 @@ import {
   getGustaftaLinksByDomain,
   type GustaftaDomainId,
   type GustaftaLink,
+  type GustaftaLinkLocation,
 } from "@/lib/gustafta";
+import { trackGustaftaLinkClick } from "@/lib/analytics";
 
 const domainIcons: Record<GustaftaDomainId, typeof FileCheck> = {
   legalitas: FileCheck,
@@ -24,7 +26,15 @@ const domainIcons: Record<GustaftaDomainId, typeof FileCheck> = {
   proyek: BriefcaseBusiness,
 };
 
-function GustaftaLinkButton({ link, compact }: { link: GustaftaLink; compact: boolean }) {
+function GustaftaLinkButton({
+  link,
+  compact,
+  location,
+}: {
+  link: GustaftaLink;
+  compact: boolean;
+  location: GustaftaLinkLocation;
+}) {
   return (
     <Button
       asChild
@@ -36,6 +46,13 @@ function GustaftaLinkButton({ link, compact }: { link: GustaftaLink; compact: bo
         href={link.href}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() =>
+          trackGustaftaLinkClick({
+            domain: link.domain,
+            destination: link.id,
+            location,
+          })
+        }
         aria-label={`${link.cta}: ${link.title} di Gustafta`}
         data-testid={`link-gustafta-${link.id}`}
       >
@@ -46,7 +63,13 @@ function GustaftaLinkButton({ link, compact }: { link: GustaftaLink; compact: bo
   );
 }
 
-export function GustaftaEcosystem({ compact = false }: { compact?: boolean }) {
+export function GustaftaEcosystem({
+  compact = false,
+  location = compact ? "dashboard" : "landing",
+}: {
+  compact?: boolean;
+  location?: GustaftaLinkLocation;
+}) {
   return (
     <section
       className={compact ? "space-y-4" : "py-16 md:py-24 bg-muted/30"}
@@ -87,7 +110,7 @@ export function GustaftaEcosystem({ compact = false }: { compact?: boolean }) {
                 </CardHeader>
                 <CardContent className={compact ? "p-4 pt-0 space-y-2" : "space-y-2"}>
                   {links.map((link) => (
-                    <GustaftaLinkButton key={link.id} link={link} compact={compact} />
+                    <GustaftaLinkButton key={link.id} link={link} compact={compact} location={location} />
                   ))}
                 </CardContent>
               </Card>
