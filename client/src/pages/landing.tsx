@@ -84,6 +84,29 @@ const pubDomains = [
   }
 ];
 
+const heroDomainCards = [
+  {
+    icon: FileCheck,
+    title: "SIAP Legalitas",
+    description: "Legalitas dan perizinan BUJK"
+  },
+  {
+    icon: Award,
+    title: "SIAP Sertifikasi",
+    description: "SBU dan kompetensi tenaga kerja"
+  },
+  {
+    icon: ClipboardCheck,
+    title: "SIAP Tender",
+    description: "Kualifikasi dan dokumen penawaran"
+  },
+  {
+    icon: Target,
+    title: "SIAP Proyek",
+    description: "Administrasi dan kendali proyek"
+  }
+];
+
 const lspFeatures = [
   {
     icon: Shield,
@@ -153,12 +176,12 @@ export default function Landing() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-primary/10" />
         <div className="container mx-auto px-4 py-20 md:py-32 relative">
-          <div className="max-w-3xl mx-auto text-center space-y-6">
+          <div className="max-w-5xl mx-auto text-center space-y-6">
             <Badge variant="secondary" className="mb-4">
               <Sparkles className="h-3 w-3 mr-1" />
                LMS PUB ASPEKINDO · Pembelajaran Bisnis Konstruksi
             </Badge>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
+            <h1 className="max-w-4xl mx-auto text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
                Kembangkan <span className="text-primary">Kompetensi Konstruksi</span>{" "}
                untuk Bisnis yang Lebih Tangguh
             </h1>
@@ -181,6 +204,29 @@ export default function Landing() {
                 </Button>
               </Link>
             </div>
+           <div className="mt-10 w-full" aria-label="Empat domain utama pembelajaran">
+             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+               {heroDomainCards.map((domain) => (
+                 <Card
+                   key={domain.title}
+                   className="h-full border-border/70 bg-background/85 text-left shadow-sm backdrop-blur-sm"
+                   data-testid={`card-hero-domain-${domain.title.toLowerCase().replace(/\s+/g, "-")}`}
+                 >
+                   <CardContent className="flex min-h-[7rem] flex-col justify-between gap-3 p-4 md:min-h-[8rem] md:p-5">
+                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                       <domain.icon className="h-4 w-4 text-primary md:h-5 md:w-5" aria-hidden="true" />
+                     </div>
+                     <div>
+                       <p className="text-sm font-semibold leading-snug md:text-base">{domain.title}</p>
+                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground md:text-sm">
+                         {domain.description}
+                       </p>
+                     </div>
+                   </CardContent>
+                 </Card>
+               ))}
+             </div>
+           </div>
           </div>
         </div>
       </section>
