@@ -19,8 +19,14 @@ vi.mock("../db", async () => {
 
 import { db } from "../db";
 import { seedDatabase } from "../seed";
-import { participantsTable } from "@shared/schema";
+import {
+  evidencesTable,
+  learningRecordsTable,
+  participantCompetenciesTable,
+  participantsTable,
+} from "@shared/schema";
 import { DrizzleStorage } from "../db-storage";
+import { inArray } from "drizzle-orm";
 
 const storage = new DrizzleStorage();
 const adminClient = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -51,7 +57,13 @@ describe("fresh seed participant relations", () => {
       await adminClient.query(
         `CREATE TABLE ${quotedSchemaName}."${tableName}" AS TABLE public."${tableName}" WITH NO DATA`,
       );
+      await adminClient.query(
+        `ALTER TABLE ${quotedSchemaName}."${tableName}" ADD PRIMARY KEY (id)`,
+      );
     }
+    await adminClient.query(
+      `ALTER TABLE ${quotedSchemaName}.users ALTER COLUMN id SET DEFAULT gen_random_uuid()`,
+    );
   });
 
   afterAll(async () => {
@@ -144,6 +156,60 @@ describe("fresh seed participant relations", () => {
         status: "gap",
       },
     ]);
+    expect(p002?.evidences).toEqual([
+      {
+        id: "ev-1",
+        unitId: "tender-01",
+        type: "document",
+        title: "Checklist Dokumen Tender",
+        description: "Hasil review kelengkapan dan konsistensi dokumen kualifikasi",
+        submittedAt: "2026-08-18",
+        score: 85,
+        feedback: "Dokumen lengkap dan risiko telah diidentifikasi",
+        status: "approved",
+      },
+    ]);
+    expect(p002?.learningHistory).toEqual([
+      {
+        id: "lr-2",
+        courseId: "course-tender01-l2",
+        startedAt: "2026-08-12",
+        completedAt: "2026-08-18",
+        progress: 100,
+        status: "completed",
+      },
+    ]);
+  });
+
+  it("restores missing p-001 and p-002 relations when catalog data already exists", async () => {
+    await db.delete(participantCompetenciesTable)
+      .where(inArray(participantCompetenciesTable.participantId, ["p-001", "p-002"]));
+    await db.delete(evidencesTable)
+      .where(inArray(evidencesTable.participantId, ["p-001", "p-002"]));
+    await db.delete(learningRecordsTable)
+      .where(inArray(learningRecordsTable.participantId, ["p-001", "p-002"]));
+
+    expect(await db.select().from(participantsTable)).toHaveLength(5);
+    expect(await db.select().from(participantCompetenciesTable)
+      .where(inArray(participantCompetenciesTable.participantId, ["p-001", "p-002"]))).toEqual([]);
+
+    await seedDatabase();
+
+    const p001 = await storage.getParticipant("p-001");
+    expect(p001?.competencies).toHaveLength(4);
+    expect(p001?.evidences).toEqual([]);
+    expect(p001?.learningHistory).toEqual([
+      {
+        id: "lr-1",
+        courseId: "course-legal01-l2",
+        startedAt: "2026-08-15",
+        progress: 60,
+        status: "in_progress",
+      },
+    ]);
+
+    const p002 = await storage.getParticipant("p-002");
+    expect(p002?.competencies).toHaveLength(4);
     expect(p002?.evidences).toEqual([
       {
         id: "ev-1",

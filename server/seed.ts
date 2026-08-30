@@ -36,6 +36,27 @@ const LEGACY_FIXTURE_EMAILS: Record<string, string[]> = {
   "p-005": ["eka.putra@org.go.id"],
 };
 
+const PARTICIPANT_COMPETENCY_SEED_ROWS = PUB_PARTICIPANTS.flatMap(participant =>
+  participant.competencies.map((competency, index) => ({
+    id: `pc-${participant.id.replace("-", "")}-${index + 1}`,
+    participantId: participant.id,
+    ...competency,
+  })),
+);
+
+const EVIDENCE_SEED_ROWS = [
+  { id: "ev-1", participantId: "p-002", unitId: "tender-01", type: "document", title: "Checklist Dokumen Tender", description: "Hasil review kelengkapan dan konsistensi dokumen kualifikasi", submittedAt: "2026-08-18", status: "approved", score: 85, feedback: "Dokumen lengkap dan risiko telah diidentifikasi" },
+  { id: "ev-2", participantId: "p-003", unitId: "sert-02", type: "presentation", title: "Peta Kebutuhan SKK", description: "Pemetaan jabatan kerja dan kesenjangan SKK tenaga kerja konstruksi", submittedAt: "2026-08-15", status: "approved", score: 90, feedback: null },
+  { id: "ev-3", participantId: "p-005", unitId: "smap-04", type: "document", title: "Laporan Evaluasi SMAP", description: "Evaluasi penerapan SMAP dan rencana tindak lanjut badan usaha", submittedAt: "2026-08-01", status: "approved", score: 95, feedback: null },
+] satisfies (typeof evidencesTable.$inferInsert)[];
+
+const LEARNING_RECORD_SEED_ROWS = PUB_PARTICIPANTS.flatMap(participant =>
+  participant.learningHistory.map(record => ({
+    participantId: participant.id,
+    ...record,
+  })),
+);
+
 async function synchronizePubCatalog() {
   for (const cluster of PUB_CLUSTERS) {
     const { id: _id, ...updates } = cluster;
@@ -104,6 +125,32 @@ async function synchronizePubCatalog() {
   }
 }
 
+async function synchronizeParticipantRelations(participantIds: Set<string>) {
+  const competencies = PARTICIPANT_COMPETENCY_SEED_ROWS
+    .filter(competency => participantIds.has(competency.participantId));
+  if (competencies.length > 0) {
+    await db.insert(participantCompetenciesTable)
+      .values(competencies)
+      .onConflictDoNothing();
+  }
+
+  const evidences = EVIDENCE_SEED_ROWS
+    .filter(evidence => participantIds.has(evidence.participantId));
+  if (evidences.length > 0) {
+    await db.insert(evidencesTable)
+      .values(evidences)
+      .onConflictDoNothing();
+  }
+
+  const learningRecords = LEARNING_RECORD_SEED_ROWS
+    .filter(record => participantIds.has(record.participantId));
+  if (learningRecords.length > 0) {
+    await db.insert(learningRecordsTable)
+      .values(learningRecords)
+      .onConflictDoNothing();
+  }
+}
+
 export async function seedDatabase() {
   // Ensure default admin user exists
   const existingAdmin = await db.select().from(users).where(eq(users.username, "admin"));
@@ -117,6 +164,12 @@ export async function seedDatabase() {
   const existingClusters = await db.select().from(clustersTable).limit(1);
   if (existingClusters.length > 0) {
     await synchronizePubCatalog();
+    const existingParticipants = await db.select({
+      id: participantsTable.id,
+    }).from(participantsTable);
+    await synchronizeParticipantRelations(
+      new Set(existingParticipants.map(participant => participant.id)),
+    );
     console.log("[seed] PUB-ASPEKINDO baseline catalog synchronized.");
     return;
   }
@@ -141,47 +194,13 @@ export async function seedDatabase() {
   ]);
 
   // Participant competencies (relational)
-  await db.insert(participantCompetenciesTable).values([
-    // p-001
-    { id: "pc-p001-1", participantId: "p-001", unitId: "legal-01", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2026-08-10", status: "gap" },
-    { id: "pc-p001-2", participantId: "p-001", unitId: "tender-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-10", status: "gap" },
-    { id: "pc-p001-3", participantId: "p-001", unitId: "smap-01", currentLevel: "L2", targetLevel: "L2", lastAssessed: "2026-08-10", status: "achieved" },
-    { id: "pc-p001-4", participantId: "p-001", unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-10", status: "on_track" },
-    // p-002
-    { id: "pc-p002-1", participantId: "p-002", unitId: "tender-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-08", status: "on_track" },
-    { id: "pc-p002-2", participantId: "p-002", unitId: "tender-02", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2026-08-08", status: "gap" },
-    { id: "pc-p002-3", participantId: "p-002", unitId: "legal-02", currentLevel: "L2", targetLevel: "L2", lastAssessed: "2026-08-08", status: "achieved" },
-    { id: "pc-p002-4", participantId: "p-002", unitId: "smap-02", currentLevel: "L1", targetLevel: "L2", lastAssessed: "2026-08-08", status: "gap" },
-    // p-003
-    { id: "pc-p003-1", participantId: "p-003", unitId: "sert-01", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2026-08-05", status: "achieved" },
-    { id: "pc-p003-2", participantId: "p-003", unitId: "sert-02", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-05", status: "gap" },
-    { id: "pc-p003-3", participantId: "p-003", unitId: "smap-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-05", status: "on_track" },
-    { id: "pc-p003-4", participantId: "p-003", unitId: "pan-02", currentLevel: "L3", targetLevel: "L3", lastAssessed: "2026-08-05", status: "achieved" },
-    // p-004
-    { id: "pc-p004-1", participantId: "p-004", unitId: "proyek-01", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-12", status: "on_track" },
-    { id: "pc-p004-2", participantId: "p-004", unitId: "proyek-02", currentLevel: "L1", targetLevel: "L3", lastAssessed: "2026-08-12", status: "gap" },
-    { id: "pc-p004-3", participantId: "p-004", unitId: "pan-03", currentLevel: "L2", targetLevel: "L3", lastAssessed: "2026-08-12", status: "gap" },
-    { id: "pc-p004-4", participantId: "p-004", unitId: "smap-01", currentLevel: "L2", targetLevel: "L2", lastAssessed: "2026-08-12", status: "achieved" },
-    // p-005
-    { id: "pc-p005-1", participantId: "p-005", unitId: "legal-01", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2026-08-01", status: "achieved" },
-    { id: "pc-p005-2", participantId: "p-005", unitId: "tender-02", currentLevel: "L3", targetLevel: "L4", lastAssessed: "2026-08-01", status: "on_track" },
-    { id: "pc-p005-3", participantId: "p-005", unitId: "proyek-01", currentLevel: "L3", targetLevel: "L4", lastAssessed: "2026-08-01", status: "on_track" },
-    { id: "pc-p005-4", participantId: "p-005", unitId: "smap-04", currentLevel: "L4", targetLevel: "L4", lastAssessed: "2026-08-01", status: "achieved" },
-  ]);
+  await db.insert(participantCompetenciesTable).values(PARTICIPANT_COMPETENCY_SEED_ROWS);
 
   // Evidences (relational)
-  await db.insert(evidencesTable).values([
-    { id: "ev-1", participantId: "p-002", unitId: "tender-01", type: "document", title: "Checklist Dokumen Tender", description: "Hasil review kelengkapan dan konsistensi dokumen kualifikasi", submittedAt: "2026-08-18", status: "approved", score: 85, feedback: "Dokumen lengkap dan risiko telah diidentifikasi" },
-    { id: "ev-2", participantId: "p-003", unitId: "sert-02", type: "presentation", title: "Peta Kebutuhan SKK", description: "Pemetaan jabatan kerja dan kesenjangan SKK tenaga kerja konstruksi", submittedAt: "2026-08-15", status: "approved", score: 90, feedback: null },
-    { id: "ev-3", participantId: "p-005", unitId: "smap-04", type: "document", title: "Laporan Evaluasi SMAP", description: "Evaluasi penerapan SMAP dan rencana tindak lanjut badan usaha", submittedAt: "2026-08-01", status: "approved", score: 95, feedback: null },
-  ]);
+  await db.insert(evidencesTable).values(EVIDENCE_SEED_ROWS);
 
   // Learning records (relational)
-  await db.insert(learningRecordsTable).values([
-    { id: "lr-1", participantId: "p-001", courseId: "course-legal01-l2", startedAt: "2026-08-15", progress: 60, status: "in_progress" },
-    { id: "lr-2", participantId: "p-002", courseId: "course-tender01-l2", startedAt: "2026-08-12", completedAt: "2026-08-18", progress: 100, status: "completed" },
-    { id: "lr-3", participantId: "p-004", courseId: "course-proyek01-l2", startedAt: "2026-08-14", progress: 80, status: "in_progress" },
-  ]);
+  await db.insert(learningRecordsTable).values(LEARNING_RECORD_SEED_ROWS);
 
   // LSP Organization
   await db.insert(lspOrganizationsTable).values([
