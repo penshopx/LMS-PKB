@@ -199,6 +199,8 @@ const templateSteps = [
   { type: "reflection", title: "Evidensi & Refleksi", desc: "Dokumentasi & portofolio kompetensi", placeholder: "Jelaskan jenis evidensi dan format refleksi yang diperlukan..." }
 ];
 
+const NO_QUIZ_SELECTION = "__none__";
+
 function CourseBuilderTemplate({ onStartBuild }: { onStartBuild?: () => void }) {
   const [selectedStep, setSelectedStep] = useState<typeof templateSteps[0] | null>(null);
   const [stepContent, setStepContent] = useState<Record<string, string>>({});
@@ -326,8 +328,8 @@ function CreateCourseForm({ units, quizzes, onClose }: { units?: UnitCompetency[
     title: "",
     description: "",
     duration: "",
-    preTestId: "",
-    postTestId: ""
+    preTestId: NO_QUIZ_SELECTION,
+    postTestId: NO_QUIZ_SELECTION
   });
 
   const createMutation = useMutation({
@@ -352,8 +354,8 @@ function CreateCourseForm({ units, quizzes, onClose }: { units?: UnitCompetency[
     }
     const submitData = {
       ...formData,
-      preTestId: formData.preTestId || undefined,
-      postTestId: formData.postTestId || undefined
+      preTestId: formData.preTestId === NO_QUIZ_SELECTION ? undefined : formData.preTestId,
+      postTestId: formData.postTestId === NO_QUIZ_SELECTION ? undefined : formData.postTestId
     };
     createMutation.mutate(submitData);
   };
@@ -438,7 +440,7 @@ function CreateCourseForm({ units, quizzes, onClose }: { units?: UnitCompetency[
             <SelectValue placeholder="Pilih kuis untuk pre-test" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tidak ada pre-test</SelectItem>
+            <SelectItem value={NO_QUIZ_SELECTION}>Tidak ada pre-test</SelectItem>
             {quizzes?.map((quiz) => (
               <SelectItem key={quiz.id} value={quiz.id}>
                 {quiz.title}
@@ -458,7 +460,7 @@ function CreateCourseForm({ units, quizzes, onClose }: { units?: UnitCompetency[
             <SelectValue placeholder="Pilih kuis untuk post-test" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tidak ada post-test</SelectItem>
+            <SelectItem value={NO_QUIZ_SELECTION}>Tidak ada post-test</SelectItem>
             {quizzes?.map((quiz) => (
               <SelectItem key={quiz.id} value={quiz.id}>
                 {quiz.title}
