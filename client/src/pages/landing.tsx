@@ -231,30 +231,30 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-16 md:py-24">
+      <section className="border-y bg-muted/20 py-16 md:py-20">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
+          <div className="mx-auto mb-10 max-w-3xl text-center md:mb-12">
             <Badge variant="outline" className="mb-4">Domain Pembelajaran PUB-ASPEKINDO</Badge>
-            <h2 className="text-3xl font-bold mb-4">Empat Kesiapan Utama Kontraktor</h2>
-            <p className="text-muted-foreground max-w-3xl mx-auto">
+            <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">Empat Kesiapan Utama Kontraktor</h2>
+            <p className="text-muted-foreground">
               Materi mengacu pada konteks Pengembangan Usaha Berkelanjutan dalam Permen PUPR Nomor 7 Tahun 2024.
               SMAP dan PANCEK melengkapi keempat domain ini sebagai pembelajaran Kepatuhan.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-4">
             {pubDomains.map((domain) => (
-              <Card key={domain.title} className="hover-elevate">
-                <CardHeader>
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+              <Card key={domain.title} className="h-full bg-background/90 hover-elevate">
+                <CardHeader className="p-5">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <domain.icon className="h-5 w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-lg">{domain.title}</CardTitle>
-                  <CardDescription>{domain.description}</CardDescription>
+                  <CardTitle className="min-h-[3.5rem] text-lg leading-snug">{domain.title}</CardTitle>
+                  <CardDescription className="text-sm leading-relaxed">{domain.description}</CardDescription>
                 </CardHeader>
               </Card>
             ))}
           </div>
-          <p className="text-sm text-muted-foreground text-center mt-8">
+          <p className="mx-auto mt-8 max-w-3xl text-center text-sm text-muted-foreground">
             LKUT digunakan sebagai konteks pemetaan kebutuhan belajar, bukan sebagai formulir, modul penyusunan, atau proses pelaporan di dalam LMS.
           </p>
         </div>
