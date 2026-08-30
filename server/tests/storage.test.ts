@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "crypto";
 import { DrizzleStorage } from "../db-storage";
+import { MemStorage } from "../storage";
 import { db } from "../db";
 import {
   clustersTable,
@@ -1447,6 +1448,55 @@ describe("Notifications", () => {
 
   it("markAllNotificationsRead — does not throw", async () => {
     await expect(storage.markAllNotificationsRead()).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// In-memory Notifications
+// ---------------------------------------------------------------------------
+describe("MemStorage notifications", () => {
+  it("getNotifications — returns notifications newest-first", async () => {
+    const memory = new MemStorage();
+
+    const notifications = await memory.getNotifications();
+
+    expect(notifications.map(notification => notification.id)).toEqual([
+      "notif-001",
+      "notif-002",
+      "notif-003",
+      "notif-004",
+      "notif-005",
+      "notif-006",
+    ]);
+  });
+
+  it("markNotificationRead — marks only the requested notification as read", async () => {
+    const memory = new MemStorage();
+
+    const updated = await memory.markNotificationRead("notif-001");
+
+    expect(updated).toBeDefined();
+    expect(updated!.isRead).toBe(true);
+    expect((await memory.getNotifications()).find(notification => notification.id === "notif-001")!.isRead).toBe(true);
+    expect((await memory.getNotifications()).find(notification => notification.id === "notif-002")!.isRead).toBe(false);
+  });
+
+  it("markNotificationRead — returns undefined for a missing notification", async () => {
+    const memory = new MemStorage();
+
+    const result = await memory.markNotificationRead("nonexistent-notif");
+
+    expect(result).toBeUndefined();
+  });
+
+  it("markAllNotificationsRead — marks every notification as read", async () => {
+    const memory = new MemStorage();
+
+    expect((await memory.getNotifications()).some(notification => !notification.isRead)).toBe(true);
+
+    await expect(memory.markAllNotificationsRead()).resolves.toBeUndefined();
+
+    expect((await memory.getNotifications()).every(notification => notification.isRead)).toBe(true);
   });
 });
 
