@@ -529,8 +529,8 @@ export default function Courses() {
     <div className="p-6 space-y-6" data-testid="page-courses">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Pembelajaran Bisnis Konstruksi</h1>
-          <p className="text-muted-foreground">Bangun dan kelola pembelajaran berbasis kompetensi kontraktor</p>
+          <h1 className="text-2xl font-bold">LMS PUB ASPEKINDO</h1>
+          <p className="text-muted-foreground">LMS Bisnis Kontraktor · Bangun dan kelola pembelajaran berbasis kompetensi</p>
         </div>
         <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
           <DialogTrigger asChild>

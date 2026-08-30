@@ -57,8 +57,8 @@ export default function Login() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-           <BrandMark size="sm" />
+         <div className="flex items-center gap-3">
+            <BrandMark size="md" />
            <div className="flex flex-col">
              <span className="font-bold text-sm sm:text-lg leading-tight text-foreground">{BRAND_NAME}</span>
              <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>

@@ -129,10 +129,10 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link href="/" data-testid="link-home">
-           <div className="flex items-center gap-3">
+             <div className="flex items-center gap-3">
              <BrandMark />
             <div className="flex flex-col">
-               <span className="font-semibold text-sm leading-tight">{BRAND_NAME}</span>
+                <span className="font-semibold text-base leading-tight">{BRAND_NAME}</span>
                <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
             </div>
           </div>
@@ -238,7 +238,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Settings className="h-3 w-3" />
-          <span>Pembelajaran Bisnis Konstruksi v1.0</span>
+          <span>LMS PUB ASPEKINDO · LMS Bisnis Kontraktor</span>
         </div>
         <LogoutButton />
       </SidebarFooter>

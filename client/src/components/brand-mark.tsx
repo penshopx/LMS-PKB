@@ -1,7 +1,7 @@
 import { Building2, HardHat } from "lucide-react";
 
-export const BRAND_NAME = "Pembelajaran Bisnis Konstruksi";
-export const BRAND_TAGLINE = "Kompetensi Kontraktor";
+export const BRAND_NAME = "LMS PUB ASPEKINDO";
+export const BRAND_TAGLINE = "LMS Bisnis Kontraktor";
 
 type BrandMarkProps = {
   size?: "sm" | "md" | "lg";
@@ -10,18 +10,18 @@ type BrandMarkProps = {
 
 const sizeStyles = {
   sm: {
-    wrapper: "h-8 w-8 rounded-md",
-    primaryIcon: "h-4 w-4",
-    secondaryIcon: "h-3 w-3",
-  },
-  md: {
-    wrapper: "h-10 w-10 rounded-md",
+    wrapper: "h-10 w-10 rounded-lg",
     primaryIcon: "h-5 w-5",
     secondaryIcon: "h-3.5 w-3.5",
   },
-  lg: {
+  md: {
     wrapper: "h-12 w-12 rounded-xl",
     primaryIcon: "h-6 w-6",
+    secondaryIcon: "h-4 w-4",
+  },
+  lg: {
+    wrapper: "h-14 w-14 rounded-xl",
+    primaryIcon: "h-7 w-7",
     secondaryIcon: "h-4 w-4",
   },
 };
@@ -33,15 +33,15 @@ export function BrandMark({ size = "md", className = "" }: BrandMarkProps) {
     <div
       role="img"
       aria-label={`${BRAND_NAME} — ${BRAND_TAGLINE}`}
-      className={`relative flex shrink-0 items-center justify-center bg-primary ${styles.wrapper} ${className}`}
+      className={`relative flex shrink-0 items-center justify-center bg-sky-500 shadow-sm shadow-sky-500/30 dark:bg-sky-400 ${styles.wrapper} ${className}`}
     >
       <Building2
         aria-hidden="true"
-        className={`absolute bottom-1 right-1 text-amber-300/90 ${styles.secondaryIcon}`}
+        className={`absolute bottom-1 right-1 text-amber-300 dark:text-amber-300 ${styles.secondaryIcon}`}
       />
       <HardHat
         aria-hidden="true"
-        className={`relative z-10 text-primary-foreground ${styles.primaryIcon}`}
+        className={`relative z-10 text-white dark:text-slate-950 ${styles.primaryIcon}`}
       />
     </div>
   );

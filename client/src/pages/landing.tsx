@@ -154,11 +154,11 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-             <BrandMark size="sm" />
+           <div className="flex items-center gap-3">
+              <BrandMark size="md" />
              <div className="flex flex-col">
-               <span className="font-bold text-sm sm:text-lg lg:text-xl leading-tight">{BRAND_NAME}</span>
-               <span className="hidden sm:block text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
+                <span className="font-bold text-sm sm:text-lg lg:text-xl leading-tight">{BRAND_NAME}</span>
+                <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
              </div>
           </div>
           <div className="flex items-center gap-3">
@@ -179,7 +179,7 @@ export default function Landing() {
           <div className="max-w-5xl mx-auto text-center space-y-6">
             <Badge variant="secondary" className="mb-4">
               <Sparkles className="h-3 w-3 mr-1" />
-               LMS PUB ASPEKINDO · Pembelajaran Bisnis Konstruksi
+               LMS PUB ASPEKINDO · LMS Bisnis Kontraktor
             </Badge>
             <h1 className="max-w-4xl mx-auto text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
                Kembangkan <span className="text-primary">Kompetensi Konstruksi</span>{" "}
@@ -446,9 +446,12 @@ export default function Landing() {
       <footer className="border-t py-8">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-               <BrandMark size="sm" />
-               <span className="font-semibold">{BRAND_NAME}</span>
+            <div className="flex items-center gap-3">
+               <BrandMark size="md" />
+               <div className="flex flex-col">
+                 <span className="font-semibold leading-tight">{BRAND_NAME}</span>
+                 <span className="text-xs text-muted-foreground">{BRAND_TAGLINE}</span>
+               </div>
             </div>
             <p className="text-sm text-muted-foreground">
                {BRAND_TAGLINE} · LMS PUB ASPEKINDO
