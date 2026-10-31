@@ -374,6 +374,10 @@ export interface IStorage {
   getQuizAttemptsByParticipant(participantId: string): Promise<QuizAttempt[]>;
   getQuizAttemptsAwaitingReview(): Promise<QuizAttempt[]>;
   createQuizAttempt(attempt: NewQuizAttempt): Promise<QuizAttempt>;
+  createQuizAttemptWithinLimit(attempt: NewQuizAttempt): Promise<
+    | { attempt: QuizAttempt }
+    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
+  >;
   gradeQuizAttempt(id: string, grade: QuizAttemptGradeInput): Promise<QuizAttempt | undefined>;
 
   // LMS - Certificates
@@ -1154,6 +1158,43 @@ export class MemStorage implements IStorage {
       }
     }
     return newAttempt;
+  }
+
+  async createQuizAttemptWithinLimit(
+    attempt: NewQuizAttempt,
+  ): Promise<
+    | { attempt: QuizAttempt }
+    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
+  > {
+    const quiz = this.quizzes.get(attempt.quizId);
+    if (!quiz) return { rejection: "quiz_not_found" };
+
+    const quizAttempts = Array.from(this.quizAttempts.values())
+      .filter(existing => existing.quizId === attempt.quizId);
+    if (quizAttempts.some(existing => existing.gradingStatus === "awaiting_review")) {
+      return { rejection: "awaiting_review" };
+    }
+    if (
+      quizAttempts.filter(existing => existing.participantId === attempt.participantId).length >= quiz.maxAttempts
+    ) {
+      return { rejection: "max_attempts" };
+    }
+
+    const id = `attempt-${randomUUID()}`;
+    const newAttempt: QuizAttempt = {
+      gradingStatus: "graded",
+      ...attempt,
+      id,
+    };
+    this.quizAttempts.set(id, newAttempt);
+    const course = this.courses.get(quiz.courseId);
+    if (course?.postTestId === quiz.id) {
+      const enrollment = Array.from(this.enrollments.values()).find(
+        item => item.courseId === course.id && item.participantId === attempt.participantId,
+      );
+      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+    }
+    return { attempt: newAttempt };
   }
 
   async gradeQuizAttempt(

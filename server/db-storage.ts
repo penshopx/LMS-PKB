@@ -1069,6 +1069,62 @@ export class DrizzleStorage implements IStorage {
     return toQuizAttempt(row);
   }
 
+  async createQuizAttemptWithinLimit(
+    attempt: NewQuizAttempt,
+  ): Promise<
+    | { attempt: QuizAttempt }
+    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
+  > {
+    const id = `attempt-${randomUUID()}`;
+    const result = await db.transaction(async tx => {
+      const [quiz] = await tx.select().from(quizzesTable)
+        .where(eq(quizzesTable.id, attempt.quizId))
+        .for("update")
+        .limit(1);
+      if (!quiz) return { rejected: true as const, rejection: "quiz_not_found" as const };
+
+      const quizAttempts = await tx.select({
+        participantId: quizAttemptsTable.participantId,
+        gradingStatus: quizAttemptsTable.gradingStatus,
+      }).from(quizAttemptsTable)
+        .where(eq(quizAttemptsTable.quizId, attempt.quizId));
+      if (quizAttempts.some(existing => existing.gradingStatus === "awaiting_review")) {
+        return { rejected: true as const, rejection: "awaiting_review" as const };
+      }
+      if (quizAttempts.filter(existing => existing.participantId === attempt.participantId).length >= quiz.maxAttempts) {
+        return { rejected: true as const, rejection: "max_attempts" as const };
+      }
+
+      const row = {
+        id,
+        quizId: attempt.quizId,
+        participantId: attempt.participantId,
+        answers: attempt.answers,
+        score: attempt.score,
+        maxScore: attempt.maxScore,
+        passed: attempt.passed ? 1 : 0,
+        gradingStatus: attempt.gradingStatus ?? "graded",
+        gradingFeedback: attempt.gradingFeedback ?? null,
+        gradedBy: attempt.gradedBy ?? null,
+        gradedAt: attempt.gradedAt ?? null,
+        startedAt: attempt.startedAt,
+        completedAt: attempt.completedAt ?? null,
+        timeSpent: attempt.timeSpent ?? null,
+      };
+      await tx.insert(quizAttemptsTable).values(row);
+      return { rejected: false as const, row, quiz };
+    });
+
+    if (result.rejected) return { rejection: result.rejection };
+    const course = await this.getCourse(result.quiz.courseId);
+    if (course?.postTestId === result.quiz.id) {
+      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
+      const enrollment = enrollments.find(item => item.courseId === course.id);
+      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+    }
+    return { attempt: toQuizAttempt(result.row) };
+  }
+
   async gradeQuizAttempt(
     id: string,
     grade: QuizAttemptGradeInput,

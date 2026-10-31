@@ -1172,18 +1172,10 @@ export async function registerRoutes(
       if (!enrollments.some(enrollment => enrollment.courseId === quiz.courseId)) {
         return res.status(409).json({ message: "Peserta harus terdaftar pada kursus kuis ini" });
       }
-      const priorAttempts = await storage.getQuizAttempts(quiz.id);
-      if (priorAttempts.some(attempt => attempt.gradingStatus === "awaiting_review")) {
-        return res.status(409).json({ message: "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang." });
-      }
-      if (priorAttempts.filter(attempt => attempt.participantId === submission.participantId).length >= quiz.maxAttempts) {
-        return res.status(409).json({ message: "Batas percobaan kuis telah tercapai" });
-      }
-
       const result = gradeQuizSubmission(quiz, submission.answers as SubmittedQuizAnswers);
       const requiresEssayReview = quiz.questions.some(question => question.type === "essay");
       const submittedAt = new Date().toISOString();
-      const attempt = await storage.createQuizAttempt({
+      const creation = await storage.createQuizAttemptWithinLimit({
         quizId: quiz.id,
         participantId: submission.participantId,
         answers: result.answers,
@@ -1195,7 +1187,16 @@ export async function registerRoutes(
         completedAt: submittedAt,
         timeSpent: submission.timeSpent,
       });
-      res.status(201).json(attempt);
+      if ("rejection" in creation) {
+        if (creation.rejection === "quiz_not_found") {
+          return res.status(404).json({ message: "Kuis tidak ditemukan" });
+        }
+        if (creation.rejection === "awaiting_review") {
+          return res.status(409).json({ message: "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang." });
+        }
+        return res.status(409).json({ message: "Batas percobaan kuis telah tercapai" });
+      }
+      res.status(201).json(creation.attempt);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Jawaban kuis tidak valid", errors: error.errors });
