@@ -119,9 +119,32 @@ export interface Participant {
   position: string;
   unit: string;
   email: string;
+  bujkId?: string;
   competencies: ParticipantCompetency[];
   learningHistory: LearningRecord[];
   evidences: Evidence[];
+}
+
+export type ApplicationRole = "admin" | "participant" | "bujk_pic";
+
+export interface BujkOrganization {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface BujkInvitation {
+  id: string;
+  email: string;
+  role: Exclude<ApplicationRole, "admin">;
+  bujkId: string;
+  participantName?: string;
+  nip?: string;
+  position?: string;
+  unit?: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  createdAt: string;
 }
 
 export interface ParticipantCompetency {
@@ -224,7 +247,8 @@ export const insertParticipantSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi"),
   position: z.string().min(1, "Jabatan wajib diisi"),
   unit: z.string().min(1, "Unit kerja wajib diisi"),
-  email: z.string().email("Email tidak valid")
+  email: z.string().email("Email tidak valid"),
+  bujkId: z.string().optional(),
 });
 
 export type InsertParticipant = z.infer<typeof insertParticipantSchema>;
@@ -733,11 +757,35 @@ export interface Notification {
   createdAt: string;
 }
 
-// Legacy user schema (keeping for compatibility)
+export const bujksTable = pgTable("bujks", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").$type<ApplicationRole>().notNull().default("admin"),
+  participantId: varchar("participant_id"),
+  bujkId: varchar("bujk_id").references(() => bujksTable.id, { onDelete: "set null" }),
+});
+
+export const bujkInvitationsTable = pgTable("bujk_invitations", {
+  id: varchar("id").primaryKey(),
+  tokenHash: text("token_hash").notNull().unique(),
+  email: text("email").notNull(),
+  role: text("role").$type<Exclude<ApplicationRole, "admin">>().notNull(),
+  bujkId: varchar("bujk_id").notNull().references(() => bujksTable.id, { onDelete: "cascade" }),
+  participantName: text("participant_name"),
+  nip: text("nip"),
+  position: text("position"),
+  unit: text("unit"),
+  invitedBy: varchar("invited_by").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  acceptedAt: text("accepted_at"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const passwordChangeAttempts = pgTable(
@@ -802,6 +850,7 @@ export const participantsTable = pgTable("participants", {
   position: text("position").notNull(),
   unit: text("unit").notNull(),
   email: text("email").notNull(),
+  bujkId: varchar("bujk_id").references(() => bujksTable.id, { onDelete: "set null" }),
 });
 
 export const learningPathsTable = pgTable("learning_paths", {

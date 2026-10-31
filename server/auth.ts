@@ -8,7 +8,7 @@ import { db, pool } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { Express, RequestHandler } from "express";
-import type { User } from "@shared/schema";
+import type { ApplicationRole, User } from "@shared/schema";
 
 const scryptAsync = promisify(scrypt);
 
@@ -35,10 +35,25 @@ export async function getUserById(id: string): Promise<User | undefined> {
   return user;
 }
 
-export async function createUser(username: string, password: string): Promise<User> {
+export async function createUser(
+  username: string,
+  password: string,
+  access: {
+    role?: ApplicationRole;
+    participantId?: string;
+    bujkId?: string;
+  } = {},
+): Promise<User> {
   const hashed = await hashPassword(password);
   const id = randomUUID();
-  const row = { id, username, password: hashed };
+  const row = {
+    id,
+    username,
+    password: hashed,
+    role: access.role ?? "admin",
+    participantId: access.participantId ?? null,
+    bujkId: access.bujkId ?? null,
+  };
   await db.insert(users).values(row);
   return row;
 }
@@ -395,3 +410,14 @@ export const requireAuth: RequestHandler = (req, res, next) => {
   if (req.isAuthenticated()) return next();
   res.status(401).json({ message: "Unauthorized" });
 };
+
+export function requireRole(...roles: ApplicationRole[]): RequestHandler {
+  return (req, res, next) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = req.user as User;
+    if (roles.includes(user.role)) return next();
+    res.status(403).json({ message: "Akses tidak diizinkan untuk peran akun ini." });
+  };
+}

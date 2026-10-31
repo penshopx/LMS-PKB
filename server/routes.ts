@@ -1,11 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { createHash, randomBytes, randomUUID } from "crypto";
+import { and, eq, sql } from "drizzle-orm";
 import passport from "passport";
 import {
   requireAuth,
+  requireRole,
   changeUserPassword,
   passwordChangeAttemptLimiter,
+  hashPassword,
 } from "./auth";
+import { db } from "./db";
 import { storage } from "./storage";
 import { 
   insertParticipantSchema, 
@@ -21,7 +26,12 @@ import {
   insertSchemeSchema,
   insertScheduleSchema,
   insertPortfolioSchema
+  , users
+  , bujksTable
+  , bujkInvitationsTable
+  , participantsTable
 } from "@shared/schema";
+import type { ApplicationRole, User } from "@shared/schema";
 import { z } from "zod";
 import {
   evaluateCourseCompletion,
@@ -29,6 +39,52 @@ import {
   quizForLearner,
   type SubmittedQuizAnswers,
 } from "@shared/lms-course-rules";
+
+function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
+  if (role === "admin") return true;
+  if (method === "POST" && path === "/api/me/password") return true;
+
+  const readOnlyRoutes = [
+    /^\/api\/courses(?:\/[^/]+)?$/,
+    /^\/api\/courses\/[^/]+\/learning-state$/,
+    /^\/api\/learning-paths(?:\/[^/]+)?$/,
+    /^\/api\/quizzes(?:\/[^/]+)?$/,
+    /^\/api\/participants$/,
+    /^\/api\/participants\/[^/]+$/,
+    /^\/api\/participants\/[^/]+\/quiz-attempts$/,
+    /^\/api\/enrollments$/,
+    /^\/api\/certificates$/,
+    /^\/api\/certificates\/[^/]+$/,
+    /^\/api\/certificates\/verify\/[^/]+$/,
+  ];
+  if (method === "GET" && readOnlyRoutes.some(pattern => pattern.test(path))) return true;
+
+  if (role === "participant") {
+    return (
+      (method === "POST" && /^\/api\/quizzes\/[^/]+\/attempts$/.test(path)) ||
+      (method === "POST" && /^\/api\/enrollments\/[^/]+\/lessons\/[^/]+\/complete$/.test(path)) ||
+      (method === "POST" && /^\/api\/participants\/[^/]+\/evidences$/.test(path))
+    );
+  }
+
+  return (
+    (method === "GET" && /^\/api\/quizzes\/[^/]+\/attempts$/.test(path)) ||
+    (method === "GET" && path === "/api/access/bujks") ||
+    (method === "GET" && path === "/api/access/invitations") ||
+    (method === "POST" && path === "/api/access/invitations") ||
+    (method === "POST" && /^\/api\/access\/invitations\/[^/]+\/revoke$/.test(path))
+  );
+}
+
+async function canAccessParticipant(user: User, participantId: string): Promise<boolean> {
+  if (user.role === "admin") return true;
+  if (user.role === "participant") return user.participantId === participantId;
+  if (user.role === "bujk_pic" && user.bujkId) {
+    const participant = await storage.getParticipant(participantId);
+    return participant?.bujkId === user.bujkId;
+  }
+  return false;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -65,8 +121,250 @@ export async function registerRoutes(
     });
   });
 
+  // Invitation acceptance is public, but requires an unexpired, single-use token.
+  app.post("/api/invitations/accept", async (req, res) => {
+    try {
+      const input = z.object({
+        token: z.string().min(32).max(256),
+        password: z.string().min(12).max(128),
+      }).parse(req.body);
+      const tokenHash = createHash("sha256").update(input.token).digest("hex");
+      const [preview] = await db.select().from(bujkInvitationsTable)
+        .where(eq(bujkInvitationsTable.tokenHash, tokenHash)).limit(1);
+      if (!preview || preview.acceptedAt || new Date(preview.expiresAt).getTime() <= Date.now()) {
+        return res.status(400).json({ message: "Tautan undangan tidak valid atau sudah kedaluwarsa." });
+      }
+
+      const normalizedEmail = preview.email.trim().toLowerCase();
+      const [existingUser] = await db.select({ id: users.id }).from(users)
+        .where(sql`lower(${users.username}) = ${normalizedEmail}`).limit(1);
+      if (existingUser) {
+        return res.status(409).json({ message: "Akun untuk email ini sudah tersedia." });
+      }
+
+      const hashedPassword = await hashPassword(input.password);
+      const now = new Date().toISOString();
+      const result = await db.transaction(async tx => {
+        const [invitation] = await tx.select().from(bujkInvitationsTable)
+          .where(eq(bujkInvitationsTable.tokenHash, tokenHash))
+          .for("update")
+          .limit(1);
+        if (!invitation || invitation.acceptedAt || new Date(invitation.expiresAt).getTime() <= Date.now()) {
+          return { ok: false as const, code: "invalid" };
+        }
+
+        const [duplicate] = await tx.select({ id: users.id }).from(users)
+          .where(sql`lower(${users.username}) = ${normalizedEmail}`).limit(1);
+        if (duplicate) return { ok: false as const, code: "duplicate" };
+
+        let participantId: string | null = null;
+        if (invitation.role === "participant") {
+          participantId = `p-${randomUUID()}`;
+          await tx.insert(participantsTable).values({
+            id: participantId,
+            nip: invitation.nip!,
+            name: invitation.participantName!,
+            position: invitation.position!,
+            unit: invitation.unit!,
+            email: normalizedEmail,
+            bujkId: invitation.bujkId,
+          });
+        }
+
+        const userId = randomUUID();
+        await tx.insert(users).values({
+          id: userId,
+          username: normalizedEmail,
+          password: hashedPassword,
+          role: invitation.role,
+          participantId,
+          bujkId: invitation.bujkId,
+        });
+        await tx.update(bujkInvitationsTable)
+          .set({ acceptedAt: now })
+          .where(eq(bujkInvitationsTable.id, invitation.id));
+
+        return { ok: true as const, username: normalizedEmail, role: invitation.role };
+      });
+
+      if (!result.ok) {
+        return res.status(result.code === "duplicate" ? 409 : 400).json({
+          message: result.code === "duplicate"
+            ? "Akun untuk email ini sudah tersedia."
+            : "Tautan undangan tidak valid atau sudah kedaluwarsa.",
+        });
+      }
+      res.status(201).json({ message: "Akun berhasil dibuat. Silakan masuk.", username: result.username, role: result.role });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Kata sandi wajib berisi 12–128 karakter." });
+      }
+      res.status(500).json({ message: "Undangan tidak dapat diproses." });
+    }
+  });
+
   // Protect all remaining /api/* routes
   app.use("/api", requireAuth);
+  app.use("/api", (req, res, next) => {
+    const user = req.user as User;
+    const path = req.originalUrl.split("?")[0];
+    if (roleAllowsPath(user.role, req.method, path)) return next();
+    res.status(403).json({ message: "Akses tidak diizinkan untuk peran akun ini." });
+  });
+
+  // ============ BUJK ACCESS & INVITATIONS ============
+  app.get("/api/access/bujks", async (req, res) => {
+    try {
+      const user = req.user as User;
+      const organizations = user.role === "admin"
+        ? await db.select().from(bujksTable)
+        : user.bujkId
+          ? await db.select().from(bujksTable).where(eq(bujksTable.id, user.bujkId))
+          : [];
+      res.json(organizations);
+    } catch {
+      res.status(500).json({ message: "Daftar BUJK tidak dapat dimuat." });
+    }
+  });
+
+  app.post("/api/access/bujks", requireRole("admin"), async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(2).max(200) }).parse(req.body);
+      const [existing] = await db.select({ id: bujksTable.id }).from(bujksTable)
+        .where(sql`lower(${bujksTable.name}) = ${name.toLowerCase()}`).limit(1);
+      if (existing) return res.status(409).json({ message: "Nama BUJK sudah terdaftar." });
+
+      const organization = {
+        id: randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+      };
+      await db.insert(bujksTable).values(organization);
+      res.status(201).json(organization);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Nama BUJK harus berisi 2–200 karakter." });
+      }
+      res.status(500).json({ message: "BUJK tidak dapat disimpan." });
+    }
+  });
+
+  app.get("/api/access/users", requireRole("admin"), async (_req, res) => {
+    try {
+      const accounts = await db.select({
+        id: users.id,
+        username: users.username,
+        role: users.role,
+        participantId: users.participantId,
+        participantName: participantsTable.name,
+        bujkId: users.bujkId,
+        bujkName: bujksTable.name,
+      })
+        .from(users)
+        .leftJoin(participantsTable, eq(users.participantId, participantsTable.id))
+        .leftJoin(bujksTable, eq(users.bujkId, bujksTable.id));
+      res.json(accounts);
+    } catch {
+      res.status(500).json({ message: "Daftar akun tidak dapat dimuat." });
+    }
+  });
+
+  app.get("/api/access/invitations", requireRole("admin", "bujk_pic"), async (req, res) => {
+    try {
+      const user = req.user as User;
+      const invitations = user.role === "admin"
+        ? await db.select().from(bujkInvitationsTable)
+        : user.bujkId
+          ? await db.select().from(bujkInvitationsTable)
+              .where(eq(bujkInvitationsTable.bujkId, user.bujkId))
+          : [];
+      res.json(invitations.map(({ tokenHash: _tokenHash, invitedBy: _invitedBy, ...invitation }) => invitation));
+    } catch {
+      res.status(500).json({ message: "Daftar undangan tidak dapat dimuat." });
+    }
+  });
+
+  app.post("/api/access/invitations", requireRole("admin", "bujk_pic"), async (req, res) => {
+    try {
+      const data = z.object({
+        email: z.string().trim().email().max(254),
+        role: z.enum(["participant", "bujk_pic"]).optional(),
+        bujkId: z.string().optional(),
+        participantName: z.string().trim().min(1).max(150).optional(),
+        nip: z.string().trim().min(1).max(80).optional(),
+        position: z.string().trim().min(1).max(150).optional(),
+        unit: z.string().trim().min(1).max(150).optional(),
+      }).parse(req.body);
+      const user = req.user as User;
+      const role = user.role === "bujk_pic" ? "participant" : (data.role ?? "bujk_pic");
+      const bujkId = user.role === "bujk_pic" ? user.bujkId : data.bujkId;
+      if (!bujkId) return res.status(400).json({ message: "Pilih BUJK untuk undangan ini." });
+      if (role === "participant" && (!data.participantName || !data.nip || !data.position || !data.unit)) {
+        return res.status(400).json({ message: "Nama, NIP, jabatan, dan unit peserta wajib diisi." });
+      }
+
+      const [organization] = await db.select({ id: bujksTable.id }).from(bujksTable)
+        .where(eq(bujksTable.id, bujkId)).limit(1);
+      if (!organization) return res.status(404).json({ message: "BUJK tidak ditemukan." });
+
+      const email = data.email.toLowerCase();
+      const [existingUser] = await db.select({ id: users.id }).from(users)
+        .where(sql`lower(${users.username}) = ${email}`).limit(1);
+      if (existingUser) return res.status(409).json({ message: "Akun untuk email ini sudah ada." });
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const token = randomBytes(32).toString("base64url");
+      const invitation = {
+        id: randomUUID(),
+        tokenHash: createHash("sha256").update(token).digest("hex"),
+        email,
+        role,
+        bujkId,
+        participantName: role === "participant" ? data.participantName! : null,
+        nip: role === "participant" ? data.nip! : null,
+        position: role === "participant" ? data.position! : null,
+        unit: role === "participant" ? data.unit! : null,
+        invitedBy: user.id,
+        expiresAt,
+        acceptedAt: null,
+        createdAt: now.toISOString(),
+      };
+      await db.insert(bujkInvitationsTable).values(invitation);
+      res.status(201).json({
+        id: invitation.id,
+        email,
+        role,
+        bujkId,
+        expiresAt,
+        invitePath: `/invite/${token}`,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Data undangan tidak valid.", errors: error.errors });
+      }
+      res.status(500).json({ message: "Undangan tidak dapat dibuat." });
+    }
+  });
+
+  app.post("/api/access/invitations/:id/revoke", requireRole("admin", "bujk_pic"), async (req, res) => {
+    try {
+      const user = req.user as User;
+      const [invitation] = await db.select().from(bujkInvitationsTable)
+        .where(eq(bujkInvitationsTable.id, req.params.id)).limit(1);
+      if (!invitation) return res.status(404).json({ message: "Undangan tidak ditemukan." });
+      if (user.role === "bujk_pic" && invitation.bujkId !== user.bujkId) {
+        return res.status(404).json({ message: "Undangan tidak ditemukan." });
+      }
+      if (invitation.acceptedAt) return res.status(409).json({ message: "Undangan sudah digunakan." });
+      await db.update(bujkInvitationsTable)
+        .set({ expiresAt: new Date().toISOString() })
+        .where(eq(bujkInvitationsTable.id, invitation.id));
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ message: "Undangan tidak dapat dibatalkan." });
+    }
+  });
 
   // ============ CHANGE PASSWORD ============
   app.post("/api/me/password", async (req, res) => {
@@ -240,12 +538,19 @@ export async function registerRoutes(
   // ============ COURSES ============
   app.get("/api/courses", async (req, res) => {
     try {
+      const user = req.user as User;
       const unitId = req.query.unitId as string | undefined;
+      let courses;
       if (unitId) {
-        const courses = await storage.getCoursesByUnit(unitId);
-        return res.json(courses);
+        courses = await storage.getCoursesByUnit(unitId);
+      } else {
+        courses = await storage.getCourses();
       }
-      const courses = await storage.getCourses();
+      if (user.role === "participant" && user.participantId) {
+        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
+        const enrolledCourseIds = new Set(enrollments.map(enrollment => enrollment.courseId).filter(Boolean));
+        courses = courses.filter(course => enrolledCourseIds.has(course.id));
+      }
       res.json(courses);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch courses" });
@@ -257,6 +562,15 @@ export async function registerRoutes(
       const course = await storage.getCourse(req.params.id);
       if (!course) {
         return res.status(404).json({ message: "Course not found" });
+      }
+      const user = req.user as User;
+      if (user.role === "participant") {
+        const enrollments = user.participantId
+          ? await storage.getEnrollmentsByParticipant(user.participantId)
+          : [];
+        if (!enrollments.some(enrollment => enrollment.courseId === course.id)) {
+          return res.status(404).json({ message: "Course not found" });
+        }
       }
       res.json(course);
     } catch (error) {
@@ -292,7 +606,13 @@ export async function registerRoutes(
   // ============ PARTICIPANTS ============
   app.get("/api/participants", async (req, res) => {
     try {
-      const participants = await storage.getParticipants();
+      const user = req.user as User;
+      let participants = await storage.getParticipants();
+      if (user.role === "participant") {
+        participants = participants.filter(participant => participant.id === user.participantId);
+      } else if (user.role === "bujk_pic") {
+        participants = participants.filter(participant => participant.bujkId === user.bujkId);
+      }
       res.json(participants);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch participants" });
@@ -302,10 +622,13 @@ export async function registerRoutes(
   app.get("/api/participants/:id", async (req, res) => {
     try {
       const participant = await storage.getParticipant(req.params.id);
-      if (!participant) {
+      if (!participant || !await canAccessParticipant(req.user as User, participant.id)) {
         return res.status(404).json({ message: "Participant not found" });
       }
-      res.json(participant);
+      const user = req.user as User;
+      res.json(user.role === "bujk_pic"
+        ? { ...participant, evidences: participant.evidences.filter(evidence => evidence.type !== "reflection") }
+        : participant);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch participant" });
     }
@@ -354,6 +677,10 @@ export async function registerRoutes(
   // ============ EVIDENCES ============
   app.post("/api/participants/:id/evidences", async (req, res) => {
     try {
+      const user = req.user as User;
+      if (user.role === "participant" && user.participantId !== req.params.id) {
+        return res.status(404).json({ message: "Participant not found" });
+      }
       const data = insertEvidenceSchema.parse(req.body);
       const evidence = await storage.addEvidence(req.params.id, data);
       res.status(201).json(evidence);
@@ -406,7 +733,13 @@ export async function registerRoutes(
   // ============ LEARNING PATHS ============
   app.get("/api/learning-paths", async (req, res) => {
     try {
-      const paths = await storage.getLearningPaths();
+      const user = req.user as User;
+      let paths = await storage.getLearningPaths();
+      if (user.role === "participant" && user.participantId) {
+        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
+        const pathIds = new Set(enrollments.map(enrollment => enrollment.learningPathId).filter(Boolean));
+        paths = paths.filter(path => pathIds.has(path.id));
+      }
       res.json(paths);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch learning paths" });
@@ -418,6 +751,15 @@ export async function registerRoutes(
       const path = await storage.getLearningPath(req.params.id);
       if (!path) {
         return res.status(404).json({ message: "Learning path not found" });
+      }
+      const user = req.user as User;
+      if (user.role === "participant") {
+        const enrollments = user.participantId
+          ? await storage.getEnrollmentsByParticipant(user.participantId)
+          : [];
+        if (!enrollments.some(enrollment => enrollment.learningPathId === path.id)) {
+          return res.status(404).json({ message: "Learning path not found" });
+        }
       }
       res.json(path);
     } catch (error) {
@@ -465,6 +807,22 @@ export async function registerRoutes(
   // ============ ENROLLMENTS ============
   app.get("/api/enrollments", async (req, res) => {
     try {
+      const user = req.user as User;
+      if (user.role === "participant") {
+        const enrollments = user.participantId
+          ? await storage.getEnrollmentsByParticipant(user.participantId)
+          : [];
+        return res.json(enrollments);
+      }
+      if (user.role === "bujk_pic") {
+        const participants = await storage.getParticipants();
+        const participantIds = new Set(
+          participants.filter(participant => participant.bujkId === user.bujkId).map(participant => participant.id),
+        );
+        const enrollments = (await storage.getEnrollments())
+          .filter(enrollment => participantIds.has(enrollment.participantId));
+        return res.json(enrollments);
+      }
       const participantId = req.query.participantId as string | undefined;
       if (participantId) {
         const enrollments = await storage.getEnrollmentsByParticipant(participantId);
@@ -479,11 +837,16 @@ export async function registerRoutes(
 
   app.get("/api/courses/:courseId/learning-state", async (req, res) => {
     try {
-      const participantId = typeof req.query.participantId === "string"
+      const user = req.user as User;
+      let participantId = typeof req.query.participantId === "string"
         ? req.query.participantId
         : "";
+      if (user.role === "participant") participantId = user.participantId ?? "";
       if (!participantId) {
         return res.status(400).json({ message: "participantId wajib diisi" });
+      }
+      if (!await canAccessParticipant(user, participantId)) {
+        return res.status(404).json({ message: "Data peserta tidak ditemukan." });
       }
 
       const course = await storage.getCourse(req.params.courseId);
@@ -564,8 +927,12 @@ export async function registerRoutes(
 
   app.post("/api/enrollments/:id/lessons/:lessonId/complete", async (req, res) => {
     try {
+      const user = req.user as User;
       const enrollment = (await storage.getEnrollments()).find(item => item.id === req.params.id);
       if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+      if (user.role === "participant" && enrollment.participantId !== user.participantId) {
+        return res.status(404).json({ message: "Enrollment not found" });
+      }
       if (!enrollment.courseId) {
         return res.status(400).json({ message: "Enrollment ini tidak terkait dengan kursus" });
       }
@@ -584,12 +951,19 @@ export async function registerRoutes(
   // ============ QUIZZES ============
   app.get("/api/quizzes", async (req, res) => {
     try {
+      const user = req.user as User;
       const courseId = req.query.courseId as string | undefined;
+      let quizzes;
       if (courseId) {
-        const quizzes = await storage.getQuizzesByCourse(courseId);
-        return res.json(quizzes.map(quizForLearner));
+        quizzes = await storage.getQuizzesByCourse(courseId);
+      } else {
+        quizzes = await storage.getQuizzes();
       }
-      const quizzes = await storage.getQuizzes();
+      if (user.role === "participant" && user.participantId) {
+        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
+        const enrolledCourseIds = new Set(enrollments.map(enrollment => enrollment.courseId).filter(Boolean));
+        quizzes = quizzes.filter(quiz => enrolledCourseIds.has(quiz.courseId));
+      }
       res.json(quizzes.map(quizForLearner));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quizzes" });
@@ -601,6 +975,15 @@ export async function registerRoutes(
       const quiz = await storage.getQuiz(req.params.id);
       if (!quiz) {
         return res.status(404).json({ message: "Quiz not found" });
+      }
+      const user = req.user as User;
+      if (user.role === "participant") {
+        const enrollments = user.participantId
+          ? await storage.getEnrollmentsByParticipant(user.participantId)
+          : [];
+        if (!enrollments.some(enrollment => enrollment.courseId === quiz.courseId)) {
+          return res.status(404).json({ message: "Quiz not found" });
+        }
       }
       res.json(quizForLearner(quiz));
     } catch (error) {
@@ -636,7 +1019,15 @@ export async function registerRoutes(
   // ============ QUIZ ATTEMPTS ============
   app.get("/api/quizzes/:quizId/attempts", async (req, res) => {
     try {
-      const attempts = await storage.getQuizAttempts(req.params.quizId);
+      const user = req.user as User;
+      let attempts = await storage.getQuizAttempts(req.params.quizId);
+      if (user.role === "bujk_pic") {
+        const participants = await storage.getParticipants();
+        const participantIds = new Set(
+          participants.filter(participant => participant.bujkId === user.bujkId).map(participant => participant.id),
+        );
+        attempts = attempts.filter(attempt => participantIds.has(attempt.participantId));
+      }
       res.json(attempts);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quiz attempts" });
@@ -645,6 +1036,9 @@ export async function registerRoutes(
 
   app.get("/api/participants/:participantId/quiz-attempts", async (req, res) => {
     try {
+      if (!await canAccessParticipant(req.user as User, req.params.participantId)) {
+        return res.status(404).json({ message: "Participant not found" });
+      }
       const attempts = await storage.getQuizAttemptsByParticipant(req.params.participantId);
       res.json(attempts);
     } catch (error) {
@@ -741,6 +1135,10 @@ export async function registerRoutes(
         timeSpent: z.number().int().min(0).max(86_400).optional(),
       });
       const submission = submissionSchema.parse(req.body);
+      const user = req.user as User;
+      if (user.role === "participant" && submission.participantId !== user.participantId) {
+        return res.status(404).json({ message: "Participant not found" });
+      }
       const quiz = await storage.getQuiz(req.params.quizId);
       if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan" });
       if (!await storage.getParticipant(submission.participantId)) {
@@ -785,12 +1183,28 @@ export async function registerRoutes(
   // ============ CERTIFICATES ============
   app.get("/api/certificates", async (req, res) => {
     try {
+      const user = req.user as User;
+      if (user.role === "participant") {
+        return res.json(user.participantId
+          ? await storage.getCertificatesByParticipant(user.participantId)
+          : []);
+      }
       const participantId = req.query.participantId as string | undefined;
       if (participantId) {
+        if (!await canAccessParticipant(user, participantId)) {
+          return res.status(404).json({ message: "Participant not found" });
+        }
         const certificates = await storage.getCertificatesByParticipant(participantId);
         return res.json(certificates);
       }
-      const certificates = await storage.getCertificates();
+      let certificates = await storage.getCertificates();
+      if (user.role === "bujk_pic") {
+        const participants = await storage.getParticipants();
+        const participantIds = new Set(
+          participants.filter(participant => participant.bujkId === user.bujkId).map(participant => participant.id),
+        );
+        certificates = certificates.filter(certificate => participantIds.has(certificate.participantId));
+      }
       res.json(certificates);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch certificates" });
@@ -801,6 +1215,9 @@ export async function registerRoutes(
     try {
       const certificate = await storage.getCertificate(req.params.id);
       if (!certificate) {
+        return res.status(404).json({ message: "Certificate not found" });
+      }
+      if (!await canAccessParticipant(req.user as User, certificate.participantId)) {
         return res.status(404).json({ message: "Certificate not found" });
       }
       res.json(certificate);
@@ -853,6 +1270,9 @@ export async function registerRoutes(
     try {
       const certificate = await storage.verifyCertificate(req.params.certificateNumber);
       if (!certificate) {
+        return res.status(404).json({ message: "Certificate not found", valid: false });
+      }
+      if (!await canAccessParticipant(req.user as User, certificate.participantId)) {
         return res.status(404).json({ message: "Certificate not found", valid: false });
       }
       res.json({ valid: true, certificate });
