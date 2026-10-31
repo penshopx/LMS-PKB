@@ -25,11 +25,11 @@ import {
   insertAssesseeSchema,
   insertSchemeSchema,
   insertScheduleSchema,
-  insertPortfolioSchema
-  , users
-  , bujksTable
-  , bujkInvitationsTable
-  , participantsTable
+  insertPortfolioSchema,
+  users,
+  bujksTable,
+  bujkInvitationsTable,
+  participantsTable,
 } from "@shared/schema";
 import type { ApplicationRole, User } from "@shared/schema";
 import { z } from "zod";
@@ -61,6 +61,7 @@ function roleAllowsPath(role: ApplicationRole, method: string, path: string): bo
 
   if (role === "participant") {
     return (
+      (method === "POST" && path === "/api/enrollments") ||
       (method === "POST" && /^\/api\/quizzes\/[^/]+\/attempts$/.test(path)) ||
       (method === "POST" && /^\/api\/enrollments\/[^/]+\/lessons\/[^/]+\/complete$/.test(path)) ||
       (method === "POST" && /^\/api\/participants\/[^/]+\/evidences$/.test(path))
@@ -94,8 +95,14 @@ export async function registerRoutes(
   // ---------- AUTH ROUTES (public) ----------
   app.get("/api/me", (req, res) => {
     if (req.isAuthenticated()) {
-      const user = req.user as any;
-      res.json({ id: user.id, username: user.username });
+      const user = req.user as User;
+      res.json({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        participantId: user.participantId,
+        bujkId: user.bujkId,
+      });
     } else {
       res.status(401).json({ message: "Not authenticated" });
     }
@@ -109,7 +116,13 @@ export async function registerRoutes(
       }
       req.logIn(user, (loginErr) => {
         if (loginErr) return next(loginErr);
-        res.json({ id: user.id, username: user.username });
+        res.json({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          participantId: user.participantId,
+          bujkId: user.bujkId,
+        });
       });
     })(req, res, next);
   });
@@ -124,6 +137,7 @@ export async function registerRoutes(
   // Invitation acceptance is public, but requires an unexpired, single-use token.
   app.post("/api/invitations/accept", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const input = z.object({
         token: z.string().min(32).max(256),
         password: z.string().min(12).max(128),
@@ -286,6 +300,7 @@ export async function registerRoutes(
 
   app.post("/api/access/invitations", requireRole("admin", "bujk_pic"), async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const data = z.object({
         email: z.string().trim().email().max(254),
         role: z.enum(["participant", "bujk_pic"]).optional(),
@@ -351,15 +366,20 @@ export async function registerRoutes(
     try {
       const user = req.user as User;
       const [invitation] = await db.select().from(bujkInvitationsTable)
-        .where(eq(bujkInvitationsTable.id, req.params.id)).limit(1);
+        .where(eq(bujkInvitationsTable.id, String(req.params.id))).limit(1);
       if (!invitation) return res.status(404).json({ message: "Undangan tidak ditemukan." });
       if (user.role === "bujk_pic" && invitation.bujkId !== user.bujkId) {
         return res.status(404).json({ message: "Undangan tidak ditemukan." });
       }
       if (invitation.acceptedAt) return res.status(409).json({ message: "Undangan sudah digunakan." });
-      await db.update(bujkInvitationsTable)
+      const revoked = await db.update(bujkInvitationsTable)
         .set({ expiresAt: new Date().toISOString() })
-        .where(eq(bujkInvitationsTable.id, invitation.id));
+        .where(and(
+          eq(bujkInvitationsTable.id, invitation.id),
+          sql`${bujkInvitationsTable.acceptedAt} IS NULL`,
+        ))
+        .returning({ id: bujkInvitationsTable.id });
+      if (!revoked.length) return res.status(409).json({ message: "Undangan sudah digunakan." });
       res.status(204).send();
     } catch {
       res.status(500).json({ message: "Undangan tidak dapat dibatalkan." });
@@ -538,18 +558,12 @@ export async function registerRoutes(
   // ---------- COURSES ----------
   app.get("/api/courses", async (req, res) => {
     try {
-      const user = req.user as User;
       const unitId = req.query.unitId as string | undefined;
       let courses;
       if (unitId) {
         courses = await storage.getCoursesByUnit(unitId);
       } else {
         courses = await storage.getCourses();
-      }
-      if (user.role === "participant" && user.participantId) {
-        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
-        const enrolledCourseIds = new Set(enrollments.map(enrollment => enrollment.courseId).filter(Boolean));
-        courses = courses.filter(course => enrolledCourseIds.has(course.id));
       }
       res.json(courses);
     } catch (error) {
@@ -562,15 +576,6 @@ export async function registerRoutes(
       const course = await storage.getCourse(req.params.id);
       if (!course) {
         return res.status(404).json({ message: "Course not found" });
-      }
-      const user = req.user as User;
-      if (user.role === "participant") {
-        const enrollments = user.participantId
-          ? await storage.getEnrollmentsByParticipant(user.participantId)
-          : [];
-        if (!enrollments.some(enrollment => enrollment.courseId === course.id)) {
-          return res.status(404).json({ message: "Course not found" });
-        }
       }
       res.json(course);
     } catch (error) {
@@ -611,7 +616,12 @@ export async function registerRoutes(
       if (user.role === "participant") {
         participants = participants.filter(participant => participant.id === user.participantId);
       } else if (user.role === "bujk_pic") {
-        participants = participants.filter(participant => participant.bujkId === user.bujkId);
+        participants = participants
+          .filter(participant => Boolean(user.bujkId) && participant.bujkId === user.bujkId)
+          .map(participant => ({
+            ...participant,
+            evidences: participant.evidences.filter(evidence => evidence.type !== "reflection"),
+          }));
       }
       res.json(participants);
     } catch (error) {
@@ -735,8 +745,8 @@ export async function registerRoutes(
     try {
       const user = req.user as User;
       let paths = await storage.getLearningPaths();
-      if (user.role === "participant" && user.participantId) {
-        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
+      if (user.role === "participant") {
+        const enrollments = user.participantId ? await storage.getEnrollmentsByParticipant(user.participantId) : [];
         const pathIds = new Set(enrollments.map(enrollment => enrollment.learningPathId).filter(Boolean));
         paths = paths.filter(path => pathIds.has(path.id));
       }
@@ -890,15 +900,24 @@ export async function registerRoutes(
 
   app.post("/api/enrollments", async (req, res) => {
     try {
+      const user = req.user as User;
       const { participantId, courseId, learningPathId } = req.body;
       if (typeof participantId !== "string" || (!courseId && !learningPathId)) {
         return res.status(400).json({ message: "Peserta dan kursus atau learning path wajib dipilih" });
+      }
+      if (user.role === "participant" && (participantId !== user.participantId || !courseId || learningPathId)) {
+        return res.status(403).json({ message: "Peserta hanya dapat mendaftarkan dirinya pada kursus pilihan." });
       }
       if (!await storage.getParticipant(participantId)) {
         return res.status(404).json({ message: "Peserta tidak ditemukan" });
       }
       if (courseId && !await storage.getCourse(courseId)) {
         return res.status(404).json({ message: "Kursus tidak ditemukan" });
+      }
+      if (user.role === "participant") {
+        const existing = (await storage.getEnrollmentsByParticipant(participantId))
+          .find(enrollment => enrollment.courseId === courseId);
+        if (existing) return res.json(existing);
       }
       const enrollment = await storage.createEnrollment(participantId, courseId, learningPathId);
       res.status(201).json(enrollment);
@@ -964,8 +983,8 @@ export async function registerRoutes(
       } else {
         quizzes = await storage.getQuizzes();
       }
-      if (user.role === "participant" && user.participantId) {
-        const enrollments = await storage.getEnrollmentsByParticipant(user.participantId);
+      if (user.role === "participant") {
+        const enrollments = user.participantId ? await storage.getEnrollmentsByParticipant(user.participantId) : [];
         const enrolledCourseIds = new Set(enrollments.map(enrollment => enrollment.courseId).filter(Boolean));
         quizzes = quizzes.filter(quiz => enrolledCourseIds.has(quiz.courseId));
       }

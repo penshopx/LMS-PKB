@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
+import { QueryClientProvider, useMutation } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -33,6 +33,10 @@ import Assessment from "@/pages/assessment";
 import Certificates from "@/pages/certificates";
 import Quizzes from "@/pages/quizzes";
 import Analytics from "@/pages/analytics";
+import AccessManagement from "@/pages/access";
+import AcceptInvitation from "@/pages/accept-invitation";
+import { ParticipantHome, PicHome } from "@/pages/role-home";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 const PAGE_TITLES: Record<string, string> = {
   "/app": "Dashboard",
@@ -45,22 +49,18 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/assessment": "Asesmen & LSP",
   "/app/certificates": "Sertifikat",
   "/app/analytics": "Analitik & Laporan",
+  "/app/access": "Akun & Undangan BUJK",
 };
 
-function useCurrentUser() {
-  return useQuery({
-    queryKey: ["/api/me"],
-    queryFn: async () => {
-      const res = await fetch("/api/me", { credentials: "include" });
-      if (!res.ok) return null;
-      return res.json() as Promise<{ id: string; username: string }>;
-    },
-    retry: false,
-    staleTime: 60_000,
-  });
-}
-
 function AppRouter() {
+  const { data: user } = useCurrentUser();
+  const [location] = useLocation();
+  if (user?.role === "participant") {
+    return location === "/app/quizzes" ? <Quizzes /> : <ParticipantHome />;
+  }
+  if (user?.role === "bujk_pic") {
+    return location === "/app/access" ? <AccessManagement /> : <PicHome />;
+  }
   return (
     <Switch>
       <Route path="/app" component={Dashboard} />
@@ -73,6 +73,7 @@ function AppRouter() {
       <Route path="/app/assessment" component={Assessment} />
       <Route path="/app/certificates" component={Certificates} />
       <Route path="/app/analytics" component={Analytics} />
+      <Route path="/app/access" component={AccessManagement} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -111,6 +112,7 @@ function UserMenu() {
           <DropdownMenuLabel className="font-normal">
             <p className="text-xs text-muted-foreground">Masuk sebagai</p>
             <p className="font-semibold text-sm truncate" data-testid="text-username">{user?.username}</p>
+            <p className="text-xs text-muted-foreground">{user?.role === "admin" ? "Admin" : user?.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -143,6 +145,7 @@ function UserMenu() {
 
 function AppLayout() {
   const [location] = useLocation();
+  const { data: user } = useCurrentUser();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -162,8 +165,7 @@ function AppLayout() {
               </span>
             )}
             <div className="flex-1" />
-            <GlobalSearch />
-            <NotificationCenter />
+            {user?.role === "admin" && <><GlobalSearch /><NotificationCenter /></>}
             <ThemeToggle />
             <UserMenu />
           </header>
@@ -199,6 +201,7 @@ function App() {
   const isLanding = location === "/";
   const isLogin = location === "/login";
   const isApp = location.startsWith("/app");
+  const isInvitation = location.startsWith("/invite/");
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -206,7 +209,8 @@ function App() {
         {isLanding && <Landing />}
         {isLogin && <Login />}
         {isApp && <ProtectedApp />}
-        {!isLanding && !isLogin && !isApp && (
+        {isInvitation && <AcceptInvitation token={location.split("/")[2] ?? ""} />}
+        {!isLanding && !isLogin && !isApp && !isInvitation && (
           <Switch>
             <Route component={NotFound} />
           </Switch>

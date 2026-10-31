@@ -72,10 +72,12 @@ export function CoursePlayerDialog({
   course,
   open,
   onOpenChange,
+  fixedParticipantId,
 }: {
   course: ECourse;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  fixedParticipantId?: string;
 }) {
   const [activeLessonIndex, setActiveLessonIndex] = useState(0);
   const [participantId, setParticipantId] = useState("");
@@ -102,6 +104,8 @@ export function CoursePlayerDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [learningStateKey] });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
     },
   });
 
@@ -116,15 +120,16 @@ export function CoursePlayerDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [learningStateKey] });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
     },
   });
 
   useEffect(() => {
     if (open) {
       setActiveLessonIndex(0);
-      setParticipantId("");
+      setParticipantId(fixedParticipantId ?? "");
     }
-  }, [course.id, open]);
+  }, [course.id, open, fixedParticipantId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,7 +153,7 @@ export function CoursePlayerDialog({
             <label className="text-sm font-medium" htmlFor={`player-participant-${course.id}`}>
               Progres peserta
             </label>
-            <Select value={participantId} onValueChange={setParticipantId}>
+            <Select value={participantId} onValueChange={setParticipantId} disabled={Boolean(fixedParticipantId)}>
               <SelectTrigger id={`player-participant-${course.id}`} data-testid="select-player-participant">
                 <SelectValue placeholder="Pilih peserta untuk menyimpan progres" />
               </SelectTrigger>

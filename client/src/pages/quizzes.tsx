@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,7 @@ function transformQuestions(questions: unknown): LocalQuestion[] {
 
 export default function Quizzes() {
   const { toast } = useToast();
+  const { data: user } = useCurrentUser();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isQuestionDialogOpen, setIsQuestionDialogOpen] = useState(false);
   const [isReviewingEssays, setIsReviewingEssays] = useState(false);
@@ -146,6 +148,10 @@ export default function Quizzes() {
     setIsTakingQuiz(true);
   }, [quizzes, requestedQuizId]);
 
+  useEffect(() => {
+    if (user?.role === "participant") setParticipantId(user.participantId ?? "");
+  }, [user?.role, user?.participantId]);
+
   const createQuizMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       return apiRequest("POST", "/api/quizzes", data);
@@ -187,7 +193,8 @@ export default function Quizzes() {
       setSelectedQuiz(null);
       setAnswers({});
       setCurrentQuestionIndex(0);
-    }
+    },
+    onError: (error: Error) => toast({ title: "Jawaban belum terkirim", description: error.message, variant: "destructive" }),
   });
 
   const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -322,7 +329,7 @@ export default function Quizzes() {
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <div className="space-y-2 rounded-lg border p-4">
           <Label htmlFor="quiz-participant">Peserta</Label>
-          <Select value={participantId} onValueChange={setParticipantId}>
+          <Select value={participantId} onValueChange={setParticipantId} disabled={user?.role === "participant"}>
             <SelectTrigger id="quiz-participant" data-testid="select-quiz-participant">
               <SelectValue placeholder="Pilih peserta" />
             </SelectTrigger>
@@ -452,14 +459,14 @@ export default function Quizzes() {
           <h1 className="text-2xl font-bold tracking-tight">Quiz Engine</h1>
           <p className="text-muted-foreground">Buat dan kelola kuis untuk mengukur pemahaman peserta</p>
         </div>
-        <Button variant="outline" onClick={() => setIsReviewingEssays(true)}>Penilaian Esai</Button>
+        {user?.role === "admin" && <Button variant="outline" onClick={() => setIsReviewingEssays(true)}>Penilaian Esai</Button>}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
+          {user?.role === "admin" && <DialogTrigger asChild>
             <Button data-testid="button-create-quiz">
               <Plus className="h-4 w-4 mr-2" />
               Buat Kuis Baru
             </Button>
-          </DialogTrigger>
+          </DialogTrigger>}
           <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleCreateSubmit}>
               <DialogHeader>
@@ -759,10 +766,10 @@ export default function Quizzes() {
             <p className="text-muted-foreground text-center max-w-sm mt-2">
               Buat kuis pertama Anda untuk mengukur pemahaman peserta
             </p>
-            <Button className="mt-4" onClick={() => setIsCreateDialogOpen(true)}>
+            {user?.role === "admin" && <Button className="mt-4" onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Buat Kuis Pertama
-            </Button>
+            </Button>}
           </CardContent>
         </Card>
       ) : (
@@ -802,7 +809,7 @@ export default function Quizzes() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex gap-2">
-                  {questions.some(question => question.type === "essay") && (
+                  {user?.role === "admin" && questions.some(question => question.type === "essay") && (
                     <Button
                       variant="outline"
                       onClick={() => openGradingDialog(quiz)}
