@@ -23,6 +23,12 @@ import {
   insertPortfolioSchema
 } from "@shared/schema";
 import { z } from "zod";
+import {
+  evaluateCourseCompletion,
+  gradeQuizSubmission,
+  quizForLearner,
+  type SubmittedQuizAnswers,
+} from "@shared/lms-course-rules";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -471,9 +477,61 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/courses/:courseId/learning-state", async (req, res) => {
+    try {
+      const participantId = typeof req.query.participantId === "string"
+        ? req.query.participantId
+        : "";
+      if (!participantId) {
+        return res.status(400).json({ message: "participantId wajib diisi" });
+      }
+
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) return res.status(404).json({ message: "Kursus tidak ditemukan" });
+      const [enrollments, attempts] = await Promise.all([
+        storage.getEnrollmentsByParticipant(participantId),
+        storage.getQuizAttemptsByParticipant(participantId),
+      ]);
+      const enrollment = enrollments.find(item => item.courseId === course.id);
+      const configuredPostTest = course.postTestId
+        ? await storage.getQuiz(course.postTestId)
+        : undefined;
+      const postTestPassed = Boolean(
+        configuredPostTest &&
+        configuredPostTest.courseId === course.id &&
+        attempts.some(attempt => attempt.quizId === configuredPostTest.id && attempt.passed),
+      );
+      const completion = evaluateCourseCompletion(
+        course,
+        enrollment?.completedLessonIds ?? [],
+        postTestPassed,
+      );
+
+      res.json({
+        enrollment: enrollment ?? null,
+        completion,
+        preTestAttempted: Boolean(
+          course.preTestId && attempts.some(attempt => attempt.quizId === course.preTestId),
+        ),
+        postTestPassed,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Gagal mengambil progres kursus" });
+    }
+  });
+
   app.post("/api/enrollments", async (req, res) => {
     try {
       const { participantId, courseId, learningPathId } = req.body;
+      if (typeof participantId !== "string" || (!courseId && !learningPathId)) {
+        return res.status(400).json({ message: "Peserta dan kursus atau learning path wajib dipilih" });
+      }
+      if (!await storage.getParticipant(participantId)) {
+        return res.status(404).json({ message: "Peserta tidak ditemukan" });
+      }
+      if (courseId && !await storage.getCourse(courseId)) {
+        return res.status(404).json({ message: "Kursus tidak ditemukan" });
+      }
       const enrollment = await storage.createEnrollment(participantId, courseId, learningPathId);
       res.status(201).json(enrollment);
     } catch (error) {
@@ -484,6 +542,16 @@ export async function registerRoutes(
   app.patch("/api/enrollments/:id/progress", async (req, res) => {
     try {
       const { progress, status } = req.body;
+      const existing = (await storage.getEnrollments()).find(item => item.id === req.params.id);
+      if (!existing) return res.status(404).json({ message: "Enrollment not found" });
+      if (existing.courseId) {
+        return res.status(409).json({
+          message: "Progres kursus dihitung dari lesson dan post-test; gunakan endpoint progres lesson.",
+        });
+      }
+      if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
+        return res.status(400).json({ message: "progress harus berupa bilangan bulat 0–100" });
+      }
       const enrollment = await storage.updateEnrollmentProgress(req.params.id, progress, status);
       if (!enrollment) {
         return res.status(404).json({ message: "Enrollment not found" });
@@ -494,16 +562,35 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/enrollments/:id/lessons/:lessonId/complete", async (req, res) => {
+    try {
+      const enrollment = (await storage.getEnrollments()).find(item => item.id === req.params.id);
+      if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+      if (!enrollment.courseId) {
+        return res.status(400).json({ message: "Enrollment ini tidak terkait dengan kursus" });
+      }
+      const course = await storage.getCourse(enrollment.courseId);
+      if (!course?.lessons.some(lesson => lesson.id === req.params.lessonId)) {
+        return res.status(400).json({ message: "Lesson tidak termasuk dalam kursus ini" });
+      }
+      const updated = await storage.markEnrollmentLessonCompleted(enrollment.id, req.params.lessonId);
+      if (!updated) return res.status(404).json({ message: "Enrollment tidak ditemukan" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Gagal menyimpan progres lesson" });
+    }
+  });
+
   // ============ QUIZZES ============
   app.get("/api/quizzes", async (req, res) => {
     try {
       const courseId = req.query.courseId as string | undefined;
       if (courseId) {
         const quizzes = await storage.getQuizzesByCourse(courseId);
-        return res.json(quizzes);
+        return res.json(quizzes.map(quizForLearner));
       }
       const quizzes = await storage.getQuizzes();
-      res.json(quizzes);
+      res.json(quizzes.map(quizForLearner));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quizzes" });
     }
@@ -515,7 +602,7 @@ export async function registerRoutes(
       if (!quiz) {
         return res.status(404).json({ message: "Quiz not found" });
       }
-      res.json(quiz);
+      res.json(quizForLearner(quiz));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quiz" });
     }
@@ -567,12 +654,44 @@ export async function registerRoutes(
 
   app.post("/api/quizzes/:quizId/attempts", async (req, res) => {
     try {
+      const submissionSchema = z.object({
+        participantId: z.string().min(1),
+        answers: z.record(z.union([z.string(), z.array(z.string())])),
+        timeSpent: z.number().int().min(0).max(86_400).optional(),
+      });
+      const submission = submissionSchema.parse(req.body);
+      const quiz = await storage.getQuiz(req.params.quizId);
+      if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan" });
+      if (!await storage.getParticipant(submission.participantId)) {
+        return res.status(404).json({ message: "Peserta tidak ditemukan" });
+      }
+      const enrollments = await storage.getEnrollmentsByParticipant(submission.participantId);
+      if (!enrollments.some(enrollment => enrollment.courseId === quiz.courseId)) {
+        return res.status(409).json({ message: "Peserta harus terdaftar pada kursus kuis ini" });
+      }
+      const priorAttempts = await storage.getQuizAttempts(quiz.id);
+      if (priorAttempts.filter(attempt => attempt.participantId === submission.participantId).length >= quiz.maxAttempts) {
+        return res.status(409).json({ message: "Batas percobaan kuis telah tercapai" });
+      }
+
+      const result = gradeQuizSubmission(quiz, submission.answers as SubmittedQuizAnswers);
+      const submittedAt = new Date().toISOString();
       const attempt = await storage.createQuizAttempt({
-        quizId: req.params.quizId,
-        ...req.body
+        quizId: quiz.id,
+        participantId: submission.participantId,
+        answers: result.answers,
+        score: result.score,
+        maxScore: result.maxScore,
+        passed: result.passed,
+        startedAt: submittedAt,
+        completedAt: submittedAt,
+        timeSpent: submission.timeSpent,
       });
       res.status(201).json(attempt);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Jawaban kuis tidak valid", errors: error.errors });
+      }
       res.status(500).json({ message: "Failed to create quiz attempt" });
     }
   });
@@ -607,6 +726,33 @@ export async function registerRoutes(
   app.post("/api/certificates", async (req, res) => {
     try {
       const data = insertCertificateSchema.parse(req.body);
+      if (data.courseId) {
+        const course = await storage.getCourse(data.courseId);
+        if (!course) return res.status(404).json({ message: "Kursus tidak ditemukan" });
+        const enrollments = await storage.getEnrollmentsByParticipant(data.participantId);
+        const enrollment = enrollments.find(item => item.courseId === course.id);
+        if (!enrollment) {
+          return res.status(409).json({ message: "Peserta belum terdaftar pada kursus ini" });
+        }
+        const attempts = await storage.getQuizAttemptsByParticipant(data.participantId);
+        const postTest = course.postTestId ? await storage.getQuiz(course.postTestId) : undefined;
+        const postTestPassed = Boolean(
+          postTest &&
+          postTest.courseId === course.id &&
+          attempts.some(attempt => attempt.quizId === postTest.id && attempt.passed),
+        );
+        const completion = evaluateCourseCompletion(
+          course,
+          enrollment.completedLessonIds,
+          postTestPassed,
+        );
+        if (!completion.isComplete) {
+          return res.status(409).json({
+            message: "Selesaikan semua lesson dan lulus post-test yang diwajibkan sebelum menerbitkan sertifikat kursus.",
+            completion,
+          });
+        }
+      }
       const certificate = await storage.createCertificate(data);
       res.status(201).json(certificate);
     } catch (error) {

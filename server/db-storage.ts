@@ -66,6 +66,7 @@ import type {
   Notification,
 } from "@shared/schema";
 import type { IStorage } from "./storage";
+import { evaluateCourseCompletion } from "@shared/lms-course-rules";
 
 // Helper to convert DB row to CompetencyCluster
 function toCluster(row: typeof clustersTable.$inferSelect): CompetencyCluster {
@@ -188,6 +189,7 @@ function toEnrollment(row: typeof enrollmentsTable.$inferSelect): Enrollment {
     startedAt: row.startedAt ?? undefined,
     completedAt: row.completedAt ?? undefined,
     progress: row.progress,
+    completedLessonIds: (row.completedLessonIds as string[] | null) ?? [],
     status: row.status as Enrollment["status"],
     lastAccessedAt: row.lastAccessedAt ?? undefined,
   };
@@ -875,6 +877,7 @@ export class DrizzleStorage implements IStorage {
       startedAt: null,
       completedAt: null,
       progress: 0,
+      completedLessonIds: [],
       status: "enrolled",
       lastAccessedAt: null,
     };
@@ -896,6 +899,62 @@ export class DrizzleStorage implements IStorage {
       updates.completedAt = now;
       updates.status = "completed";
     }
+    await db.update(enrollmentsTable).set(updates).where(eq(enrollmentsTable.id, id));
+    const updated = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
+    return updated[0] ? toEnrollment(updated[0]) : undefined;
+  }
+
+  async markEnrollmentLessonCompleted(id: string, lessonId: string): Promise<Enrollment | undefined> {
+    const rows = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
+    const enrollment = rows[0];
+    if (!enrollment?.courseId) return undefined;
+    const course = await this.getCourse(enrollment.courseId);
+    if (!course?.lessons.some(lesson => lesson.id === lessonId)) return undefined;
+
+    await db.update(enrollmentsTable)
+      .set({
+        completedLessonIds: drizzleSql`
+          CASE
+            WHEN ${enrollmentsTable.completedLessonIds} ? ${lessonId}::text
+              THEN ${enrollmentsTable.completedLessonIds}
+            ELSE ${enrollmentsTable.completedLessonIds} || jsonb_build_array(${lessonId}::text)
+          END
+        `,
+      })
+      .where(eq(enrollmentsTable.id, id));
+    return this.refreshCourseEnrollmentProgress(id);
+  }
+
+  async refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined> {
+    const rows = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
+    const enrollment = rows[0];
+    if (!enrollment?.courseId) return undefined;
+    const course = await this.getCourse(enrollment.courseId);
+    if (!course) return undefined;
+
+    const postTest = course.postTestId ? await this.getQuiz(course.postTestId) : undefined;
+    const postTestAttempts = postTest
+      ? await db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.quizId, postTest.id))
+      : [];
+    const postTestPassed = postTestAttempts.some(
+      attempt => attempt.participantId === enrollment.participantId && attempt.passed === 1,
+    );
+    const completedLessonIds = (enrollment.completedLessonIds as string[] | null) ?? [];
+    const completion = evaluateCourseCompletion(course, completedLessonIds, postTestPassed);
+    const now = new Date().toISOString();
+    const updates: Partial<typeof enrollmentsTable.$inferInsert> = {
+      progress: completion.progress,
+      status: completion.isComplete
+        ? "completed"
+        : completion.progress > 0
+          ? "in_progress"
+          : "enrolled",
+      lastAccessedAt: now,
+      completedAt: completion.isComplete ? enrollment.completedAt ?? now : null,
+    };
+    if (completion.progress > 0 && !enrollment.startedAt) updates.startedAt = now;
+
     await db.update(enrollmentsTable).set(updates).where(eq(enrollmentsTable.id, id));
     const updated = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
     return updated[0] ? toEnrollment(updated[0]) : undefined;
@@ -979,6 +1038,13 @@ export class DrizzleStorage implements IStorage {
       timeSpent: attempt.timeSpent ?? null,
     };
     await db.insert(quizAttemptsTable).values(row);
+    const quiz = await this.getQuiz(attempt.quizId);
+    const course = quiz ? await this.getCourse(quiz.courseId) : undefined;
+    if (quiz && course && course.postTestId === quiz.id) {
+      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
+      const enrollment = enrollments.find(item => item.courseId === course.id);
+      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+    }
     return toQuizAttempt(row);
   }
 

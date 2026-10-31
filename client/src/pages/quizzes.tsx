@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +25,7 @@ import {
   Check
 } from "lucide-react";
 import type { Quiz, ECourse } from "@shared/schema";
+import type { Participant } from "@shared/schema";
 
 type LocalQuestionType = "multiple_choice" | "true_false" | "essay";
 
@@ -62,6 +63,10 @@ export default function Quizzes() {
   const [isTakingQuiz, setIsTakingQuiz] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [participantId, setParticipantId] = useState(
+    new URLSearchParams(window.location.search).get("participantId") ?? "",
+  );
+  const requestedQuizId = new URLSearchParams(window.location.search).get("quizId");
   
   const [newQuestions, setNewQuestions] = useState<LocalQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Partial<LocalQuestion>>({
@@ -77,6 +82,17 @@ export default function Quizzes() {
   const { data: courses = [] } = useQuery<ECourse[]>({
     queryKey: ["/api/courses"]
   });
+  const { data: participants = [] } = useQuery<Participant[]>({
+    queryKey: ["/api/participants"]
+  });
+
+  useEffect(() => {
+    if (!requestedQuizId || quizzes.length === 0) return;
+    const requestedQuiz = quizzes.find(quiz => quiz.id === requestedQuizId);
+    if (!requestedQuiz) return;
+    setSelectedQuiz(requestedQuiz);
+    setIsTakingQuiz(true);
+  }, [quizzes, requestedQuizId]);
 
   const createQuizMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -91,12 +107,19 @@ export default function Quizzes() {
   });
 
   const submitAttemptMutation = useMutation({
-    mutationFn: async (data: { quizId: string; participantId: string; answers: Record<string, string>; score: number }) => {
-      return apiRequest("POST", `/api/quizzes/${data.quizId}/attempts`, data);
+    mutationFn: async (data: { quizId: string; participantId: string; answers: Record<string, string> }) => {
+      const response = await apiRequest("POST", `/api/quizzes/${data.quizId}/attempts`, data);
+      return response.json() as Promise<{ score: number; passed: boolean }>;
     },
-    onSuccess: () => {
+    onSuccess: (attempt) => {
       queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
-      toast({ title: "Berhasil", description: "Jawaban berhasil dikirim" });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/participants/${participantId}/quiz-attempts`],
+      });
+      toast({
+        title: attempt.passed ? "Lulus" : "Belum lulus",
+        description: `Nilai ${attempt.score}%. ${attempt.passed ? "Syarat nilai terpenuhi." : "Anda dapat mengulang selama percobaan masih tersedia."}`,
+      });
       setIsTakingQuiz(false);
       setSelectedQuiz(null);
       setAnswers({});
@@ -162,35 +185,12 @@ export default function Quizzes() {
     }
   };
 
-  const calculateScore = (quiz: Quiz, userAnswers: Record<string, string>) => {
-    let score = 0;
-    let total = 0;
-    
-    const questions = transformQuestions(quiz.questions);
-    questions.forEach((q) => {
-      total += q.points;
-      const userAnswer = userAnswers[q.id];
-      
-      if (q.type === "essay") {
-        return;
-      }
-      
-      if (userAnswer === q.correctAnswer) {
-        score += q.points;
-      }
-    });
-    
-    return total > 0 ? Math.round((score / total) * 100) : 0;
-  };
-
   const handleSubmitQuiz = () => {
-    if (!selectedQuiz) return;
-    const score = calculateScore(selectedQuiz, answers);
+    if (!selectedQuiz || !participantId) return;
     submitAttemptMutation.mutate({
       quizId: selectedQuiz.id,
-      participantId: "participant-001",
+      participantId,
       answers,
-      score
     });
   };
 
@@ -219,6 +219,21 @@ export default function Quizzes() {
 
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <div className="space-y-2 rounded-lg border p-4">
+          <Label htmlFor="quiz-participant">Peserta</Label>
+          <Select value={participantId} onValueChange={setParticipantId}>
+            <SelectTrigger id="quiz-participant" data-testid="select-quiz-participant">
+              <SelectValue placeholder="Pilih peserta" />
+            </SelectTrigger>
+            <SelectContent>
+              {participants.map(participant => (
+                <SelectItem key={participant.id} value={participant.id}>
+                  {participant.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">{selectedQuiz.title}</h1>
@@ -301,7 +316,11 @@ export default function Quizzes() {
                 Selanjutnya
               </Button>
             ) : (
-              <Button onClick={handleSubmitQuiz} disabled={submitAttemptMutation.isPending} data-testid="button-submit-quiz">
+              <Button
+                onClick={handleSubmitQuiz}
+                disabled={submitAttemptMutation.isPending || !participantId}
+                data-testid="button-submit-quiz"
+              >
                 {submitAttemptMutation.isPending ? "Mengirim..." : "Kirim Jawaban"}
               </Button>
             )}

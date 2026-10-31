@@ -2,3 +2,4 @@
 - [Foreign-key delete-policy normalization](foreign-key-delete-policy.md) — replace FK behavior by catalog-discovering every constraint on the column, not one assumed name.
 - [Production runtime environment](production-runtime-environment.md) — production run commands must set NODE_ENV at runtime; build-time defines do not cover injected environment objects.
 - [LMS product direction](lms-product-direction.md) — members and BUJK learn through PIC invitations, assigned and elective courses, with course-completion certificates only.
+- [PostgreSQL JSONB parameter typing](postgres-jsonb-parameter-typing.md) — explicitly cast bound text values used with JSONB operators.

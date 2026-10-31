@@ -292,6 +292,7 @@ export interface Enrollment {
   startedAt?: string;
   completedAt?: string;
   progress: number;
+  completedLessonIds: string[];
   status: "enrolled" | "in_progress" | "completed" | "dropped";
   lastAccessedAt?: string;
 }
@@ -811,6 +812,7 @@ export const enrollmentsTable = pgTable("enrollments", {
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
   progress: integer("progress").notNull().default(0),
+  completedLessonIds: jsonb("completed_lesson_ids").notNull().default(sql`'[]'::jsonb`).$type<string[]>(),
   status: text("status").notNull().default("enrolled"),
   lastAccessedAt: text("last_accessed_at"),
 });

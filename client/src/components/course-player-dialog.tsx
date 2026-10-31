@@ -7,8 +7,11 @@ import {
   Download,
   FileText,
   PlayCircle,
+  CheckCircle2,
 } from "lucide-react";
-import type { Activity, ECourse } from "@shared/schema";
+import type { Activity, ECourse, Participant } from "@shared/schema";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +21,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface CourseLearningState {
+  enrollment: {
+    id: string;
+    progress: number;
+    status: string;
+    completedLessonIds: string[];
+  } | null;
+  completion: {
+    progress: number;
+    lessonsCompleted: boolean;
+    requiresPostTest: boolean;
+    postTestPassed: boolean;
+    isComplete: boolean;
+  };
+  preTestAttempted: boolean;
+  postTestPassed: boolean;
+}
 
 const activityIcon = (activity: Activity) => {
   if (activity.type === "video") return <PlayCircle className="h-4 w-4" />;
@@ -50,11 +78,52 @@ export function CoursePlayerDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [activeLessonIndex, setActiveLessonIndex] = useState(0);
+  const [participantId, setParticipantId] = useState("");
   const lessons = [...course.lessons].sort((a, b) => a.order - b.order);
   const activeLesson = lessons[activeLessonIndex];
+  const learningStateKey = `/api/courses/${course.id}/learning-state?participantId=${encodeURIComponent(participantId)}`;
+  const { data: participants = [] } = useQuery<Participant[]>({
+    queryKey: ["/api/participants"],
+  });
+  const learningStateQuery = useQuery<CourseLearningState>({
+    queryKey: [learningStateKey],
+    enabled: Boolean(participantId),
+  });
+  const enrollment = learningStateQuery.data?.enrollment;
+  const completedLessonIds = new Set(enrollment?.completedLessonIds ?? []);
+
+  const createEnrollmentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/enrollments", {
+        participantId,
+        courseId: course.id,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [learningStateKey] });
+    },
+  });
+
+  const completeLessonMutation = useMutation({
+    mutationFn: async (lessonId: string) => {
+      if (!enrollment) throw new Error("Pendaftaran kursus belum tersedia");
+      const response = await apiRequest(
+        "POST",
+        `/api/enrollments/${enrollment.id}/lessons/${encodeURIComponent(lessonId)}/complete`,
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [learningStateKey] });
+    },
+  });
 
   useEffect(() => {
-    if (open) setActiveLessonIndex(0);
+    if (open) {
+      setActiveLessonIndex(0);
+      setParticipantId("");
+    }
   }, [course.id, open]);
 
   return (
@@ -73,6 +142,69 @@ export function CoursePlayerDialog({
           <DialogTitle className="text-xl">{course.title}</DialogTitle>
           <DialogDescription>{course.description}</DialogDescription>
         </DialogHeader>
+
+        <section className="shrink-0 space-y-3 border-b px-5 py-4 md:flex md:items-end md:justify-between md:gap-4 md:space-y-0 md:px-6">
+          <div className="w-full space-y-2 md:max-w-sm">
+            <label className="text-sm font-medium" htmlFor={`player-participant-${course.id}`}>
+              Progres peserta
+            </label>
+            <Select value={participantId} onValueChange={setParticipantId}>
+              <SelectTrigger id={`player-participant-${course.id}`} data-testid="select-player-participant">
+                <SelectValue placeholder="Pilih peserta untuk menyimpan progres" />
+              </SelectTrigger>
+              <SelectContent>
+                {participants.map(participant => (
+                  <SelectItem key={participant.id} value={participant.id}>
+                    {participant.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {participantId && (
+            <div className="flex flex-wrap items-center gap-2">
+              {enrollment ? (
+                <>
+                  <div className="min-w-36">
+                    <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                      <span>{learningStateQuery.data?.completion.progress ?? 0}% selesai</span>
+                      <span>{completedLessonIds.size}/{lessons.length} lesson</span>
+                    </div>
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-valuenow={learningStateQuery.data?.completion.progress ?? 0}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Progres kursus"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${learningStateQuery.data?.completion.progress ?? 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => learningStateQuery.refetch()}
+                    disabled={learningStateQuery.isFetching}
+                  >
+                    Perbarui status
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => createEnrollmentMutation.mutate()}
+                  disabled={createEnrollmentMutation.isPending || !learningStateQuery.isFetched}
+                >
+                  {createEnrollmentMutation.isPending ? "Memulai..." : "Mulai dan simpan progres"}
+                </Button>
+              )}
+            </div>
+          )}
+        </section>
 
         {activeLesson ? (
           <div className="grid min-h-0 flex-1 md:grid-cols-[260px_minmax(0,1fr)]">
@@ -97,6 +229,10 @@ export function CoursePlayerDialog({
                     Lesson {index + 1}
                   </span>
                   <span className="mt-1 block text-sm font-medium">{lesson.title}</span>
+                  <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                    {completedLessonIds.has(lesson.id) && <CheckCircle2 className="h-3 w-3 text-green-600" />}
+                    {completedLessonIds.has(lesson.id) ? "Selesai" : "Belum selesai"}
+                  </span>
                 </button>
               ))}
             </nav>
@@ -108,6 +244,60 @@ export function CoursePlayerDialog({
                   <h2 className="text-2xl font-semibold">{activeLesson.title}</h2>
                   <p className="text-muted-foreground">{activeLesson.description}</p>
                 </div>
+
+                {activeLesson.type === "reflection" && (
+                  <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+                    Refleksi pribadi tidak dikumpulkan atau dibagikan ke PIC. Sistem hanya menyimpan status lesson selesai.
+                  </p>
+                )}
+
+                {participantId && enrollment && (
+                  <section className="space-y-3 rounded-xl border p-4">
+                    <div>
+                      <h3 className="font-semibold">Syarat penyelesaian kursus</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Semua lesson wajib selesai. Pre-test bersifat diagnostik; post-test harus lulus jika tersedia.
+                      </p>
+                    </div>
+                    {[
+                      {
+                        label: "Pre-test diagnostik",
+                        quizId: course.preTestId,
+                        status: learningStateQuery.data?.preTestAttempted ? "Sudah dikerjakan · tidak menghambat kelulusan" : "Opsional",
+                      },
+                      {
+                        label: "Post-test",
+                        quizId: course.postTestId,
+                        status: !course.postTestId
+                          ? "Tidak diwajibkan"
+                          : learningStateQuery.data?.postTestPassed
+                            ? "Lulus"
+                            : "Belum lulus",
+                      },
+                    ].map(item => item.quizId && (
+                      <div key={item.label} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 p-3">
+                        <div>
+                          <p className="text-sm font-medium">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.status}</p>
+                        </div>
+                        <Button asChild size="sm" variant="outline">
+                          <a
+                            href={`/app/quizzes?quizId=${encodeURIComponent(item.quizId)}&participantId=${encodeURIComponent(participantId)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {item.label === "Pre-test diagnostik" ? "Kerjakan pre-test" : "Kerjakan post-test"}
+                          </a>
+                        </Button>
+                      </div>
+                    ))}
+                    {learningStateQuery.data?.completion.isComplete && (
+                      <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                        Kursus selesai. Syarat sertifikat telah terpenuhi.
+                      </p>
+                    )}
+                  </section>
+                )}
 
                 <section className="rounded-xl border bg-card p-4 md:p-6">
                   <h3 className="mb-3 flex items-center gap-2 font-semibold">
@@ -195,6 +385,17 @@ export function CoursePlayerDialog({
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
+                {participantId && enrollment && !completedLessonIds.has(activeLesson.id) && (
+                  <Button
+                    className="w-full"
+                    onClick={() => completeLessonMutation.mutate(activeLesson.id)}
+                    disabled={completeLessonMutation.isPending}
+                    data-testid={`button-complete-lesson-${activeLesson.id}`}
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {completeLessonMutation.isPending ? "Menyimpan progres..." : "Tandai lesson selesai"}
+                  </Button>
+                )}
               </div>
             </main>
           </div>

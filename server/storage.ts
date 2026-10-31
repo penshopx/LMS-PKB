@@ -43,6 +43,7 @@ import type {
   Notification
 } from "@shared/schema";
 import { PUB_CLUSTERS, PUB_COURSES, PUB_LEARNING_PATHS, PUB_PARTICIPANTS, PUB_UNITS } from "./pub-catalog";
+import { evaluateCourseCompletion } from "@shared/lms-course-rules";
 
 // Sample data imports (replicated from client for server use)
 const competencyClusters: CompetencyCluster[] = [
@@ -356,6 +357,8 @@ export interface IStorage {
   getEnrollmentsByParticipant(participantId: string): Promise<Enrollment[]>;
   createEnrollment(participantId: string, courseId?: string, learningPathId?: string): Promise<Enrollment>;
   updateEnrollmentProgress(id: string, progress: number, status?: Enrollment['status']): Promise<Enrollment | undefined>;
+  markEnrollmentLessonCompleted(id: string, lessonId: string): Promise<Enrollment | undefined>;
+  refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined>;
 
   // LMS - Quizzes
   getQuizzes(): Promise<Quiz[]>;
@@ -998,6 +1001,7 @@ export class MemStorage implements IStorage {
       learningPathId,
       enrolledAt: new Date().toISOString(),
       progress: 0,
+      completedLessonIds: [],
       status: "enrolled"
     };
     this.enrollments.set(id, enrollment);
@@ -1017,6 +1021,47 @@ export class MemStorage implements IStorage {
       enrollment.status = "completed";
     }
     enrollment.lastAccessedAt = new Date().toISOString();
+    this.enrollments.set(id, enrollment);
+    return enrollment;
+  }
+
+  async markEnrollmentLessonCompleted(id: string, lessonId: string): Promise<Enrollment | undefined> {
+    const enrollment = this.enrollments.get(id);
+    if (!enrollment?.courseId) return undefined;
+    const course = this.courses.get(enrollment.courseId);
+    if (!course?.lessons.some(lesson => lesson.id === lessonId)) return undefined;
+
+    enrollment.completedLessonIds = Array.from(new Set([...enrollment.completedLessonIds, lessonId]));
+    this.enrollments.set(id, enrollment);
+    return this.refreshCourseEnrollmentProgress(id);
+  }
+
+  async refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined> {
+    const enrollment = this.enrollments.get(id);
+    if (!enrollment?.courseId) return undefined;
+    const course = this.courses.get(enrollment.courseId);
+    if (!course) return undefined;
+
+    const postTest = course.postTestId ? this.quizzes.get(course.postTestId) : undefined;
+    const postTestPassed = postTest
+      ? Array.from(this.quizAttempts.values()).some(
+          attempt => attempt.quizId === postTest.id &&
+            attempt.participantId === enrollment.participantId &&
+            attempt.passed,
+        )
+      : false;
+    const completion = evaluateCourseCompletion(course, enrollment.completedLessonIds, postTestPassed);
+    const now = new Date().toISOString();
+
+    enrollment.progress = completion.progress;
+    enrollment.status = completion.isComplete
+      ? "completed"
+      : completion.progress > 0
+        ? "in_progress"
+        : "enrolled";
+    if (completion.progress > 0 && !enrollment.startedAt) enrollment.startedAt = now;
+    enrollment.lastAccessedAt = now;
+    enrollment.completedAt = completion.isComplete ? enrollment.completedAt ?? now : undefined;
     this.enrollments.set(id, enrollment);
     return enrollment;
   }
@@ -1084,6 +1129,16 @@ export class MemStorage implements IStorage {
     const id = `attempt-${randomUUID()}`;
     const newAttempt: QuizAttempt = { id, ...attempt };
     this.quizAttempts.set(id, newAttempt);
+    const quiz = this.quizzes.get(attempt.quizId);
+    if (quiz) {
+      const course = this.courses.get(quiz.courseId);
+      if (course?.postTestId === quiz.id) {
+        const enrollment = Array.from(this.enrollments.values()).find(
+          item => item.courseId === course.id && item.participantId === attempt.participantId,
+        );
+        if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+      }
+    }
     return newAttempt;
   }
 
