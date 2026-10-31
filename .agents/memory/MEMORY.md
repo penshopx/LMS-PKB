@@ -1,3 +1,4 @@
 - [PostgreSQL concurrency test coordination](postgres-concurrency-tests.md) — managed DB hides session activity; coordinate overlapping transactions inside the test harness.
 - [Foreign-key delete-policy normalization](foreign-key-delete-policy.md) — replace FK behavior by catalog-discovering every constraint on the column, not one assumed name.
 - [Production runtime environment](production-runtime-environment.md) — production run commands must set NODE_ENV at runtime; build-time defines do not cover injected environment objects.
+- [LMS product direction](lms-product-direction.md) — members and BUJK learn through PIC invitations, assigned and elective courses, with course-completion certificates only.
