@@ -7,6 +7,7 @@ description: Product decisions for the PUB ASPEKINDO Udemy-style LMS discussion.
 - BUJK PICs invite participants.
 - Learning combines company-assigned required paths with learner-selected elective courses.
 - PICs assign required learning paths to job-role groups and can make individual exceptions.
+- SIAP Tender is the chosen pilot domain; improve the existing Level 2 course rather than duplicate it.
 - The LMS issues course-completion certificates only, not formal competency or SKK certificates.
 - Recommended course completion rule: finish all required lessons and pass the post-test when one is configured. A pre-test is diagnostic and does not block completion. Do not require assessor approval as a competency claim for this certificate.
 - PICs may view detailed quiz answers and submitted evidence for learners in their own BUJK. Access is read-only and scoped to that BUJK; private reflection notes remain excluded unless separately approved.
