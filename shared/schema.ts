@@ -274,9 +274,9 @@ export const insertCourseSchema = z.object({
 
 export type InsertCourse = z.infer<typeof insertCourseSchema>;
 
-// ============================================
+// --------------------------------------------
 // LMS FEATURES - Learning Management System
-// ============================================
+// --------------------------------------------
 
 // Learning Path - Jalur Pembelajaran
 export interface LearningPath {
@@ -379,8 +379,9 @@ export type NewQuizAttempt = Omit<QuizAttempt, "id" | "gradingStatus"> & {
 };
 
 export interface QuizAttemptGradeInput {
-  score: number;
-  feedback: string;
+  score?: number;
+  essayScores?: Record<string, number>;
+  feedback?: string;
   gradedBy: string;
   gradedAt: string;
 }
@@ -492,9 +493,9 @@ export interface DiscussionReply {
   isAnswer: boolean;
 }
 
-// ============================================
+// --------------------------------------------
 // LSP/SKK FEATURES - Sertifikasi Kompetensi
-// ============================================
+// --------------------------------------------
 
 // Assessor - Asesor LSP
 export interface Assessor {
@@ -808,9 +809,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// ============================================
+// --------------------------------------------
 // DATABASE TABLES
-// ============================================
+// --------------------------------------------
 
 export const clustersTable = pgTable("clusters", {
   id: varchar("id").primaryKey(),
@@ -1047,9 +1048,9 @@ export const notificationsTable = pgTable("notifications", {
   createdAt: text("created_at").notNull(),
 });
 
-// ============================================
+// --------------------------------------------
 // RELATIONAL TABLES (replaces JSONB arrays in participantsTable)
-// ============================================
+// --------------------------------------------
 
 export const participantCompetenciesTable = pgTable(
   "participant_competencies",

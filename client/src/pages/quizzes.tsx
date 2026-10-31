@@ -62,6 +62,10 @@ export default function Quizzes() {
   const [isQuestionDialogOpen, setIsQuestionDialogOpen] = useState(false);
   const [isReviewingEssays, setIsReviewingEssays] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  const [gradingQuiz, setGradingQuiz] = useState<Quiz | null>(null);
+  const [gradingAttemptId, setGradingAttemptId] = useState("");
+  const [essayScores, setEssayScores] = useState<Record<string, string>>({});
+  const [isGradingDialogOpen, setIsGradingDialogOpen] = useState(false);
   const [isTakingQuiz, setIsTakingQuiz] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -90,6 +94,48 @@ export default function Quizzes() {
   const { data: participantAttempts = [] } = useQuery<QuizAttempt[]>({
     queryKey: [`/api/participants/${participantId}/quiz-attempts`],
     enabled: Boolean(participantId),
+  });
+
+  const { data: quizAttempts = [], isLoading: isLoadingAttempts } = useQuery<QuizAttempt[]>({
+    queryKey: ["/api/quizzes", gradingQuiz?.id, "attempts"],
+    enabled: isGradingDialogOpen && Boolean(gradingQuiz),
+  });
+
+  const gradeEssayMutation = useMutation({
+    mutationFn: async (data: { quizId: string; attemptId: string; essayScores: Record<string, number> }) => {
+      const response = await apiRequest(
+        "PATCH",
+        `/api/quizzes/${data.quizId}/attempts/${data.attemptId}/grade`,
+        { essayScores: data.essayScores },
+      );
+      return response.json() as Promise<QuizAttempt>;
+    },
+    onSuccess: (attempt) => {
+      if (!gradingQuiz) return;
+      queryClient.invalidateQueries({
+        queryKey: ["/api/quizzes", gradingQuiz.id, "attempts"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/participants/${attempt.participantId}/quiz-attempts`] });
+      toast({
+        title: attempt.passed ? "Peserta lulus" : "Penilaian tersimpan",
+        description: `Nilai akhir ${attempt.score}%. Ambang lulus kuis adalah ${gradingQuiz.passingScore}%.`,
+      });
+      setGradingAttemptId("");
+      setEssayScores({});
+    },
+  });
+
+  const gradingEssayQuestions = transformQuestions(gradingQuiz?.questions)
+    .filter(question => question.type === "essay");
+  const selectedAttempt = quizAttempts.find(attempt => attempt.id === gradingAttemptId);
+  const essayScoresAreValid = gradingEssayQuestions.length > 0 &&
+    gradingEssayQuestions.every(question => {
+      const rawScore = essayScores[question.id];
+      if (rawScore === undefined || rawScore.trim() === "") return false;
+      const score = Number(rawScore);
+      return Number.isInteger(score) && score >= 0 && score <= question.points;
   });
 
   useEffect(() => {
@@ -208,6 +254,29 @@ export default function Quizzes() {
       quizId: selectedQuiz.id,
       participantId,
       answers,
+    });
+  };
+
+  const openGradingDialog = (quiz: Quiz) => {
+    setGradingQuiz(quiz);
+    setGradingAttemptId("");
+    setEssayScores({});
+    setIsGradingDialogOpen(true);
+  };
+
+  const selectAttemptForGrading = (attemptId: string) => {
+    setGradingAttemptId(attemptId);
+    setEssayScores(Object.fromEntries(gradingEssayQuestions.map(question => [question.id, ""])));
+  };
+
+  const submitEssayGrade = () => {
+    if (!gradingQuiz || !selectedAttempt || !essayScoresAreValid) return;
+    gradeEssayMutation.mutate({
+      quizId: gradingQuiz.id,
+      attemptId: selectedAttempt.id,
+      essayScores: Object.fromEntries(
+        gradingEssayQuestions.map(question => [question.id, Number(essayScores[question.id])]),
+      ),
     });
   };
 
@@ -733,6 +802,16 @@ export default function Quizzes() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex gap-2">
+                  {questions.some(question => question.type === "essay") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => openGradingDialog(quiz)}
+                      data-testid={`button-grade-essays-${quiz.id}`}
+                    >
+                      <AlignLeft className="h-4 w-4 mr-2" />
+                      Nilai esai
+                    </Button>
+                  )}
                   <Button 
                     className="flex-1"
                     variant="outline"
@@ -752,6 +831,108 @@ export default function Quizzes() {
           })}
         </div>
       )}
+
+      <Dialog
+        open={isGradingDialogOpen}
+        onOpenChange={(open) => {
+          setIsGradingDialogOpen(open);
+          if (!open) {
+            setGradingQuiz(null);
+            setGradingAttemptId("");
+            setEssayScores({});
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Penilaian jawaban esai</DialogTitle>
+            <DialogDescription>
+              {gradingQuiz?.title} · Nilai setiap jawaban dari 0 sampai poin maksimum soal.
+              Kelulusan dihitung server dari seluruh poin dan ambang kuis.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingAttempts ? (
+            <p className="text-sm text-muted-foreground">Memuat jawaban peserta...</p>
+          ) : (
+            <div className="space-y-3">
+              <Label htmlFor="grading-attempt">Pilih jawaban yang menunggu penilaian</Label>
+              <Select value={gradingAttemptId} onValueChange={selectAttemptForGrading}>
+                <SelectTrigger id="grading-attempt" data-testid="select-grading-attempt">
+                  <SelectValue placeholder="Pilih peserta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quizAttempts.filter(attempt => attempt.gradingStatus === "awaiting_review").map(attempt => {
+                    const participant = participants.find(item => item.id === attempt.participantId);
+                    return (
+                      <SelectItem key={attempt.id} value={attempt.id}>
+                        {participant?.name ?? attempt.participantId} · {attempt.completedAt
+                          ? new Date(attempt.completedAt).toLocaleString("id-ID")
+                          : "Waktu tidak tersedia"}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+
+              {!quizAttempts.some(attempt => attempt.gradingStatus === "awaiting_review") && (
+                <p className="text-sm text-muted-foreground">
+                  Tidak ada jawaban esai yang menunggu penilaian.
+                </p>
+              )}
+
+              {selectedAttempt && (
+                <div className="space-y-4 pt-2">
+                  {gradingEssayQuestions.map(question => {
+                    const answer = selectedAttempt.answers.find(item => item.questionId === question.id);
+                    return (
+                      <Card key={question.id}>
+                        <CardHeader>
+                          <CardTitle className="text-base">{question.text}</CardTitle>
+                          <CardDescription>Maksimum {question.points} poin</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="rounded-md bg-muted p-3 whitespace-pre-wrap text-sm">
+                            {typeof answer?.answer === "string" && answer.answer.trim()
+                              ? answer.answer
+                              : "Peserta tidak mengisi jawaban."}
+                          </div>
+                          <div className="grid gap-2 max-w-40">
+                            <Label htmlFor={`essay-score-${question.id}`}>Poin diberikan</Label>
+                            <Input
+                              id={`essay-score-${question.id}`}
+                              type="number"
+                              min={0}
+                              max={question.points}
+                              step={1}
+                              value={essayScores[question.id] ?? ""}
+                              onChange={event => setEssayScores({
+                                ...essayScores,
+                                [question.id]: event.target.value,
+                              })}
+                              data-testid={`input-essay-score-${question.id}`}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              onClick={submitEssayGrade}
+              disabled={!selectedAttempt || !essayScoresAreValid || gradeEssayMutation.isPending}
+              data-testid="button-submit-essay-grade"
+            >
+              {gradeEssayMutation.isPending ? "Menyimpan..." : "Simpan penilaian"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

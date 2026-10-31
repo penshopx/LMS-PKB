@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
 import type { 
-  CompetencyCluster, 
-  UnitCompetency, 
-  ECourse, 
-  Participant, 
+  CompetencyCluster,
+  UnitCompetency,
+  ECourse,
+  Participant,
   Evidence,
   Assessment,
   DashboardStats,
@@ -42,7 +42,7 @@ import type {
   CertificationResult,
   Badge,
   Achievement,
-  Notification
+  Notification,
 } from "@shared/schema";
 import { PUB_CLUSTERS, PUB_COURSES, PUB_LEARNING_PATHS, PUB_PARTICIPANTS, PUB_UNITS } from "./pub-catalog";
 import { evaluateCourseCompletion } from "@shared/lms-course-rules";
@@ -1051,7 +1051,7 @@ export class MemStorage implements IStorage {
       ? Array.from(this.quizAttempts.values()).some(
           attempt => attempt.quizId === postTest.id &&
             attempt.participantId === enrollment.participantId &&
-            attempt.passed,
+            attempt.gradingStatus === "graded" && attempt.passed,
         )
       : false;
     const completion = evaluateCourseCompletion(course, enrollment.completedLessonIds, postTestPassed);
@@ -1160,32 +1160,73 @@ export class MemStorage implements IStorage {
     id: string,
     grade: QuizAttemptGradeInput,
   ): Promise<QuizAttempt | undefined> {
-    const existing = this.quizAttempts.get(id);
-    if (!existing || existing.gradingStatus !== "awaiting_review") return undefined;
-
-    const quiz = this.quizzes.get(existing.quizId);
+    const attempt = this.quizAttempts.get(id);
+    if (!attempt || attempt.gradingStatus !== "awaiting_review") return undefined;
+    const quiz = this.quizzes.get(attempt.quizId);
     if (!quiz) return undefined;
 
-    const graded: QuizAttempt = {
-      ...existing,
-      score: grade.score,
-      maxScore: 100,
-      passed: grade.score >= quiz.passingScore,
-      gradingStatus: "graded",
-      gradingFeedback: grade.feedback,
-      gradedBy: grade.gradedBy,
-      gradedAt: grade.gradedAt,
-    };
-    this.quizAttempts.set(id, graded);
+    let gradedAttempt: QuizAttempt;
+    if (typeof grade.score === "number") {
+      gradedAttempt = {
+        ...attempt,
+        score: grade.score,
+        maxScore: 100,
+        passed: grade.score >= quiz.passingScore,
+        gradingStatus: "graded",
+        gradingFeedback: grade.feedback,
+        gradedBy: grade.gradedBy,
+        gradedAt: grade.gradedAt,
+      };
+    } else {
+      const essayScores = grade.essayScores;
+      if (!essayScores) return undefined;
+      const essayQuestions = quiz.questions.filter(question => question.type === "essay");
+      const essayQuestionIds = new Set(essayQuestions.map(question => question.id));
+      if (
+        essayQuestionIds.size !== Object.keys(essayScores).length ||
+        Object.keys(essayScores).some(questionId => !essayQuestionIds.has(questionId)) ||
+        essayQuestions.some(question => {
+          const score = essayScores[question.id];
+          return !Number.isInteger(score) || score < 0 || score > Math.max(0, question.points);
+        })
+      ) {
+        return undefined;
+      }
 
+      const answers = attempt.answers.map(answer => {
+        const question = essayQuestions.find(item => item.id === answer.questionId);
+        if (!question) return answer;
+        const points = essayScores[question.id];
+        return {
+          ...answer,
+          isCorrect: question.points > 0 && points >= question.points,
+          points,
+        };
+      });
+      const score = attempt.maxScore > 0
+        ? Math.round((answers.reduce((total, answer) => total + answer.points, 0) / attempt.maxScore) * 100)
+        : 0;
+      gradedAttempt = {
+        ...attempt,
+        answers,
+        score,
+        passed: attempt.maxScore > 0 && score >= quiz.passingScore,
+        gradingStatus: "graded",
+        gradingFeedback: grade.feedback,
+        gradedBy: grade.gradedBy,
+        gradedAt: grade.gradedAt,
+      };
+    }
+
+    this.quizAttempts.set(id, gradedAttempt);
     const course = this.courses.get(quiz.courseId);
     if (course?.postTestId === quiz.id) {
       const enrollment = Array.from(this.enrollments.values()).find(
-        item => item.courseId === course.id && item.participantId === existing.participantId,
+        item => item.courseId === course.id && item.participantId === attempt.participantId,
       );
       if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
     }
-    return graded;
+    return gradedAttempt;
   }
 
   // LMS - Certificates

@@ -946,7 +946,10 @@ export class DrizzleStorage implements IStorage {
           .where(eq(quizAttemptsTable.quizId, postTest.id))
       : [];
     const postTestPassed = postTestAttempts.some(
-      attempt => attempt.participantId === enrollment.participantId && attempt.passed === 1,
+      attempt =>
+        attempt.participantId === enrollment.participantId &&
+        attempt.gradingStatus === "graded" &&
+        attempt.passed === 1,
     );
     const completedLessonIds = (enrollment.completedLessonIds as string[] | null) ?? [];
     const completion = evaluateCourseCompletion(course, completedLessonIds, postTestPassed);
@@ -1074,17 +1077,59 @@ export class DrizzleStorage implements IStorage {
       .where(eq(quizAttemptsTable.id, id))
       .limit(1);
     if (!current || current.gradingStatus !== "awaiting_review") return undefined;
-
-    const quiz = await this.getQuiz(current.quizId);
+    const attempt = toQuizAttempt(current);
+    const quiz = await this.getQuiz(attempt.quizId);
     if (!quiz) return undefined;
 
-    const [row] = await db.update(quizAttemptsTable)
-      .set({
+    let updates: Partial<typeof quizAttemptsTable.$inferInsert>;
+    if (typeof grade.score === "number") {
+      if (!Number.isInteger(grade.score) || grade.score < 0 || grade.score > 100) return undefined;
+      updates = {
         score: grade.score,
         maxScore: 100,
         passed: grade.score >= quiz.passingScore ? 1 : 0,
+      };
+    } else {
+      const essayScores = grade.essayScores;
+      if (!essayScores) return undefined;
+      const essayQuestions = quiz.questions.filter(question => question.type === "essay");
+      const essayQuestionIds = new Set(essayQuestions.map(question => question.id));
+      if (
+        essayQuestionIds.size !== Object.keys(essayScores).length ||
+        Object.keys(essayScores).some(questionId => !essayQuestionIds.has(questionId)) ||
+        essayQuestions.some(question => {
+          const score = essayScores[question.id];
+          return !Number.isInteger(score) || score < 0 || score > Math.max(0, question.points);
+        })
+      ) {
+        return undefined;
+      }
+
+      const answers = attempt.answers.map(answer => {
+        const question = essayQuestions.find(item => item.id === answer.questionId);
+        if (!question) return answer;
+        const points = essayScores[question.id];
+        return {
+          ...answer,
+          isCorrect: question.points > 0 && points >= question.points,
+          points,
+        };
+      });
+      const score = attempt.maxScore > 0
+        ? Math.round((answers.reduce((total, answer) => total + answer.points, 0) / attempt.maxScore) * 100)
+        : 0;
+      updates = {
+        answers,
+        score,
+        passed: attempt.maxScore > 0 && score >= quiz.passingScore ? 1 : 0,
+      };
+    }
+
+    const [row] = await db.update(quizAttemptsTable)
+      .set({
+        ...updates,
         gradingStatus: "graded",
-        gradingFeedback: grade.feedback,
+        gradingFeedback: grade.feedback ?? null,
         gradedBy: grade.gradedBy,
         gradedAt: grade.gradedAt,
       })
@@ -1097,7 +1142,7 @@ export class DrizzleStorage implements IStorage {
 
     const course = await this.getCourse(quiz.courseId);
     if (course?.postTestId === quiz.id) {
-      const enrollments = await this.getEnrollmentsByParticipant(current.participantId);
+      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
       const enrollment = enrollments.find(item => item.courseId === course.id);
       if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
     }

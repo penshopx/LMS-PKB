@@ -91,7 +91,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // ============ AUTH ROUTES (public) ============
+  // ---------- AUTH ROUTES (public) ----------
   app.get("/api/me", (req, res) => {
     if (req.isAuthenticated()) {
       const user = req.user as any;
@@ -366,7 +366,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ CHANGE PASSWORD ============
+  // ---------- CHANGE PASSWORD ----------
   app.post("/api/me/password", async (req, res) => {
     try {
       const user = req.user as { id: string };
@@ -412,7 +412,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ CLUSTERS ============
+  // ---------- CLUSTERS ----------
   app.get("/api/clusters", async (req, res) => {
     try {
       const clusters = await storage.getClusters();
@@ -471,7 +471,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ UNITS ============
+  // ---------- UNITS ----------
   app.get("/api/units", async (req, res) => {
     try {
       const clusterId = req.query.clusterId as string | undefined;
@@ -535,7 +535,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ COURSES ============
+  // ---------- COURSES ----------
   app.get("/api/courses", async (req, res) => {
     try {
       const user = req.user as User;
@@ -603,7 +603,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ PARTICIPANTS ============
+  // ---------- PARTICIPANTS ----------
   app.get("/api/participants", async (req, res) => {
     try {
       const user = req.user as User;
@@ -674,7 +674,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ EVIDENCES ============
+  // ---------- EVIDENCES ----------
   app.post("/api/participants/:id/evidences", async (req, res) => {
     try {
       const user = req.user as User;
@@ -711,7 +711,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ DASHBOARD ============
+  // ---------- DASHBOARD ----------
   app.get("/api/dashboard/stats", async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
@@ -730,7 +730,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ LEARNING PATHS ============
+  // ---------- LEARNING PATHS ----------
   app.get("/api/learning-paths", async (req, res) => {
     try {
       const user = req.user as User;
@@ -804,7 +804,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ENROLLMENTS ============
+  // ---------- ENROLLMENTS ----------
   app.get("/api/enrollments", async (req, res) => {
     try {
       const user = req.user as User;
@@ -862,7 +862,12 @@ export async function registerRoutes(
       const postTestPassed = Boolean(
         configuredPostTest &&
         configuredPostTest.courseId === course.id &&
-        attempts.some(attempt => attempt.quizId === configuredPostTest.id && attempt.passed),
+        attempts.some(
+          attempt =>
+            attempt.quizId === configuredPostTest.id &&
+            attempt.gradingStatus === "graded" &&
+            attempt.passed,
+        ),
       );
       const completion = evaluateCourseCompletion(
         course,
@@ -948,7 +953,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ QUIZZES ============
+  // ---------- QUIZZES ----------
   app.get("/api/quizzes", async (req, res) => {
     try {
       const user = req.user as User;
@@ -1016,7 +1021,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ QUIZ ATTEMPTS ============
+  // ---------- QUIZ ATTEMPTS ----------
   app.get("/api/quizzes/:quizId/attempts", async (req, res) => {
     try {
       const user = req.user as User;
@@ -1180,7 +1185,55 @@ export async function registerRoutes(
     }
   });
 
-  // ============ CERTIFICATES ============
+  app.patch("/api/quizzes/:quizId/attempts/:attemptId/grade", async (req, res) => {
+    try {
+      const quiz = await storage.getQuiz(req.params.quizId);
+      if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan" });
+      const attempt = (await storage.getQuizAttempts(quiz.id))
+        .find(item => item.id === req.params.attemptId);
+      if (!attempt) return res.status(404).json({ message: "Percobaan kuis tidak ditemukan" });
+      if (attempt.gradingStatus !== "awaiting_review") {
+        return res.status(409).json({ message: "Jawaban esai sudah dinilai" });
+      }
+
+      const essayQuestions = quiz.questions.filter(question => question.type === "essay");
+      if (essayQuestions.length === 0) {
+        return res.status(409).json({ message: "Kuis ini tidak memerlukan penilaian esai" });
+      }
+      const { essayScores } = z.object({
+        essayScores: z.record(z.number().int().min(0)),
+      }).strict().parse(req.body);
+      const expectedIds = new Set(essayQuestions.map(question => question.id));
+      const suppliedIds = Object.keys(essayScores);
+      if (
+        expectedIds.size !== suppliedIds.length ||
+        suppliedIds.some(questionId => !expectedIds.has(questionId)) ||
+        essayQuestions.some(question => essayScores[question.id] > Math.max(0, question.points))
+      ) {
+        return res.status(400).json({
+          message: "Nilai harus diberikan untuk setiap soal esai dan tidak boleh melebihi poin soal.",
+        });
+      }
+
+      const reviewer = req.user as { id: string };
+      const gradedAttempt = await storage.gradeQuizAttempt(attempt.id, {
+        essayScores,
+        gradedBy: reviewer.id,
+        gradedAt: new Date().toISOString(),
+      });
+      if (!gradedAttempt) {
+        return res.status(409).json({ message: "Percobaan tidak lagi menunggu penilaian" });
+      }
+      res.json(gradedAttempt);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Nilai esai tidak valid", errors: error.errors });
+      }
+      res.status(500).json({ message: "Gagal menyimpan penilaian esai" });
+    }
+  });
+
+  // ---------- CERTIFICATES ----------
   app.get("/api/certificates", async (req, res) => {
     try {
       const user = req.user as User;
@@ -1242,7 +1295,12 @@ export async function registerRoutes(
         const postTestPassed = Boolean(
           postTest &&
           postTest.courseId === course.id &&
-          attempts.some(attempt => attempt.quizId === postTest.id && attempt.passed),
+          attempts.some(
+            attempt =>
+              attempt.quizId === postTest.id &&
+              attempt.gradingStatus === "graded" &&
+              attempt.passed,
+          ),
         );
         const completion = evaluateCourseCompletion(
           course,
@@ -1281,7 +1339,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ASSESSORS ============
+  // ---------- ASSESSORS ----------
   app.get("/api/assessors", async (req, res) => {
     try {
       const assessors = await storage.getAssessors();
@@ -1340,7 +1398,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ASSESSEES ============
+  // ---------- ASSESSEES ----------
   app.get("/api/assessees", async (req, res) => {
     try {
       const assessees = await storage.getAssessees();
@@ -1387,7 +1445,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ COMPETENCY SCHEMES ============
+  // ---------- COMPETENCY SCHEMES ----------
   app.get("/api/schemes", async (req, res) => {
     try {
       const schemes = await storage.getSchemes();
@@ -1422,7 +1480,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ASSESSMENT SCHEDULES ============
+  // ---------- ASSESSMENT SCHEDULES ----------
   app.get("/api/schedules", async (req, res) => {
     try {
       const schedules = await storage.getSchedules();
@@ -1469,7 +1527,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ PORTFOLIO ============
+  // ---------- PORTFOLIO ----------
   app.get("/api/assessees/:assesseeId/portfolio", async (req, res) => {
     try {
       const items = await storage.getPortfolioItems(req.params.assesseeId);
@@ -1505,7 +1563,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ CERTIFICATION RESULTS ============
+  // ---------- CERTIFICATION RESULTS ----------
   app.get("/api/certification-results", async (req, res) => {
     try {
       const results = await storage.getCertificationResults();
@@ -1524,7 +1582,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ LSP ORGANIZATIONS ============
+  // ---------- LSP ORGANIZATIONS ----------
   app.get("/api/lsp-organizations", async (req, res) => {
     try {
       const orgs = await storage.getLSPOrganizations();
@@ -1546,7 +1604,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ NOTIFICATIONS ============
+  // ---------- NOTIFICATIONS ----------
   app.get("/api/notifications", async (req, res) => {
     try {
       const notifications = await storage.getNotifications();
@@ -1575,7 +1633,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ SEARCH ============
+  // ---------- SEARCH ----------
   app.get("/api/search", async (req, res) => {
     try {
       const query = (req.query.q as string) || "";
@@ -1586,7 +1644,7 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ANALYTICS ============
+  // ---------- ANALYTICS ----------
   app.get("/api/analytics", async (req, res) => {
     try {
       const data = await storage.getAnalyticsData();

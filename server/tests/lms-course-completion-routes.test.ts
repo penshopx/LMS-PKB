@@ -89,20 +89,29 @@ beforeAll(async () => {
   const postTest = await storage.createQuiz({
     courseId,
     title: "Post-test",
-    description: "Nilai lulus minimal 70",
+    description: "Esai harus dinilai sebelum kelulusan ditetapkan",
     passingScore: 70,
     maxAttempts: 3,
     shuffleQuestions: false,
     showResults: true,
-    questions: [{
-      id: "question-1",
-      type: "multiple_choice",
-      text: "Pilih jawaban benar",
-      points: 10,
-      options: [{ id: "a", text: "Tepat", isCorrect: true }, { id: "b", text: "Keliru", isCorrect: false }],
-      correctAnswer: "Tepat",
-      order: 1,
-    }],
+    questions: [
+      {
+        id: "question-1",
+        type: "multiple_choice",
+        text: "Pilih jawaban benar",
+        points: 10,
+        options: [{ id: "a", text: "Tepat", isCorrect: true }, { id: "b", text: "Keliru", isCorrect: false }],
+        correctAnswer: "Tepat",
+        order: 1,
+      },
+      {
+        id: "question-2",
+        type: "essay",
+        text: "Jelaskan alasan jawaban Anda",
+        points: 10,
+        order: 2,
+      },
+    ],
   });
   preTestId = preTest.id;
   postTestId = postTest.id;
@@ -192,9 +201,18 @@ describe("aturan progres kursus melalui API", () => {
     const preTestAttempt = await submitQuiz(preTestId, "Keliru");
     expect((await preTestAttempt.json()).passed).toBe(false);
 
-    const spoofedPostTest = await submitQuiz(postTestId, "Keliru", { score: 100, passed: true });
-    expect(spoofedPostTest.status).toBe(201);
-    expect(await spoofedPostTest.json()).toMatchObject({ score: 0, passed: false });
+    const pendingPostTest = await submitQuiz(postTestId, "Tepat", {
+      score: 100,
+      passed: true,
+      answers: { "question-1": "Tepat", "question-2": "Jawaban esai peserta" },
+    });
+    expect(pendingPostTest.status).toBe(201);
+    const pendingAttempt = await pendingPostTest.json();
+    expect(pendingAttempt).toMatchObject({
+      score: 50,
+      passed: false,
+      gradingStatus: "awaiting_review",
+    });
 
     const blockedCertificate = await request("/api/certificates", {
       method: "POST",
@@ -202,12 +220,45 @@ describe("aturan progres kursus melalui API", () => {
     });
     expect(blockedCertificate.status).toBe(409);
 
-    const passedPostTest = await submitQuiz(postTestId, "Tepat");
-    expect(await passedPostTest.json()).toMatchObject({ score: 100, passed: true });
+    const invalidGrade = await request(
+      `/api/quizzes/${postTestId}/attempts/${pendingAttempt.id}/grade`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ essayScores: { "question-2": 11 } }),
+      },
+    );
+    expect(invalidGrade.status).toBe(400);
+
+    const gradedResponse = await request(
+      `/api/quizzes/${postTestId}/attempts/${pendingAttempt.id}/grade`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ essayScores: { "question-2": 4 } }),
+      },
+    );
+    expect(gradedResponse.status).toBe(200);
+    expect(await gradedResponse.json()).toMatchObject({
+      score: 70,
+      passed: true,
+      gradingStatus: "graded",
+    });
+
+    const duplicateGrade = await request(
+      `/api/quizzes/${postTestId}/attempts/${pendingAttempt.id}/grade`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ essayScores: { "question-2": 10 } }),
+      },
+    );
+    expect(duplicateGrade.status).toBe(409);
 
     const completeState = await request(`/api/courses/${courseId}/learning-state?participantId=${participantId}`);
     expect(await completeState.json()).toMatchObject({
       completion: { progress: 100, lessonsCompleted: true, postTestPassed: true, isComplete: true },
+    });
+    expect((await storage.getEnrollmentsByParticipant(participantId))[0]).toMatchObject({
+      status: "completed",
+      progress: 100,
     });
 
     const certificate = await request("/api/certificates", {
