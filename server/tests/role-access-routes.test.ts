@@ -23,8 +23,10 @@ let participantA = "";
 let participantB = "";
 let courseId = "";
 let quizId = "";
+let essayQuizId = "";
 let attemptA = "";
 let attemptB = "";
+let pendingEssayAttemptId = "";
 const cookies: Record<string, string> = {};
 
 async function request(role: string, path: string, method = "GET", body?: unknown) {
@@ -90,6 +92,20 @@ beforeAll(async () => {
     courseId, title: "Kuis akses", description: "Uji", passingScore: 80, questions: [],
   });
   quizId = quiz.id;
+  const essayQuiz = await storage.createQuiz({
+    courseId,
+    title: "Kuis esai akses",
+    description: "Uji akses penilaian esai",
+    passingScore: 80,
+    questions: [{
+      id: "essay-1",
+      type: "essay",
+      text: "Jelaskan jawaban Anda.",
+      points: 10,
+      order: 1,
+    }],
+  });
+  essayQuizId = essayQuiz.id;
   for (const participantId of [participantA, participantB]) {
     await storage.createEnrollment(participantId, courseId);
     const attempt = await storage.createQuizAttempt({
@@ -99,6 +115,18 @@ beforeAll(async () => {
     if (participantId === participantA) attemptA = attempt.id;
     else attemptB = attempt.id;
   }
+  const pendingEssayAttempt = await storage.createQuizAttempt({
+    quizId: essayQuizId,
+    participantId: participantA,
+    answers: [{ questionId: "essay-1", answer: "Jawaban untuk ditinjau.", points: 0 }],
+    score: 0,
+    maxScore: 10,
+    passed: false,
+    gradingStatus: "awaiting_review",
+    startedAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+  });
+  pendingEssayAttemptId = pendingEssayAttempt.id;
   const app = express();
   app.use(express.json());
   setupAuth(app);
@@ -115,7 +143,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (server?.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  if (quizId) await db.delete(quizAttemptsTable).where(eq(quizAttemptsTable.quizId, quizId));
+  if (quizId) await db.delete(quizAttemptsTable).where(inArray(quizAttemptsTable.quizId, [quizId, essayQuizId]));
   if (courseId) await storage.deleteCourse(courseId);
   await db.delete(users).where(inArray(users.bujkId, [bujkA, bujkB]));
   if (adminId) await db.delete(users).where(eq(users.id, adminId));
@@ -169,10 +197,24 @@ describe("batas akses admin, PIC, dan peserta", () => {
   it("menolak pengelolaan materi dan penilaian bagi peserta serta PIC", async () => {
     for (const key of ["picA", "learnerA"]) {
       expect((await request(key, "/api/courses", "POST", {})).status).toBe(403);
+      expect((await request(key, "/api/quiz-attempts/pending-review")).status).toBe(403);
       expect((await request(key, `/api/quiz-attempts/${attemptA}/grade`, "POST", {})).status).toBe(403);
       expect((await request(key, `/api/quizzes/${quizId}/attempts/${attemptA}/grade`, "PATCH", {})).status).toBe(403);
       expect((await request(key, "/api/access/users")).status).toBe(403);
     }
+    const pendingReviews = await (await request("admin", "/api/quiz-attempts/pending-review")).json();
+    expect(pendingReviews.map((review: { id: string }) => review.id)).toContain(pendingEssayAttemptId);
+    const graded = await request(
+      "admin",
+      `/api/quiz-attempts/${pendingEssayAttemptId}/grade`,
+      "POST",
+      { score: 85, feedback: "Jawaban memenuhi kriteria." },
+    );
+    expect(graded.status).toBe(200);
+    expect(await graded.json()).toMatchObject({
+      passed: true,
+      attempt: { gradingStatus: "graded", score: 85 },
+    });
     expect((await request("picA", `/api/participants/${participantA}/evidences`, "POST", {})).status).toBe(403);
     expect((await request("picA", "/api/enrollments", "POST", { participantId: participantA, courseId })).status).toBe(403);
     expect((await request("learnerA", "/api/access/invitations", "POST", {})).status).toBe(403);

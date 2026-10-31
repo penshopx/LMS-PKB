@@ -769,7 +769,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").$type<ApplicationRole>().notNull().default("admin"),
-  participantId: varchar("participant_id"),
+  participantId: varchar("participant_id").references(() => participantsTable.id, { onDelete: "set null" }),
   bujkId: varchar("bujk_id").references(() => bujksTable.id, { onDelete: "set null" }),
 });
 

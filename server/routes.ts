@@ -1070,7 +1070,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quiz-attempts/pending-review", async (_req, res) => {
+  app.get("/api/quiz-attempts/pending-review", requireRole("admin"), async (_req, res) => {
     try {
       const attempts = await storage.getQuizAttemptsAwaitingReview();
       const reviews = await Promise.all(attempts.map(async attempt => {
@@ -1110,7 +1110,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quiz-attempts/:attemptId/grade", async (req, res) => {
+  app.post("/api/quiz-attempts/:attemptId/grade", requireRole("admin"), async (req, res) => {
     try {
       const gradeSchema = z.object({
         score: z.number().int().min(0).max(100),
@@ -1129,7 +1129,7 @@ export async function registerRoutes(
       }
 
       const reviewer = req.user as { id: string };
-      const gradedAttempt = await storage.gradeQuizAttempt(req.params.attemptId, {
+      const gradedAttempt = await storage.gradeQuizAttempt(String(req.params.attemptId), {
         ...gradeData,
         gradedBy: reviewer.id,
         gradedAt: new Date().toISOString(),
@@ -1205,9 +1205,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/quizzes/:quizId/attempts/:attemptId/grade", async (req, res) => {
+  app.patch("/api/quizzes/:quizId/attempts/:attemptId/grade", requireRole("admin"), async (req, res) => {
     try {
-      const quiz = await storage.getQuiz(req.params.quizId);
+      const quiz = await storage.getQuiz(String(req.params.quizId));
       if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan" });
       const attempt = (await storage.getQuizAttempts(quiz.id))
         .find(item => item.id === req.params.attemptId);
