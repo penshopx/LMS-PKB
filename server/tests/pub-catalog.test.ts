@@ -9,6 +9,7 @@ import {
 import {
   PUB_QUIZZES,
   SIAP_TENDER_COURSE_ID,
+  SIAP_TENDER_LESSONS,
   SIAP_TENDER_POSTTEST_ID,
   SIAP_TENDER_PRETEST_ID,
 } from "../../shared/siap-tender-course";
@@ -82,5 +83,23 @@ describe("PUB-ASPEKINDO catalog", () => {
     expect(posttest?.questions.every(question =>
       question.options?.some(option => option.text === question.correctAnswer && option.isCorrect)
     )).toBe(true);
+  });
+
+  it("cites current official references and labels the case as a simulation", () => {
+    expect(SIAP_TENDER_LESSONS).toHaveLength(6);
+    for (const lesson of SIAP_TENDER_LESSONS) {
+      expect(lesson.content).toContain("Rujukan resmi dan batas penerapan (diperiksa 31 Oktober 2026)");
+      expect(lesson.content).toContain("Perpres Nomor 46 Tahun 2025");
+      expect(lesson.content).toContain("Peraturan LKPP Nomor 3 Tahun 2026");
+      expect(lesson.content).toContain("bukan pengadaan swasta");
+      expect(lesson.content).toContain("Dokumen pemilihan paket nyata tidak ditelaah");
+    }
+
+    const orientation = SIAP_TENDER_LESSONS[0].content;
+    const pricingLesson = SIAP_TENDER_LESSONS[4].content;
+    expect(orientation).toContain("bukan Dokumen Pemilihan Simulasi terpisah");
+    expect(orientation).toContain("belum menjadi panduan tender operasional");
+    expect(pricingLesson).toContain("semua angka rupiah fiktif");
+    expect(pricingLesson).toContain("bukan nilai pagu, HPS, atau acuan harga");
   });
 });

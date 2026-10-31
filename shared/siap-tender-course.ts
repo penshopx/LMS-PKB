@@ -18,6 +18,15 @@ const worksheetActivity = (
   content,
 });
 
+const regulatoryReferenceNote = (focus: string) => `
+
+Rujukan resmi dan batas penerapan (diperiksa 31 Oktober 2026)
+Fokus lesson: ${focus}
+- [Perpres Nomor 16 Tahun 2018 tentang Pengadaan Barang/Jasa Pemerintah, terakhir diubah dengan Perpres Nomor 46 Tahun 2025](https://jdih.lkpp.go.id/regulation/peraturan-presiden/peraturan-presiden-nomor-46-tahun-2025).
+- [Peraturan LKPP Nomor 3 Tahun 2026 tentang Pedoman Persiapan dan Pelaksanaan Pengadaan Barang/Jasa Pemerintah melalui Penyedia](https://jdih.lkpp.go.id/regulation/peraturan-lkpp/peraturan-lkpp-nomor-3-tahun-2026), berlaku sejak 22 September 2026; Lampiran II mencakup pekerjaan konstruksi dan jasa konsultansi konstruksi. Pasal 10 mengatur bahwa pemilihan yang dimulai sebelum peraturan ini berlaku diselesaikan dengan pedoman sebelumnya.
+
+Batas: Rujukan ini untuk PBJ pemerintah melalui penyedia, bukan pengadaan swasta. Kasus kursus adalah ringkasan fiktif, bukan Dokumen Pemilihan resmi, bukan daftar persyaratan paket nyata, dan bukan dasar menetapkan lulus/gugur. Dokumen Pemilihan dan aturan yang berlaku untuk paket nyata harus diperiksa tersendiri, termasuk ketentuan peralihan atau aturan khusus yang relevan. Dokumen pemilihan paket nyata tidak ditelaah dalam validasi materi ini.`;
+
 export const SIAP_TENDER_LESSONS: Lesson[] = [
   {
     id: "tender01-orientation",
@@ -65,7 +74,8 @@ Paket: Rehabilitasi saluran drainase kawasan Pasar Arunika. Ruang lingkup simula
 Profil PT Lintas Karya Nusantara (fiktif): memiliki satu pengalaman yang tampak relevan, tetapi salinan bukti penyelesaiannya buram; ketersediaan manajer proyek belum terkonfirmasi; metode menyebut pengaturan lalu lintas yang belum ada pada jadwal; rekap angka berbeda dari rincian.
 
 Catatan penting
-Semua nama, angka, dokumen, dan persyaratan dalam materi ini adalah fiktif. Persyaratan evaluasi hanya yang tertulis pada Dokumen Pemilihan Simulasi. Materi ini bukan nasihat hukum, bukan jaminan hasil tender, dan bukan sertifikasi kompetensi. Periksa aturan dan dokumen resmi terbaru sebelum digunakan dalam pekerjaan nyata.`,
+Semua nama, angka, dokumen, dan persyaratan dalam materi ini adalah fiktif. Angka latihan bukan nilai pagu, HPS, ambang batas, atau acuan harga tender. Materi ini hanya ringkasan kasus dan bukan Dokumen Pemilihan Simulasi terpisah; worksheet adalah alat latihan, bukan checklist evaluasi resmi. Materi ini belum menjadi panduan tender operasional, bukan nasihat hukum, bukan jaminan hasil tender, dan bukan sertifikasi kompetensi. Untuk pekerjaan nyata, periksa Dokumen Pemilihan paket dan aturan resmi yang berlaku.
+${regulatoryReferenceNote("Orientasi ruang lingkup dan pemisahan fakta simulasi dari persyaratan paket nyata.")}`,
     activities: [
       {
         id: "tender01-orientation-video",
@@ -124,7 +134,8 @@ Teks layar: Keputusan + alasan + tindak lanjut.
 Narasi: “Dalam kasus ini, bukti pengalaman yang buram dan ketersediaan personel yang belum dipastikan adalah dua hal yang perlu ditindaklanjuti. Selanjutnya, kita periksa dokumen administrasi.”
 
 Praktik pada kasus
-Periksa apakah bukti pengalaman dapat dibaca, apakah personel sudah mengonfirmasi ketersediaan, dan apakah waktu yang tersisa cukup untuk seluruh pemeriksaan. Rekomendasi Go, Go dengan tindak lanjut, atau No-Go dinilai dari alasan, penggunaan bukti, dan rencana tindak lanjut—bukan dari pilihan saja.`,
+Periksa apakah bukti pengalaman dapat dibaca, apakah personel sudah mengonfirmasi ketersediaan, dan apakah waktu yang tersisa cukup untuk seluruh pemeriksaan. Rekomendasi Go, Go dengan tindak lanjut, atau No-Go dinilai dari alasan, penggunaan bukti, dan rencana tindak lanjut—bukan dari pilihan saja.
+${regulatoryReferenceNote("Pencatatan kecocokan, ketidakpastian, dan risiko untuk diskusi internal; bukan prosedur atau keputusan resmi pemilihan penyedia.")}`,
     activities: [
       {
         id: "tender01-opportunity-reading",
@@ -152,7 +163,7 @@ Alasan utama:
 Syarat sebelum keputusan final:
 Penanggung jawab dan waktu peninjauan ulang:
 
-Petunjuk: rujuk hanya Dokumen Pemilihan Simulasi. Tandai fakta, asumsi, dan informasi yang belum diketahui secara terpisah.`,
+Petunjuk: gunakan hanya fakta dalam ringkasan kasus latihan. Tandai fakta, asumsi, dan informasi yang belum diketahui secara terpisah.`,
       ),
       {
         id: "tender01-go-no-go-check",
@@ -168,15 +179,15 @@ Petunjuk: rujuk hanya Dokumen Pemilihan Simulasi. Tandai fakta, asumsi, dan info
     order: 3,
     type: "microlearning",
     title: "Pemeriksaan Kualifikasi dan Dokumen Administrasi",
-    description: "Mencocokkan persyaratan simulasi dengan bukti yang terbaca dan konsisten.",
+    description: "Mencocokkan butir pemeriksaan latihan dengan bukti yang terbaca dan konsisten.",
     content: `Tujuan belajar
-Peserta dapat mencocokkan persyaratan administrasi dalam dokumen simulasi dengan bukti yang tersedia serta menetapkan tindak lanjut atas kekurangan.
+Peserta dapat mencocokkan butir pemeriksaan administrasi dalam kasus latihan dengan bukti yang tersedia serta menetapkan tindak lanjut atas kekurangan.
 
 Naskah storyboard video
 00:00–00:35 — “Berkas yang terkumpul belum tentu siap diperiksa. Tim perlu mencocokkan setiap persyaratan dengan bukti, memeriksa keterbacaan dan konsistensi, lalu mencatat apa yang masih harus ditindaklanjuti.”
 Teks layar: Lengkap bukan hanya berarti ada berkas.
 
-00:35–01:25 — “Baca dokumen pemilihan latihan satu butir demi satu butir. Untuk setiap butir, catat bukti yang diminta dan cara pemeriksaannya. Jangan menambahkan persyaratan yang tidak tercantum dalam dokumen simulasi.”
+00:35–01:25 — “Gunakan hanya fakta dan instruksi yang tersedia pada ringkasan kasus latihan. Catat bukti yang perlu diperiksa untuk latihan ini. Jangan menganggap butir latihan sebagai persyaratan tender nyata.”
 Teks layar: Persyaratan → bukti yang diminta.
 
 01:25–02:20 — “Periksa apakah bukti dapat dibaca dan apakah informasi penting konsisten dengan dokumen lain. Jika ada perbedaan atau bagian tidak terbaca, tandai untuk verifikasi. Jangan memperbaiki data dengan perkiraan.”
@@ -192,7 +203,7 @@ Teks layar: Tindakan • Pemilik • Tenggat.
 Teks layar: Jangan menebak; verifikasi.
 
 Checklist administrasi latihan
-1. Salin persyaratan dari Dokumen Pemilihan Simulasi.
+1. Salin butir pemeriksaan dari ringkasan kasus latihan.
 2. Cocokkan tiap persyaratan dengan bukti yang disediakan.
 3. Periksa keterbacaan, nama, nomor, tanggal, dan konsistensi.
 4. Beri status: Lengkap, Perlu perbaikan, atau Belum tersedia.
@@ -200,7 +211,8 @@ Checklist administrasi latihan
 
 Temuan fokus: satu bukti pengalaman tampak relevan tetapi salinannya buram. Tandai Perlu perbaikan/verifikasi sampai bukti dapat diperiksa. Kehadiran berkas saja belum cukup untuk menyatakan lengkap.
 
-Catatan: checklist ini berlaku untuk kasus simulasi. Daftar persyaratan tender nyata harus diambil dari dokumen resmi yang berlaku untuk paket tersebut.`,
+Catatan: checklist ini hanya alat latihan untuk kasus fiktif dan bukan Dokumen Pemilihan resmi. Daftar persyaratan tender nyata harus diambil dari dokumen resmi yang berlaku untuk paket tersebut.
+${regulatoryReferenceNote("Pemeriksaan keterbacaan dan konsistensi bukti latihan; bukan standar kelengkapan atau kualifikasi tender.")}`,
     activities: [
       {
         id: "tender01-admin-video",
@@ -213,12 +225,12 @@ Catatan: checklist ini berlaku untuk kasus simulasi. Daftar persyaratan tender n
         "tender01-admin-matrix",
         "Matriks kelengkapan administrasi",
         "Catat persyaratan simulasi, bukti, status, dan pemilik tindak lanjut.",
-        `| No. | Persyaratan dalam dokumen simulasi | Bukti dan sumber | Keterbacaan / konsistensi | Status | Tindakan | Pemilik | Tenggat |
+        `| No. | Butir latihan dari ringkasan kasus | Bukti dan sumber | Keterbacaan / konsistensi | Status | Tindakan | Pemilik | Tenggat |
 |---:|---|---|---|---|---|---|---|
-| 1 | Profil BUJK sesuai dokumen latihan | | | | | | |
-| 2 | Pernyataan yang diminta dalam latihan | | | | | | |
-| 3 | Bukti pengalaman relevan | | | | | | |
-| 4 | Dokumen pendukung lain pada dokumen latihan | | | | | | |
+| 1 | Informasi profil BUJK (latihan) | | | | | | |
+| 2 | Contoh pernyataan (latihan) | | | | | | |
+| 3 | Bukti pengalaman (latihan) | | | | | | |
+| 4 | Bukti pendukung lain (latihan) | | | | | | |
 
 Status: Lengkap / Perlu perbaikan / Belum tersedia
 
@@ -228,7 +240,7 @@ Pemeriksaan silang:
 - Apakah setiap bukti merujuk pada persyaratan yang benar?
 - Temuan apa yang belum ditutup?
 
-Jangan menambahkan persyaratan dari luar Dokumen Pemilihan Simulasi.`,
+Template ini tidak memuat dokumen pendukung atau persyaratan tender resmi. Gunakan hanya fakta fiktif yang diberikan; status pada tabel bukan penetapan lulus/gugur.`,
       ),
       {
         id: "tender01-admin-check",
@@ -246,7 +258,7 @@ Jangan menambahkan persyaratan dari luar Dokumen Pemilihan Simulasi.`,
     title: "Pemetaan Persyaratan Teknis ke Bukti",
     description: "Meninjau hubungan antara persyaratan, respons, bukti, metode, dan jadwal.",
     content: `Tujuan belajar
-Peserta dapat memetakan persyaratan teknis simulasi ke respons dan bukti pendukung, lalu menemukan bagian yang belum lengkap atau tidak konsisten.
+Peserta dapat memetakan butir teknis latihan ke respons dan bukti pendukung, lalu menemukan bagian yang belum lengkap atau tidak konsisten.
 
 Naskah storyboard video
 00:00–00:35 — “Respons teknis perlu menjawab persyaratan yang tertulis dan didukung informasi yang bisa diperiksa. Pernyataan tanpa bukti atau rujukan dapat membuat tim sulit meninjau kualitas jawabannya.”
@@ -267,22 +279,23 @@ Teks layar: Status + tindakan + pemilik.
 04:05–04:35 — “Matriks ini membantu tim melihat apa yang sudah didukung dan apa yang harus diperiksa lagi.”
 
 Latihan pada kasus
-Gunakan Dokumen Pemilihan Simulasi dan paket PT Lintas Karya Nusantara. Cocokkan respons dan bukti untuk pengalaman, personel, peralatan, metode, serta keselamatan/pengaturan lalu lintas. Tandai: Didukung bukti, Perlu klarifikasi, atau Belum terpenuhi dalam draf.
+Gunakan ringkasan kasus fiktif PT Lintas Karya Nusantara. Cocokkan respons dan bukti untuk pengalaman, personel, peralatan, metode, serta keselamatan/pengaturan lalu lintas. Tandai: Didukung bukti, Perlu klarifikasi, atau Belum terpenuhi dalam draf. Label ini hanya status kerja untuk latihan, bukan hasil evaluasi tender.
 
-Temuan fokus: metode menyebut pengaturan lalu lintas, tetapi jadwal belum memuat aktivitasnya. Selaraskan kedua dokumen dan tinjau kebutuhan sumber dayanya; jangan menghapus atau mengarang informasi hanya untuk menutupi ketidaksesuaian.`,
+Temuan fokus: metode menyebut pengaturan lalu lintas, tetapi jadwal belum memuat aktivitasnya. Selaraskan kedua dokumen dan tinjau kebutuhan sumber dayanya; jangan menghapus atau mengarang informasi hanya untuk menutupi ketidaksesuaian.
+${regulatoryReferenceNote("Pemetaan respons, bukti, metode, dan jadwal pada latihan; isi teknis paket nyata harus mengikuti dokumen paket.")}`,
     activities: [
       {
         id: "tender01-technical-case",
         type: "case_study",
         title: "Tinjau draf teknis",
-        description: "Gunakan persyaratan simulasi untuk menelaah respons dan bukti.",
+        description: "Gunakan butir latihan untuk menelaah respons dan bukti.",
         duration: "10 menit",
       },
       worksheetActivity(
         "tender01-technical-matrix",
         "Matriks teknis–respons–bukti",
-        "Petakan setiap butir persyaratan latihan dan catat kesenjangan.",
-        `| Persyaratan teknis pada dokumen simulasi | Respons dalam draf | Bukti pendukung | Selaras dengan jadwal? | Status / pertanyaan | Tindakan |
+        "Petakan setiap butir pemeriksaan latihan dan catat kesenjangan.",
+        `| Butir teknis dalam kasus latihan | Respons dalam draf | Bukti pendukung | Selaras dengan jadwal? | Status / pertanyaan | Tindakan |
 |---|---|---|---|---|---|
 | Pengalaman relevan | | | | | |
 | Personel yang diusulkan | | | | | |
@@ -336,12 +349,13 @@ Teks layar: Periksa dengan checklist bersama.
 
 04:05–04:35 — “Temuan yang belum selesai tetap dicatat. Jangan menyembunyikannya dari catatan pemeriksaan.”
 
-Latihan rekap aritmetika (semua angka fiktif)
+Latihan rekap aritmetika (semua angka rupiah fiktif; bukan nilai pagu, HPS, atau acuan harga)
 Rincian simulasi: Rp420.000.000 + Rp315.000.000 + Rp180.000.000 + Rp85.000.000 = Rp1.000.000.000.
 Rekap pada draf: Rp1.020.000.000.
 Tugas peserta: telusuri selisih Rp20.000.000 pada dokumen latihan, catat siapa yang memeriksa ulang, dan jangan mengubah angka tanpa dasar.
 
-Risiko fokus: bukti pengalaman buram, personel belum dikonfirmasi, jadwal belum memuat pengaturan lalu lintas, dan rekap harga berbeda dari rincian. Ini adalah temuan latihan, bukan kesimpulan tentang kelayakan tender.`,
+Risiko fokus: bukti pengalaman buram, personel belum dikonfirmasi, jadwal belum memuat pengaturan lalu lintas, dan rekap harga berbeda dari rincian. Ini adalah temuan latihan, bukan kesimpulan tentang kelayakan tender.
+${regulatoryReferenceNote("Penjadwalan, pencatatan risiko, dan pemeriksaan aritmetika; bukan metode evaluasi harga atau acuan harga tender.")}`,
     activities: [
       {
         id: "tender01-schedule-risk",
@@ -427,7 +441,8 @@ Nilai tiap kriteria 0–2:
 4. Tindak lanjut: 0 tidak ada tindakan; 1 tindakan tanpa pemilik atau tenggat; 2 tindakan, pemilik, dan tenggat tercatat.
 
 Aturan penyelesaian yang dirancang
-Pre-test bersifat diagnostik. Lesson wajib diselesaikan. Jika post-test diwajibkan, nilai lulus yang dirancang adalah 80/100 dengan percobaan ulang. Worksheet digunakan untuk latihan dan umpan balik, bukan syarat tambahan sertifikat. Aturan ini belum mengaktifkan penerbitan sertifikat otomatis.`,
+Pre-test bersifat diagnostik. Lesson wajib diselesaikan. Jika post-test diwajibkan, nilai lulus yang dirancang adalah 80/100 dengan percobaan ulang. Worksheet digunakan untuk latihan dan umpan balik, bukan syarat tambahan sertifikat. Aturan ini belum mengaktifkan penerbitan sertifikat otomatis.
+${regulatoryReferenceNote("Simulasi pembelajaran dan batas arti sertifikat kursus; bukan penilaian resmi kompetensi atau hasil tender.")}`,
     activities: [
       {
         id: "tender01-final-simulation",
