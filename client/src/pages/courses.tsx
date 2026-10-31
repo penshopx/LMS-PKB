@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CoursePlayerDialog } from "@/components/course-player-dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +52,7 @@ function LessonTypeIcon({ type }: { type: string }) {
 }
 
 function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitCompetency[]; quizzes?: Quiz[] }) {
+  const [playerOpen, setPlayerOpen] = useState(false);
   const unit = units?.find(u => u.id === course.unitId);
   const preTest = quizzes?.find(q => q.id === course.preTestId);
   const postTest = quizzes?.find(q => q.id === course.postTestId);
@@ -172,7 +174,15 @@ function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitC
                         </div>
                         <h5 className="font-medium">{lesson.title}</h5>
                         <p className="text-sm text-muted-foreground">{lesson.description}</p>
-                        <p className="text-xs text-muted-foreground italic">{lesson.content}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {lesson.content.replace(/\s+/g, " ").slice(0, 180)}
+                          {lesson.content.length > 180 ? "…" : ""}
+                        </p>
+                        {lesson.activities && lesson.activities.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {lesson.activities.map(activity => activity.title).join(" · ")}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -181,11 +191,12 @@ function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitC
             </ScrollArea>
           </DialogContent>
         </Dialog>
-        <Button className="flex-1" data-testid={`button-start-course-${course.id}`}>
+        <Button className="flex-1" onClick={() => setPlayerOpen(true)} data-testid={`button-start-course-${course.id}`}>
           <GraduationCap className="h-4 w-4 mr-1" />
           Mulai
         </Button>
       </CardFooter>
+      <CoursePlayerDialog course={course} open={playerOpen} onOpenChange={setPlayerOpen} />
     </Card>
   );
 }

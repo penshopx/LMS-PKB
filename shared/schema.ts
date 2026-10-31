@@ -108,6 +108,7 @@ export interface Activity {
   title: string;
   description: string;
   duration: string;
+  content?: string;
 }
 
 // Participant / Peserta

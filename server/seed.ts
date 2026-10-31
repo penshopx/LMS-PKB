@@ -16,6 +16,7 @@ import {
   learningPathsTable,
   lspOrganizationsTable,
   notificationsTable,
+  quizzesTable,
   users,
 } from "@shared/schema";
 import { hashPassword } from "./auth";
@@ -27,6 +28,7 @@ import {
   PUB_PARTICIPANTS,
   PUB_UNITS,
 } from "./pub-catalog";
+import { PUB_QUIZZES } from "../shared/siap-tender-course";
 
 const LEGACY_FIXTURE_EMAILS: Record<string, string[]> = {
   "p-001": ["andi.pratama@org.go.id"],
@@ -88,6 +90,21 @@ async function synchronizePubCatalog() {
     } = row;
     await db.insert(coursesTable).values(row).onConflictDoUpdate({
       target: coursesTable.id,
+      set: updates,
+    });
+  }
+
+  for (const quiz of PUB_QUIZZES) {
+    const row = {
+      ...quiz,
+      lessonId: quiz.lessonId ?? null,
+      timeLimit: quiz.timeLimit ?? null,
+      shuffleQuestions: quiz.shuffleQuestions ? 1 : 0,
+      showResults: quiz.showResults ? 1 : 0,
+    };
+    const { id: _id, ...updates } = row;
+    await db.insert(quizzesTable).values(row).onConflictDoUpdate({
+      target: quizzesTable.id,
       set: updates,
     });
   }
@@ -182,6 +199,13 @@ export async function seedDatabase() {
     ...course,
     preTestId: course.preTestId ?? null,
     postTestId: course.postTestId ?? null,
+  })));
+  await db.insert(quizzesTable).values(PUB_QUIZZES.map(quiz => ({
+    ...quiz,
+    lessonId: quiz.lessonId ?? null,
+    timeLimit: quiz.timeLimit ?? null,
+    shuffleQuestions: quiz.shuffleQuestions ? 1 : 0,
+    showResults: quiz.showResults ? 1 : 0,
   })));
 
   // Participants

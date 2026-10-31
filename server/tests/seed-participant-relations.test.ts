@@ -24,6 +24,7 @@ import {
   learningRecordsTable,
   participantCompetenciesTable,
   participantsTable,
+  quizzesTable,
 } from "@shared/schema";
 import { DrizzleStorage } from "../db-storage";
 import { inArray } from "drizzle-orm";
@@ -37,6 +38,7 @@ const seededTables = [
   "clusters",
   "units",
   "courses",
+  "quizzes",
   "participants",
   "learning_paths",
   "lsp_organizations",
@@ -74,6 +76,21 @@ describe("fresh seed participant relations", () => {
   it("seeds relational participant data that getParticipant exposes", async () => {
     expect(await db.select().from(participantsTable)).toEqual([]);
     await seedDatabase();
+
+    const tenderCourse = await storage.getCourse("course-tender01-l2");
+    expect(tenderCourse?.lessons.map(lesson => lesson.title)).toEqual([
+      "Orientasi: Peta Proses Tender",
+      "Telaah Peluang dan Keputusan Go/No-Go",
+      "Pemeriksaan Kualifikasi dan Dokumen Administrasi",
+      "Pemetaan Persyaratan Teknis ke Bukti",
+      "Jadwal Persiapan, Rekap, dan Risiko",
+      "Simulasi Akhir dan Rencana Perbaikan",
+    ]);
+    const tenderQuizzes = await db.select().from(quizzesTable);
+    expect(tenderQuizzes.map(quiz => quiz.id).sort()).toEqual([
+      "quiz-tender01-posttest",
+      "quiz-tender01-pretest",
+    ]);
 
     const p001 = await storage.getParticipant("p-001");
     expect(p001).toMatchObject({

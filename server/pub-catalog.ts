@@ -7,6 +7,7 @@ import type {
   Participant,
   UnitCompetency,
 } from "@shared/schema";
+import { SIAP_TENDER_COURSE_MATERIALS } from "../shared/siap-tender-course";
 
 function progressionIndicators(
   subject: string,
@@ -313,8 +314,10 @@ const CORE_PUB_COURSES: ECourse[] = [
     targetLevel: "L2",
     title: "SIAP Tender: Kualifikasi dan Dokumen Pemilihan",
     description: "Pembelajaran untuk menyiapkan dokumen tender yang lengkap, konsisten, dapat diverifikasi, dan sesuai kapasitas badan usaha.",
-    duration: "5 jam",
-    lessons: courseLessons("tender01", "kesiapan tender", "Kesiapan badan usaha menghadapi proses kualifikasi, pemilihan, dan klarifikasi.", "Dokumen legal, teknis, personel, peralatan, pengalaman, serta risiko kontraktual.", "Melakukan review dokumen tender dengan simulasi go/no-go dan checklist mutu."),
+    duration: "2,5–3 jam",
+    lessons: SIAP_TENDER_COURSE_MATERIALS.lessons,
+    preTestId: SIAP_TENDER_COURSE_MATERIALS.preTestId,
+    postTestId: SIAP_TENDER_COURSE_MATERIALS.postTestId,
     createdAt: "2026-08-29",
   },
   {
