@@ -24,8 +24,9 @@ import {
   AlignLeft,
   Check
 } from "lucide-react";
-import type { Quiz, ECourse } from "@shared/schema";
+import type { Quiz, ECourse, QuizAttempt } from "@shared/schema";
 import type { Participant } from "@shared/schema";
+import { EssayReviewQueue } from "@/components/essay-review-queue";
 
 type LocalQuestionType = "multiple_choice" | "true_false" | "essay";
 
@@ -59,6 +60,7 @@ export default function Quizzes() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isQuestionDialogOpen, setIsQuestionDialogOpen] = useState(false);
+  const [isReviewingEssays, setIsReviewingEssays] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [isTakingQuiz, setIsTakingQuiz] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -85,6 +87,10 @@ export default function Quizzes() {
   const { data: participants = [] } = useQuery<Participant[]>({
     queryKey: ["/api/participants"]
   });
+  const { data: participantAttempts = [] } = useQuery<QuizAttempt[]>({
+    queryKey: [`/api/participants/${participantId}/quiz-attempts`],
+    enabled: Boolean(participantId),
+  });
 
   useEffect(() => {
     if (!requestedQuizId || quizzes.length === 0) return;
@@ -109,17 +115,28 @@ export default function Quizzes() {
   const submitAttemptMutation = useMutation({
     mutationFn: async (data: { quizId: string; participantId: string; answers: Record<string, string> }) => {
       const response = await apiRequest("POST", `/api/quizzes/${data.quizId}/attempts`, data);
-      return response.json() as Promise<{ score: number; passed: boolean }>;
+      return response.json() as Promise<{
+        score: number;
+        passed: boolean;
+        gradingStatus: QuizAttempt["gradingStatus"];
+      }>;
     },
     onSuccess: (attempt) => {
       queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
       queryClient.invalidateQueries({
         queryKey: [`/api/participants/${participantId}/quiz-attempts`],
       });
-      toast({
-        title: attempt.passed ? "Lulus" : "Belum lulus",
-        description: `Nilai ${attempt.score}%. ${attempt.passed ? "Syarat nilai terpenuhi." : "Anda dapat mengulang selama percobaan masih tersedia."}`,
-      });
+      if (attempt.gradingStatus === "awaiting_review") {
+        toast({
+          title: "Jawaban diterima",
+          description: "Post-test menunggu penilaian admin. Nilai dan kelulusan belum ditetapkan.",
+        });
+      } else {
+        toast({
+          title: attempt.passed ? "Lulus" : "Belum lulus",
+          description: `Nilai ${attempt.score}%. ${attempt.passed ? "Syarat nilai terpenuhi." : "Anda perlu mengulang seluruh post-test selama percobaan masih tersedia."}`,
+        });
+      }
       setIsTakingQuiz(false);
       setSelectedQuiz(null);
       setAnswers({});
@@ -198,6 +215,21 @@ export default function Quizzes() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isReviewingEssays) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Penilaian Esai</h1>
+            <p className="text-muted-foreground">Nilai akhir 0–100; peserta lulus mulai dari batas nilai pada kuis.</p>
+          </div>
+          <Button variant="outline" onClick={() => setIsReviewingEssays(false)}>Kembali ke kuis</Button>
+        </div>
+        <EssayReviewQueue />
       </div>
     );
   }
@@ -351,6 +383,7 @@ export default function Quizzes() {
           <h1 className="text-2xl font-bold tracking-tight">Quiz Engine</h1>
           <p className="text-muted-foreground">Buat dan kelola kuis untuk mengukur pemahaman peserta</p>
         </div>
+        <Button variant="outline" onClick={() => setIsReviewingEssays(true)}>Penilaian Esai</Button>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-quiz">
@@ -562,6 +595,53 @@ export default function Quizzes() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {participantId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Riwayat hasil peserta</CardTitle>
+            <CardDescription>Status penilaian, nilai akhir, dan feedback post-test.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {participantAttempts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada percobaan kuis.</p>
+            ) : (
+              [...participantAttempts]
+                .sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
+                .map(attempt => {
+                  const quiz = quizzes.find(item => item.id === attempt.quizId);
+                  const hasEssay = quiz?.questions.some(question => question.type === "essay") ?? false;
+                  const statusLabel = attempt.gradingStatus === "awaiting_review"
+                    ? "Menunggu penilaian"
+                    : attempt.passed ? "Lulus" : "Belum lulus";
+                  return (
+                    <div key={attempt.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">{quiz?.title ?? "Kuis"}</span>
+                        <Badge variant={attempt.gradingStatus === "awaiting_review" ? "outline" : attempt.passed ? "default" : "secondary"}>
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      {attempt.gradingStatus === "awaiting_review" ? (
+                        <p className="mt-2 text-sm text-muted-foreground">Jawaban diterima. Nilai dan kelulusan ditampilkan setelah admin selesai menilai.</p>
+                      ) : (
+                        <>
+                          <p className="mt-2 text-sm">Nilai akhir: {attempt.score}%</p>
+                          {attempt.gradingFeedback && (
+                            <p className="mt-1 text-sm text-muted-foreground">Feedback: {attempt.gradingFeedback}</p>
+                          )}
+                          {!attempt.passed && hasEssay && (
+                            <p className="mt-1 text-sm text-muted-foreground">Ulangi seluruh post-test; revisi sebagian pada jawaban esai tidak tersedia.</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

@@ -341,9 +341,24 @@ export interface QuizAttempt {
   score: number;
   maxScore: number;
   passed: boolean;
+  gradingStatus: "awaiting_review" | "graded";
+  gradingFeedback?: string;
+  gradedBy?: string;
+  gradedAt?: string;
   startedAt: string;
   completedAt?: string;
   timeSpent?: number; // in seconds
+}
+
+export type NewQuizAttempt = Omit<QuizAttempt, "id" | "gradingStatus"> & {
+  gradingStatus?: QuizAttempt["gradingStatus"];
+};
+
+export interface QuizAttemptGradeInput {
+  score: number;
+  feedback: string;
+  gradedBy: string;
+  gradedAt: string;
 }
 
 export interface QuizAnswer {
@@ -840,6 +855,10 @@ export const quizAttemptsTable = pgTable("quiz_attempts", {
   score: integer("score").notNull(),
   maxScore: integer("max_score").notNull(),
   passed: integer("passed").notNull().default(0),
+  gradingStatus: text("grading_status").notNull().default("graded"),
+  gradingFeedback: text("grading_feedback"),
+  gradedBy: varchar("graded_by"),
+  gradedAt: text("graded_at"),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
   timeSpent: integer("time_spent"),

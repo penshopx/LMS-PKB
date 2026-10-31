@@ -216,4 +216,106 @@ describe("aturan progres kursus melalui API", () => {
     });
     expect(certificate.status).toBe(201);
   });
+
+  it("menahan kelulusan esai sampai dinilai dan meminta peserta mengulang seluruh tes jika gagal", async () => {
+    const essayQuiz = await storage.createQuiz({
+      courseId,
+      title: "Post-test esai",
+      description: "Penilaian manual",
+      passingScore: 80,
+      maxAttempts: 3,
+      shuffleQuestions: false,
+      showResults: true,
+      questions: [{
+        id: "essay-question",
+        type: "essay",
+        text: "Jelaskan tahapan evaluasi dokumen tender.",
+        points: 10,
+        options: [],
+        correctAnswer: "",
+        order: 1,
+      }],
+    });
+    await db.update(coursesTable)
+      .set({ postTestId: essayQuiz.id })
+      .where(eq(coursesTable.id, courseId));
+
+    const submitEssay = (answer: string) => request(`/api/quizzes/${essayQuiz.id}/attempts`, {
+      method: "POST",
+      body: JSON.stringify({ participantId, answers: { "essay-question": answer } }),
+    });
+    const firstAttemptResponse = await submitEssay("Saya memeriksa persyaratan administrasi dan teknis.");
+    expect(firstAttemptResponse.status).toBe(201);
+    const firstAttempt = await firstAttemptResponse.json();
+    expect(firstAttempt).toMatchObject({
+      passed: false,
+      gradingStatus: "awaiting_review",
+    });
+
+    const queueResponse = await request("/api/quiz-attempts/pending-review");
+    const queue = await queueResponse.json();
+    expect(queue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: firstAttempt.id,
+        participantName: expect.any(String),
+        quizTitle: "Post-test esai",
+        passingScore: 80,
+        answers: expect.arrayContaining([
+          expect.objectContaining({
+            questionText: "Jelaskan tahapan evaluasi dokumen tender.",
+            answer: "Saya memeriksa persyaratan administrasi dan teknis.",
+          }),
+        ]),
+      }),
+    ]));
+
+    const blockedWhilePending = await submitEssay("Saya mengirim percobaan kedua.");
+    expect(blockedWhilePending.status).toBe(409);
+
+    const invalidGrade = await request(`/api/quiz-attempts/${firstAttempt.id}/grade`, {
+      method: "POST",
+      body: JSON.stringify({ score: 101, feedback: "Nilai di luar rentang." }),
+    });
+    expect(invalidGrade.status).toBe(400);
+
+    const failedGrade = await request(`/api/quiz-attempts/${firstAttempt.id}/grade`, {
+      method: "POST",
+      body: JSON.stringify({ score: 79, feedback: "Ulasan belum mencakup seluruh tahapan." }),
+    });
+    expect(await failedGrade.json()).toMatchObject({
+      passed: false,
+      passingScore: 80,
+      attempt: {
+        gradingStatus: "graded",
+        score: 79,
+        maxScore: 100,
+      },
+    });
+
+    const duplicateGrade = await request(`/api/quiz-attempts/${firstAttempt.id}/grade`, {
+      method: "POST",
+      body: JSON.stringify({ score: 95, feedback: "Penilaian ulang." }),
+    });
+    expect(duplicateGrade.status).toBe(409);
+
+    const retakeResponse = await submitEssay("Saya memeriksa syarat administrasi, evaluasi teknis, dan jadwal.");
+    expect(retakeResponse.status).toBe(201);
+    const retake = await retakeResponse.json();
+    expect(retake.gradingStatus).toBe("awaiting_review");
+
+    const passedGrade = await request(`/api/quiz-attempts/${retake.id}/grade`, {
+      method: "POST",
+      body: JSON.stringify({ score: 85, feedback: "Jawaban telah mencakup tahapan utama dengan tepat." }),
+    });
+    expect(await passedGrade.json()).toMatchObject({
+      passed: true,
+      passingScore: 80,
+      attempt: { score: 85, gradingStatus: "graded" },
+    });
+
+    const finalState = await request(`/api/courses/${courseId}/learning-state?participantId=${participantId}`);
+    expect(await finalState.json()).toMatchObject({
+      completion: { postTestPassed: true, isComplete: true },
+    });
+  });
 });

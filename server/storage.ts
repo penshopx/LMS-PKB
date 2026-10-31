@@ -22,6 +22,8 @@ import type {
   Enrollment,
   Quiz,
   QuizAttempt,
+  NewQuizAttempt,
+  QuizAttemptGradeInput,
   InsertQuiz,
   Question,
   Certificate,
@@ -370,7 +372,9 @@ export interface IStorage {
   // LMS - Quiz Attempts
   getQuizAttempts(quizId: string): Promise<QuizAttempt[]>;
   getQuizAttemptsByParticipant(participantId: string): Promise<QuizAttempt[]>;
-  createQuizAttempt(attempt: Omit<QuizAttempt, 'id'>): Promise<QuizAttempt>;
+  getQuizAttemptsAwaitingReview(): Promise<QuizAttempt[]>;
+  createQuizAttempt(attempt: NewQuizAttempt): Promise<QuizAttempt>;
+  gradeQuizAttempt(id: string, grade: QuizAttemptGradeInput): Promise<QuizAttempt | undefined>;
 
   // LMS - Certificates
   getCertificates(): Promise<Certificate[]>;
@@ -1125,9 +1129,19 @@ export class MemStorage implements IStorage {
     return Array.from(this.quizAttempts.values()).filter(a => a.participantId === participantId);
   }
 
-  async createQuizAttempt(attempt: Omit<QuizAttempt, 'id'>): Promise<QuizAttempt> {
+  async getQuizAttemptsAwaitingReview(): Promise<QuizAttempt[]> {
+    return Array.from(this.quizAttempts.values()).filter(
+      attempt => attempt.gradingStatus === "awaiting_review",
+    );
+  }
+
+  async createQuizAttempt(attempt: NewQuizAttempt): Promise<QuizAttempt> {
     const id = `attempt-${randomUUID()}`;
-    const newAttempt: QuizAttempt = { id, ...attempt };
+    const newAttempt: QuizAttempt = {
+      gradingStatus: "graded",
+      ...attempt,
+      id,
+    };
     this.quizAttempts.set(id, newAttempt);
     const quiz = this.quizzes.get(attempt.quizId);
     if (quiz) {
@@ -1140,6 +1154,38 @@ export class MemStorage implements IStorage {
       }
     }
     return newAttempt;
+  }
+
+  async gradeQuizAttempt(
+    id: string,
+    grade: QuizAttemptGradeInput,
+  ): Promise<QuizAttempt | undefined> {
+    const existing = this.quizAttempts.get(id);
+    if (!existing || existing.gradingStatus !== "awaiting_review") return undefined;
+
+    const quiz = this.quizzes.get(existing.quizId);
+    if (!quiz) return undefined;
+
+    const graded: QuizAttempt = {
+      ...existing,
+      score: grade.score,
+      maxScore: 100,
+      passed: grade.score >= quiz.passingScore,
+      gradingStatus: "graded",
+      gradingFeedback: grade.feedback,
+      gradedBy: grade.gradedBy,
+      gradedAt: grade.gradedAt,
+    };
+    this.quizAttempts.set(id, graded);
+
+    const course = this.courses.get(quiz.courseId);
+    if (course?.postTestId === quiz.id) {
+      const enrollment = Array.from(this.enrollments.values()).find(
+        item => item.courseId === course.id && item.participantId === existing.participantId,
+      );
+      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+    }
+    return graded;
   }
 
   // LMS - Certificates

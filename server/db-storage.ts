@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { eq, inArray, like, or, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, inArray, like, or, sql as drizzleSql } from "drizzle-orm";
 import { db } from "./db";
 import {
   clustersTable,
@@ -45,6 +45,8 @@ import type {
   Enrollment,
   Quiz,
   QuizAttempt,
+  NewQuizAttempt,
+  QuizAttemptGradeInput,
   InsertQuiz,
   Question,
   Certificate,
@@ -221,6 +223,10 @@ function toQuizAttempt(row: typeof quizAttemptsTable.$inferSelect): QuizAttempt 
     score: row.score,
     maxScore: row.maxScore,
     passed: row.passed === 1,
+    gradingStatus: row.gradingStatus as QuizAttempt["gradingStatus"],
+    gradingFeedback: row.gradingFeedback ?? undefined,
+    gradedBy: row.gradedBy ?? undefined,
+    gradedAt: row.gradedAt ?? undefined,
     startedAt: row.startedAt,
     completedAt: row.completedAt ?? undefined,
     timeSpent: row.timeSpent ?? undefined,
@@ -1023,7 +1029,13 @@ export class DrizzleStorage implements IStorage {
     return rows.map(toQuizAttempt);
   }
 
-  async createQuizAttempt(attempt: Omit<QuizAttempt, "id">): Promise<QuizAttempt> {
+  async getQuizAttemptsAwaitingReview(): Promise<QuizAttempt[]> {
+    const rows = await db.select().from(quizAttemptsTable)
+      .where(eq(quizAttemptsTable.gradingStatus, "awaiting_review"));
+    return rows.map(toQuizAttempt);
+  }
+
+  async createQuizAttempt(attempt: NewQuizAttempt): Promise<QuizAttempt> {
     const id = `attempt-${randomUUID()}`;
     const row = {
       id,
@@ -1033,6 +1045,10 @@ export class DrizzleStorage implements IStorage {
       score: attempt.score,
       maxScore: attempt.maxScore,
       passed: attempt.passed ? 1 : 0,
+      gradingStatus: attempt.gradingStatus ?? "graded",
+      gradingFeedback: attempt.gradingFeedback ?? null,
+      gradedBy: attempt.gradedBy ?? null,
+      gradedAt: attempt.gradedAt ?? null,
       startedAt: attempt.startedAt,
       completedAt: attempt.completedAt ?? null,
       timeSpent: attempt.timeSpent ?? null,
@@ -1042,6 +1058,44 @@ export class DrizzleStorage implements IStorage {
     const course = quiz ? await this.getCourse(quiz.courseId) : undefined;
     if (quiz && course && course.postTestId === quiz.id) {
       const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
+      const enrollment = enrollments.find(item => item.courseId === course.id);
+      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
+    }
+    return toQuizAttempt(row);
+  }
+
+  async gradeQuizAttempt(
+    id: string,
+    grade: QuizAttemptGradeInput,
+  ): Promise<QuizAttempt | undefined> {
+    const [current] = await db.select().from(quizAttemptsTable)
+      .where(eq(quizAttemptsTable.id, id))
+      .limit(1);
+    if (!current || current.gradingStatus !== "awaiting_review") return undefined;
+
+    const quiz = await this.getQuiz(current.quizId);
+    if (!quiz) return undefined;
+
+    const [row] = await db.update(quizAttemptsTable)
+      .set({
+        score: grade.score,
+        maxScore: 100,
+        passed: grade.score >= quiz.passingScore ? 1 : 0,
+        gradingStatus: "graded",
+        gradingFeedback: grade.feedback,
+        gradedBy: grade.gradedBy,
+        gradedAt: grade.gradedAt,
+      })
+      .where(and(
+        eq(quizAttemptsTable.id, id),
+        eq(quizAttemptsTable.gradingStatus, "awaiting_review"),
+      ))
+      .returning();
+    if (!row) return undefined;
+
+    const course = await this.getCourse(quiz.courseId);
+    if (course?.postTestId === quiz.id) {
+      const enrollments = await this.getEnrollmentsByParticipant(current.participantId);
       const enrollment = enrollments.find(item => item.courseId === course.id);
       if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
     }

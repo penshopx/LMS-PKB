@@ -652,6 +652,87 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/quiz-attempts/pending-review", async (_req, res) => {
+    try {
+      const attempts = await storage.getQuizAttemptsAwaitingReview();
+      const reviews = await Promise.all(attempts.map(async attempt => {
+        const [quiz, participant] = await Promise.all([
+          storage.getQuiz(attempt.quizId),
+          storage.getParticipant(attempt.participantId),
+        ]);
+        if (!quiz || !quiz.questions.some(question => question.type === "essay")) return null;
+
+        const course = await storage.getCourse(quiz.courseId);
+        return {
+          id: attempt.id,
+          participantId: attempt.participantId,
+          participantName: participant?.name ?? "Peserta tidak ditemukan",
+          quizId: quiz.id,
+          quizTitle: quiz.title,
+          courseTitle: course?.title ?? "Kursus tidak ditemukan",
+          passingScore: quiz.passingScore,
+          submittedAt: attempt.completedAt ?? attempt.startedAt,
+          answers: quiz.questions.map(question => {
+            const submittedAnswer = attempt.answers.find(answer => answer.questionId === question.id);
+            return {
+              questionId: question.id,
+              questionText: question.text,
+              type: question.type,
+              answer: submittedAnswer?.answer ?? "",
+              maxPoints: question.points,
+              pointsAwarded: submittedAnswer?.points ?? 0,
+              isCorrect: question.type === "essay" ? undefined : submittedAnswer?.isCorrect,
+            };
+          }),
+        };
+      }));
+      res.json(reviews.filter((review): review is NonNullable<typeof review> => review !== null));
+    } catch (error) {
+      res.status(500).json({ message: "Gagal mengambil antrean penilaian esai" });
+    }
+  });
+
+  app.post("/api/quiz-attempts/:attemptId/grade", async (req, res) => {
+    try {
+      const gradeSchema = z.object({
+        score: z.number().int().min(0).max(100),
+        feedback: z.string().trim().min(1).max(4000),
+      });
+      const gradeData = gradeSchema.parse(req.body);
+      const pendingAttempt = (await storage.getQuizAttemptsAwaitingReview())
+        .find(attempt => attempt.id === req.params.attemptId);
+      if (!pendingAttempt) {
+        return res.status(409).json({ message: "Percobaan ini tidak lagi menunggu penilaian." });
+      }
+
+      const quiz = await storage.getQuiz(pendingAttempt.quizId);
+      if (!quiz || !quiz.questions.some(question => question.type === "essay")) {
+        return res.status(409).json({ message: "Percobaan ini tidak memerlukan penilaian esai." });
+      }
+
+      const reviewer = req.user as { id: string };
+      const gradedAttempt = await storage.gradeQuizAttempt(req.params.attemptId, {
+        ...gradeData,
+        gradedBy: reviewer.id,
+        gradedAt: new Date().toISOString(),
+      });
+      if (!gradedAttempt) {
+        return res.status(409).json({ message: "Percobaan sudah dinilai oleh admin lain." });
+      }
+
+      res.json({
+        attempt: gradedAttempt,
+        passingScore: quiz.passingScore,
+        passed: gradedAttempt.passed,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Nilai dan feedback penilaian tidak valid", errors: error.errors });
+      }
+      res.status(500).json({ message: "Gagal menyimpan penilaian esai" });
+    }
+  });
+
   app.post("/api/quizzes/:quizId/attempts", async (req, res) => {
     try {
       const submissionSchema = z.object({
@@ -670,11 +751,15 @@ export async function registerRoutes(
         return res.status(409).json({ message: "Peserta harus terdaftar pada kursus kuis ini" });
       }
       const priorAttempts = await storage.getQuizAttempts(quiz.id);
+      if (priorAttempts.some(attempt => attempt.gradingStatus === "awaiting_review")) {
+        return res.status(409).json({ message: "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang." });
+      }
       if (priorAttempts.filter(attempt => attempt.participantId === submission.participantId).length >= quiz.maxAttempts) {
         return res.status(409).json({ message: "Batas percobaan kuis telah tercapai" });
       }
 
       const result = gradeQuizSubmission(quiz, submission.answers as SubmittedQuizAnswers);
+      const requiresEssayReview = quiz.questions.some(question => question.type === "essay");
       const submittedAt = new Date().toISOString();
       const attempt = await storage.createQuizAttempt({
         quizId: quiz.id,
@@ -682,7 +767,8 @@ export async function registerRoutes(
         answers: result.answers,
         score: result.score,
         maxScore: result.maxScore,
-        passed: result.passed,
+        passed: requiresEssayReview ? false : result.passed,
+        gradingStatus: requiresEssayReview ? "awaiting_review" : "graded",
         startedAt: submittedAt,
         completedAt: submittedAt,
         timeSpent: submission.timeSpent,
