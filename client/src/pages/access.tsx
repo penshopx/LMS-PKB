@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { AccountStatusHistoryEntry, BujkInvitation, BujkOrganization } from "@shared/schema";
+import {
+  accountStatusChangeSchema, ACCOUNT_STATUS_REASON_MAX_LENGTH,
+  type AccountStatusHistoryEntry, type BujkInvitation, type BujkOrganization,
+} from "@shared/schema";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -8,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -58,6 +62,8 @@ export default function AccessManagement() {
     enabled: isAdmin,
   });
   const [accountToUpdate, setAccountToUpdate] = useState<AccountSummary | null>(null);
+  const [statusChangeReason, setStatusChangeReason] = useState("");
+  const reasonIsValid = accountStatusChangeSchema.shape.reason.safeParse(statusChangeReason).success;
   const historyQueryKey = ["/api/access/status-history", user?.id, historyOffset] as const;
   const {
     data: statusHistory,
@@ -102,8 +108,8 @@ export default function AccessManagement() {
   });
 
   const updateAccountStatus = useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      const response = await apiRequest("PATCH", `/api/access/users/${id}/status`, { isActive });
+    mutationFn: async ({ id, isActive, reason }: { id: string; isActive: boolean; reason: string }) => {
+      const response = await apiRequest("PATCH", `/api/access/users/${id}/status`, { isActive, reason });
       return response.json() as Promise<{ id: string; isActive: boolean }>;
     },
     onSuccess: result => {
@@ -117,6 +123,7 @@ export default function AccessManagement() {
           : "Sesi pengguna telah dicabut. Riwayat belajar tetap tersimpan.",
       });
       setAccountToUpdate(null);
+      setStatusChangeReason("");
     },
     onError: (error: Error) => toast({
       title: "Status akun gagal diperbarui",
@@ -268,7 +275,11 @@ export default function AccessManagement() {
                         size="sm"
                         variant="outline"
                         disabled={updateAccountStatus.isPending}
-                        onClick={() => setAccountToUpdate(account)}
+                        onClick={() => {
+                          setStatusChangeReason("");
+                          updateAccountStatus.reset();
+                          setAccountToUpdate(account);
+                        }}
                         aria-label={`${account.isActive ? "Nonaktifkan" : "Aktifkan"} akun ${account.username}`}
                       >
                         {account.isActive ? "Nonaktifkan" : "Aktifkan"}
@@ -325,6 +336,10 @@ export default function AccessManagement() {
                       <p className="mt-2 text-sm">
                         {entry.previousIsActive ? "Aktif" : "Nonaktif"} <span className="text-muted-foreground">→</span> {entry.newIsActive ? "Aktif" : "Nonaktif"}
                       </p>
+                      <p className="mt-2 whitespace-pre-wrap break-words text-sm">
+                        <span className="font-medium">Alasan: </span>
+                        {entry.reason ?? "Belum dicatat — riwayat sebelum alasan diwajibkan."}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -360,7 +375,11 @@ export default function AccessManagement() {
       )}
 
       <AlertDialog open={!!accountToUpdate} onOpenChange={open => {
-        if (!open && !updateAccountStatus.isPending) setAccountToUpdate(null);
+        if (!open && !updateAccountStatus.isPending) {
+          setAccountToUpdate(null);
+          setStatusChangeReason("");
+          updateAccountStatus.reset();
+        }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -373,6 +392,23 @@ export default function AccessManagement() {
                 : `Akun ${accountToUpdate?.username} akan dapat digunakan kembali untuk masuk ke LMS. Riwayat belajar tetap tersimpan.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="account-status-reason">Alasan perubahan status (wajib)</Label>
+            <Textarea
+              id="account-status-reason"
+              value={statusChangeReason}
+              onChange={event => setStatusChangeReason(event.target.value)}
+              required
+              maxLength={ACCOUNT_STATUS_REASON_MAX_LENGTH}
+              rows={3}
+              disabled={updateAccountStatus.isPending}
+              aria-describedby="account-status-reason-help"
+              placeholder="Tuliskan alasan akun diaktifkan atau dinonaktifkan."
+            />
+            <p id="account-status-reason-help" className="text-xs text-muted-foreground">
+              Maksimal {ACCOUNT_STATUS_REASON_MAX_LENGTH} karakter. Alasan tersimpan dalam riwayat admin. Jangan masukkan password atau data rahasia.
+            </p>
+          </div>
           {updateAccountStatus.isError && (
             <p className="text-sm text-destructive" role="alert">
               Perubahan status gagal. Silakan coba lagi.
@@ -381,11 +417,12 @@ export default function AccessManagement() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={updateAccountStatus.isPending}>Batal</AlertDialogCancel>
             <AlertDialogAction
-              disabled={updateAccountStatus.isPending}
+              disabled={updateAccountStatus.isPending || !reasonIsValid}
               onClick={event => {
                 event.preventDefault();
-                if (accountToUpdate) {
-                  updateAccountStatus.mutate({ id: accountToUpdate.id, isActive: !accountToUpdate.isActive });
+                if (accountToUpdate && !updateAccountStatus.isPending) {
+                  const change = accountStatusChangeSchema.safeParse({ isActive: !accountToUpdate.isActive, reason: statusChangeReason });
+                  if (change.success) updateAccountStatus.mutate({ id: accountToUpdate.id, ...change.data });
                 }
               }}
             >

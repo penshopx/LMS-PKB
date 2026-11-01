@@ -11,6 +11,7 @@ import { registerRoutes } from "../routes";
 
 const tag = randomUUID();
 const password = "account-status-test-password";
+const defaultReason = "Penyesuaian akses sesuai kebutuhan operasional BUJK.";
 const ids: string[] = [];
 const cookies: Record<string, string> = {};
 let server: Server;
@@ -40,8 +41,8 @@ async function login(actor: string) {
   return response;
 }
 
-function setStatus(id: string, isActive: boolean, actor = "admin") {
-  return request(actor, `/api/access/users/${id}/status`, "PATCH", { isActive });
+function setStatus(id: string, isActive: boolean, actor = "admin", reason = defaultReason) {
+  return request(actor, `/api/access/users/${id}/status`, "PATCH", { isActive, reason });
 }
 
 async function learningData() {
@@ -145,6 +146,44 @@ describe("account status management", () => {
     expect(await history()).toEqual(before);
   });
 
+  it("requires a nonblank reason of at most 1000 characters without changing status, sessions, or audit on rejection", async () => {
+    const [before] = await db.select().from(users).where(eq(users.id, learnerId));
+    const beforeHistory = await history();
+    for (const reason of [undefined, null, "", " \t\n ", 123, true, [], {}, "a".repeat(1001)]) {
+      const response = await request("admin", `/api/access/users/${learnerId}/status`, "PATCH", { isActive: false, reason });
+      expect(response.status).toBe(400);
+    }
+    expect((await request("admin", `/api/access/users/${learnerId}/status`, "PATCH", {
+      isActive: false, reason: defaultReason, actorId: learnerId,
+    })).status).toBe(400);
+    expect((await db.select().from(users).where(eq(users.id, learnerId)))[0]).toEqual(before);
+    expect(await history()).toEqual(beforeHistory);
+    expect((await request("learner", "/api/me")).status).toBe(200);
+    // The maximum length is valid, but an unchanged status still creates no event.
+    expect((await setStatus(learnerId, true, "admin", "a".repeat(1000))).status).toBe(200);
+    expect(await history()).toEqual(beforeHistory);
+  });
+
+  it("stores trimmed reasons for activation and deactivation without overwriting an earlier event on retry", async () => {
+    const target = await createUser(`reason-${tag}`, password, { role: "bujk_pic" });
+    ids.push(target.id);
+    expect((await setStatus(target.id, false, "admin", "  Penugasan pengguna telah berakhir.\n")).status).toBe(200);
+    expect((await setStatus(target.id, false, "admin", "Alasan retry yang tidak boleh menimpa audit.")).status).toBe(200);
+    expect((await setStatus(target.id, true, "admin", "\nPenugasan baru telah disetujui. ")).status).toBe(200);
+    const entries = (await history()).filter(entry => entry.targetUserId === target.id);
+    expect(entries).toHaveLength(2);
+    expect(entries.find(entry => !entry.newIsActive)).toMatchObject({
+      reason: "Penugasan pengguna telah berakhir.", actorId: adminId, previousIsActive: true,
+    });
+    expect(entries.find(entry => entry.newIsActive)).toMatchObject({
+      reason: "Penugasan baru telah disetujui.", actorId: adminId, previousIsActive: false,
+    });
+    const response = await request("admin", "/api/access/status-history");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const publicEntries = (await response.json()).entries;
+    expect(publicEntries.find((entry: { id: string }) => entry.id === entries[0].id)).toHaveProperty("reason", entries[0].reason);
+  });
+
   it("blocks login and every old session for participants and PICs, retaining learning history", async () => {
     for (const [actor, id] of [["learner", learnerId], ["pic", picId]]) {
       const oldSession = cookies[actor];
@@ -162,7 +201,7 @@ describe("account status management", () => {
       expect(event).toMatchObject({
         actorId: adminId, actorUsername: `admin-${tag}`,
         targetUserId: id, targetUsername: `${actor}-${tag}`,
-        previousIsActive: true, newIsActive: false,
+        previousIsActive: true, newIsActive: false, reason: defaultReason,
       });
       expect(event.changedAt.getTime()).toBeGreaterThanOrEqual(startedAt - 1000);
       expect(event.changedAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
@@ -231,6 +270,7 @@ describe("account status management", () => {
       actorId: adminId, actorUsername: `admin-${tag}`,
       targetUserId: learnerId, targetUsername: `learner-${tag}`,
       previousIsActive: true, newIsActive: false,
+      reason: "Catatan audit untuk pengujian paginasi.",
       changedAt: new Date(Date.now() - (index + 1) * 1000),
     })));
     const response = await request("admin", "/api/access/status-history");
@@ -243,7 +283,7 @@ describe("account status management", () => {
     for (const entry of page.entries) {
       expect(Object.keys(entry).sort()).toEqual([
         "id", "actorId", "actorUsername", "targetUserId", "targetUsername",
-        "previousIsActive", "newIsActive", "changedAt",
+        "previousIsActive", "newIsActive", "changedAt", "reason",
       ].sort());
       expect(Number.isNaN(Date.parse(entry.changedAt))).toBe(false);
     }
@@ -256,5 +296,25 @@ describe("account status management", () => {
     }
     const empty = await (await request("admin", "/api/access/status-history?offset=2147483647")).json();
     expect(empty).toEqual({ entries: [], hasMore: false });
+  });
+
+  it("keeps legacy audit events with unknown reasons and rejects invalid stored explanations", async () => {
+    const [legacy] = await db.insert(accountStatusHistory).values({
+      actorId: adminId, actorUsername: `admin-${tag}`,
+      targetUserId: randomUUID(), targetUsername: "historical-user",
+      previousIsActive: false, newIsActive: true, reason: null,
+    }).returning();
+    const response = await request("admin", "/api/access/status-history");
+    expect(response.status).toBe(200);
+    const entry = (await response.json()).entries.find((item: { id: string }) => item.id === legacy.id);
+    expect(entry).toMatchObject({ reason: null, actorUsername: `admin-${tag}`, targetUsername: "historical-user" });
+    for (const reason of [" \t\n", "a".repeat(1001)]) {
+      await expect(db.insert(accountStatusHistory).values({
+        actorId: adminId, actorUsername: `admin-${tag}`,
+        targetUserId: learnerId, targetUsername: `learner-${tag}`,
+        previousIsActive: false, newIsActive: true, reason,
+      })).rejects.toMatchObject({ code: "23514", constraint: "account_status_history_reason_valid" });
+    }
+    expect((await db.select().from(accountStatusHistory).where(eq(accountStatusHistory.id, legacy.id)))[0].reason).toBeNull();
   });
 });

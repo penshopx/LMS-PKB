@@ -15,6 +15,8 @@ const ui = vi.hoisted(() => ({
   states: [] as unknown[],
   stateIndex: 0,
   handlers: new Map<string, { onClick?: (event: { preventDefault: () => void }) => void; disabled?: boolean }>(),
+  fields: new Map<string, { onChange: (event: { target: { value: string } }) => void; disabled?: boolean }>(),
+  closeDialog: undefined as ((open: boolean) => void) | undefined,
   mutations: [] as any[],
   accountQuery: { isLoading: false, isError: false },
   historyQuery: { data: { entries: [], hasMore: false }, isLoading: false, isError: false },
@@ -65,6 +67,7 @@ vi.mock("@tanstack/react-query", () => ({
     return {
       isPending: ui.pending,
       isError: ui.mutationError,
+      reset: () => { ui.mutationError = false; },
       mutate: async (input: unknown) => {
         try { options.onSuccess?.(await options.mutationFn(input)); }
         catch (error) { options.onError?.(error); }
@@ -83,11 +86,20 @@ vi.mock("@/components/ui/button", async () => {
     },
   };
 });
+vi.mock("@/components/ui/textarea", () => ({
+  Textarea: (props: any) => {
+    ui.fields.set(props.id, props);
+    return createElement("textarea", props);
+  },
+}));
 vi.mock("@/components/ui/alert-dialog", async () => {
   const { createElement } = await import("react");
   const Wrapper = ({ children }: { children: ReactNode }) => createElement("div", null, children);
   return {
-    AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) => open ? children : null,
+    AlertDialog: ({ open, children, onOpenChange }: { open: boolean; children: ReactNode; onOpenChange: (open: boolean) => void }) => {
+      ui.closeDialog = onOpenChange;
+      return open ? children : null;
+    },
     AlertDialogContent: Wrapper, AlertDialogHeader: Wrapper, AlertDialogTitle: Wrapper,
     AlertDialogDescription: Wrapper, AlertDialogFooter: Wrapper,
     AlertDialogCancel: Wrapper,
@@ -101,6 +113,7 @@ vi.mock("@/components/ui/alert-dialog", async () => {
 function render() {
   ui.stateIndex = 0;
   ui.handlers.clear();
+  ui.fields.clear();
   ui.mutations.length = 0;
   return renderToStaticMarkup(createElement(AccessManagement));
 }
@@ -110,6 +123,12 @@ function click(label: string) {
   expect(button, `Missing button: ${label}`).toBeDefined();
   expect(button?.disabled).not.toBe(true);
   button?.onClick?.({ preventDefault() {} });
+}
+
+function fillReason(value = "Alasan perubahan akses untuk kebutuhan operasional.") {
+  const field = ui.fields.get("account-status-reason");
+  expect(field).toBeDefined();
+  field!.onChange({ target: { value } });
 }
 
 beforeEach(() => {
@@ -150,10 +169,15 @@ describe("account management UI", () => {
     expect(markup).toMatch(/[Rr]iwayat belajar.*tetap tersimpan/);
     if (!isActive) expect(markup).toContain("Semua sesi aktif akan dicabut");
     expect(ui.apiRequest).not.toHaveBeenCalled();
+    expect(ui.handlers.get(confirm)?.disabled).toBe(true);
+    fillReason("  Alasan perubahan akses untuk kebutuhan operasional. \n");
+    render();
     click(confirm);
     await vi.waitFor(() => expect(ui.invalidate).toHaveBeenCalledWith({ queryKey: ["/api/access/users"] }));
     expect(ui.invalidate).toHaveBeenCalledWith({ queryKey: ["/api/access/status-history", "admin-user"] });
-    expect(ui.apiRequest).toHaveBeenCalledWith("PATCH", `/api/access/users/${id}/status`, { isActive });
+    expect(ui.apiRequest).toHaveBeenCalledWith("PATCH", `/api/access/users/${id}/status`, {
+      isActive, reason: "Alasan perubahan akses untuk kebutuhan operasional.",
+    });
     expect(ui.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: isActive ? "Akun diaktifkan" : "Akun dinonaktifkan",
     }));
@@ -165,16 +189,49 @@ describe("account management UI", () => {
     render();
     click("Nonaktifkan akun peserta");
     render();
+    fillReason();
+    render();
     click("Ya, nonaktifkan");
     await vi.waitFor(() => expect(ui.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: "Status akun gagal diperbarui", variant: "destructive",
     })));
     ui.mutationError = true;
     expect(render()).toContain("Perubahan status gagal");
+    expect(render()).toContain("Alasan perubahan akses untuk kebutuhan operasional.");
     ui.pending = true;
     render();
     expect(ui.handlers.get("Menyimpan...")?.disabled).toBe(true);
     expect(ui.handlers.get("Nonaktifkan akun peserta")?.disabled).toBe(true);
+    expect(ui.fields.get("account-status-reason")?.disabled).toBe(true);
+  });
+
+  it("blocks missing, whitespace-only, and overlong reasons even if a disabled handler is invoked", () => {
+    render();
+    click("Nonaktifkan akun peserta");
+    render();
+    for (const reason of ["", " \n\t ", "a".repeat(1001)]) {
+      fillReason(reason);
+      const markup = render();
+      expect(markup).toMatch(/maxlength="1000"/i);
+      expect(markup).toContain("Jangan masukkan password atau data rahasia");
+      expect(ui.handlers.get("Ya, nonaktifkan")?.disabled).toBe(true);
+      ui.handlers.get("Ya, nonaktifkan")?.onClick?.({ preventDefault() {} });
+      expect(ui.apiRequest).not.toHaveBeenCalled();
+    }
+  });
+
+  it("clears the reason when a dialog closes or a different target is opened", () => {
+    render();
+    click("Nonaktifkan akun peserta");
+    render();
+    fillReason("Alasan khusus untuk peserta pertama.");
+    expect(render()).toContain("Alasan khusus untuk peserta pertama.");
+    ui.closeDialog!(false);
+    render();
+    click("Aktifkan akun pic-bujk");
+    const markup = render();
+    expect(markup).not.toContain("Alasan khusus untuk peserta pertama.");
+    expect(ui.handlers.get("Ya, aktifkan")?.disabled).toBe(true);
   });
 
   it("shows loading and retryable list failures instead of a misleading empty list", () => {
@@ -212,6 +269,7 @@ describe("account management UI", () => {
           targetUsername: "peserta.audit",
           previousIsActive: true,
           newIsActive: false,
+          reason: "Penugasan selesai <script>alert('x')</script>",
           changedAt: "2025-02-10T02:30:00.000Z",
         }],
         hasMore: true,
@@ -227,6 +285,9 @@ describe("account management UI", () => {
     expect(markup).toContain("Aktif");
     expect(markup).toContain("Nonaktif");
     expect(markup).toContain("WIB");
+    expect(markup).toContain("Alasan:");
+    expect(markup).toContain("Penugasan selesai &lt;script&gt;");
+    expect(markup).not.toContain("<script>");
     expect(ui.handlers.get("Sebelumnya")?.disabled).toBe(true);
     expect(ui.handlers.get("Berikutnya")?.disabled).toBe(false);
   });
@@ -251,6 +312,7 @@ describe("account management UI", () => {
           targetUsername: "peserta.audit",
           previousIsActive: true,
           newIsActive: false,
+          reason: null,
           changedAt: "2025-02-10T02:30:00.000Z",
         }],
         hasMore: true,
@@ -258,7 +320,7 @@ describe("account management UI", () => {
       isLoading: false,
       isError: false,
     };
-    render();
+    expect(render()).toContain("Belum dicatat — riwayat sebelum alasan diwajibkan.");
     click("Berikutnya");
     render();
     expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "admin-user", 50]);

@@ -30,6 +30,7 @@ import {
   insertPortfolioSchema,
   users,
   accountStatusHistory,
+  accountStatusChangeSchema,
   bujksTable,
   bujkInvitationsTable,
   participantsTable,
@@ -293,6 +294,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/access/status-history", requireRole("admin"), async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     const input = z.object({
       offset: z.coerce.number().int().min(0).max(2147483647).default(0),
     }).strict().safeParse(req.query);
@@ -310,9 +312,9 @@ export async function registerRoutes(
   });
 
   app.patch("/api/access/users/:id/status", requireRole("admin"), async (req, res) => {
-    const input = z.object({ isActive: z.boolean() }).strict().safeParse(req.body);
+    const input = accountStatusChangeSchema.safeParse(req.body);
     if (!input.success) {
-      return res.status(400).json({ message: "Status akun harus berupa isActive boolean." });
+      return res.status(400).json({ message: input.error.issues[0]?.message ?? "Status akun dan alasan perubahan tidak valid." });
     }
     try {
       const accountId = String(req.params.id);
@@ -338,6 +340,7 @@ export async function registerRoutes(
             targetUsername: account.username,
             previousIsActive: account.isActive,
             newIsActive: input.data.isActive,
+            reason: input.data.reason,
           });
         }
         return { status: 200, body: { id: account.id, isActive: input.data.isActive } };

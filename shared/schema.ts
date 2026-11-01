@@ -787,6 +787,14 @@ export const users = pgTable("users", {
 });
 
 // Identity snapshots deliberately survive account deletion; never store auth data.
+export const ACCOUNT_STATUS_REASON_MAX_LENGTH = 1000;
+export const accountStatusChangeSchema = z.object({
+  isActive: z.boolean(),
+  reason: z.string().trim()
+    .min(1, "Alasan perubahan status wajib diisi.")
+    .max(ACCOUNT_STATUS_REASON_MAX_LENGTH, "Alasan perubahan status maksimal 1000 karakter."),
+}).strict();
+
 export const accountStatusHistory = pgTable("account_status_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   actorId: varchar("actor_id").notNull(),
@@ -795,10 +803,13 @@ export const accountStatusHistory = pgTable("account_status_history", {
   targetUsername: text("target_username").notNull(),
   previousIsActive: boolean("previous_is_active").notNull(),
   newIsActive: boolean("new_is_active").notNull(),
+  // Null means the event predates mandatory reasons; never invent an explanation.
+  reason: text("reason"),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
   index("account_status_history_chronology_idx").on(table.changedAt, table.id),
   check("account_status_history_actual_change", sql`${table.previousIsActive} <> ${table.newIsActive}`),
+  check("account_status_history_reason_valid", sql`${table.reason} IS NULL OR (${table.reason} ~ '[^[:space:]]' AND char_length(${table.reason}) <= 1000)`),
 ]);
 
 export type AccountStatusHistoryEntry = Omit<typeof accountStatusHistory.$inferSelect, "changedAt"> & {
