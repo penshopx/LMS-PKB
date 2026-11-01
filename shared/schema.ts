@@ -788,6 +788,27 @@ export const users = pgTable("users", {
 
 // Identity snapshots deliberately survive account deletion; never store auth data.
 export const ACCOUNT_STATUS_REASON_MAX_LENGTH = 1000;
+export const ACCOUNT_STATUS_HISTORY_PAGE_SIZE = 50;
+const historyDateSchema = z.string().regex(/^[1-9]\d{3}-\d{2}-\d{2}$/, "Tanggal harus berformat YYYY-MM-DD.")
+  .refine(value => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, "Tanggal tidak valid.");
+const historyInteger = (min: number, max: number, fallback: string) =>
+  z.string().regex(/^\d+$/).default(fallback).transform(Number).pipe(z.number().int().min(min).max(max));
+
+export const accountStatusHistoryQuerySchema = z.object({
+  offset: historyInteger(0, 2147483647, "0"),
+  limit: historyInteger(1, ACCOUNT_STATUS_HISTORY_PAGE_SIZE, String(ACCOUNT_STATUS_HISTORY_PAGE_SIZE)),
+  actor: z.string().trim().max(200).optional(),
+  target: z.string().trim().max(200).optional(),
+  from: historyDateSchema.optional(),
+  to: historyDateSchema.optional(),
+}).strict().refine(value => !value.from || !value.to || value.from <= value.to, {
+  message: "Tanggal akhir tidak boleh sebelum tanggal awal.",
+  path: ["to"],
+});
+
 export const accountStatusChangeSchema = z.object({
   isActive: z.boolean(),
   reason: z.string().trim()

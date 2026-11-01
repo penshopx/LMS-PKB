@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import passport from "passport";
 import {
   requireAuth,
@@ -30,6 +30,7 @@ import {
   insertPortfolioSchema,
   users,
   accountStatusHistory,
+  accountStatusHistoryQuerySchema,
   accountStatusChangeSchema,
   bujksTable,
   bujkInvitationsTable,
@@ -374,17 +375,28 @@ export async function registerRoutes(
 
   app.get("/api/access/status-history", requireRole("admin"), async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
-    const input = z.object({
-      offset: z.coerce.number().int().min(0).max(2147483647).default(0),
-    }).strict().safeParse(req.query);
+    const input = accountStatusHistoryQuerySchema.safeParse(req.query);
     if (!input.success) {
-      return res.status(400).json({ message: "Posisi halaman riwayat tidak valid." });
+      return res.status(400).json({ message: "Filter atau posisi halaman riwayat tidak valid. Periksa tanggal dan batas halaman." });
     }
     try {
+      const { actor, target, from, to, offset, limit } = input.data;
+      // Search immutable snapshots, not live users (which may be renamed/deleted).
+      // strpos treats SQL wildcard characters literally; all values remain bound.
+      const entriesFilter = and(
+        actor ? or(eq(accountStatusHistory.actorId, actor),
+          sql`strpos(lower(${accountStatusHistory.actorUsername}), lower(${actor})) > 0`) : undefined,
+        target ? or(eq(accountStatusHistory.targetUserId, target),
+          sql`strpos(lower(${accountStatusHistory.targetUsername}), lower(${target})) > 0`) : undefined,
+        from ? gte(accountStatusHistory.changedAt, new Date(`${from}T00:00:00+07:00`)) : undefined,
+        // Inclusive WIB end date, expressed as an exclusive next-midnight bound.
+        to ? lt(accountStatusHistory.changedAt, new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400000)) : undefined,
+      );
       const entries = await db.select().from(accountStatusHistory)
+        .where(entriesFilter)
         .orderBy(desc(accountStatusHistory.changedAt), desc(accountStatusHistory.id))
-        .limit(51).offset(input.data.offset);
-      res.json({ entries: entries.slice(0, 50), hasMore: entries.length > 50 });
+        .limit(limit + 1).offset(offset);
+      res.json({ entries: entries.slice(0, limit), hasMore: entries.length > limit });
     } catch {
       res.status(500).json({ message: "Riwayat perubahan akses tidak dapat dimuat." });
     }

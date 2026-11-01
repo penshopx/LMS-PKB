@@ -92,6 +92,12 @@ vi.mock("@/components/ui/textarea", () => ({
     return createElement("textarea", props);
   },
 }));
+vi.mock("@/components/ui/input", () => ({
+  Input: (props: any) => {
+    ui.fields.set(props.id, props);
+    return createElement("input", props);
+  },
+}));
 vi.mock("@/components/ui/alert-dialog", async () => {
   const { createElement } = await import("react");
   const Wrapper = ({ children }: { children: ReactNode }) => createElement("div", null, children);
@@ -248,11 +254,11 @@ describe("account management UI", () => {
     expect(markup).toContain("Riwayat perubahan status akun");
     expect(markup).toContain("Belum ada riwayat perubahan status akun");
     expect(ui.historyOptions.enabled).toBe(true);
-    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "admin-user", 0]);
+    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "admin-user", 0, { actor: "", target: "", from: "", to: "" }]);
     ui.role = "bujk_pic";
     expect(render()).not.toContain("Riwayat perubahan status akun");
     expect(ui.historyOptions.enabled).toBe(false);
-    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "pic-user", 0]);
+    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "pic-user", 0, { actor: "", target: "", from: "", to: "" }]);
     expect(ui.apiRequest).not.toHaveBeenCalled();
     await ui.historyOptions.queryFn();
     expect(ui.apiRequest).toHaveBeenCalledWith("GET", "/api/access/status-history?offset=0");
@@ -323,9 +329,58 @@ describe("account management UI", () => {
     expect(render()).toContain("Belum dicatat — riwayat sebelum alasan diwajibkan.");
     click("Berikutnya");
     render();
-    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "admin-user", 50]);
+    expect(ui.historyOptions.queryKey).toEqual(["/api/access/status-history", "admin-user", 50, { actor: "", target: "", from: "", to: "" }]);
     await ui.historyOptions.queryFn();
     expect(ui.apiRequest).toHaveBeenCalledWith("GET", "/api/access/status-history?offset=50");
     expect(ui.handlers.get("Sebelumnya")?.disabled).toBe(false);
+  });
+
+  it("combines filters, resets pagination on every change, and URL-encodes identities", async () => {
+    ui.historyQuery.data = {
+      entries: [{ id: "event", actorId: "old-admin", actorUsername: "Old Admin", targetUserId: "deleted",
+        targetUsername: "Deleted Target", previousIsActive: true, newIsActive: false,
+        reason: null, changedAt: "2030-03-10T00:00:00Z" }] as any,
+      hasMore: true,
+    };
+    render();
+    click("Berikutnya");
+    render();
+    expect(ui.historyOptions.queryKey[2]).toBe(50);
+    const values = { actor: "Admin & lama", target: "deleted/id", from: "2030-03-10", to: "2030-03-11" };
+    for (const [key, value] of Object.entries(values)) {
+      ui.fields.get(`history-${key}`)!.onChange({ target: { value } });
+      render();
+      expect(ui.historyOptions.queryKey[2]).toBe(0);
+      expect(ui.historyOptions.queryKey[3]).toMatchObject({ [key]: value });
+      click("Berikutnya");
+      render();
+    }
+    await ui.historyOptions.queryFn();
+    expect(ui.apiRequest).toHaveBeenLastCalledWith("GET",
+      "/api/access/status-history?offset=50&actor=Admin+%26+lama&target=deleted%2Fid&from=2030-03-10&to=2030-03-11");
+    expect(ui.apiRequest.mock.calls.every(([method]) => method === "GET")).toBe(true);
+    click("Reset filter");
+    render();
+    expect(ui.historyOptions.queryKey[2]).toBe(0);
+    expect(ui.historyOptions.queryKey[3]).toEqual({ actor: "", target: "", from: "", to: "" });
+    expect(ui.handlers.get("Reset filter")?.disabled).toBe(true);
+  });
+
+  it("blocks invalid date ranges and explains empty filtered results", () => {
+    render();
+    ui.fields.get("history-from")!.onChange({ target: { value: "2030-03-11" } });
+    render();
+    ui.fields.get("history-to")!.onChange({ target: { value: "2030-03-10" } });
+    expect(render()).toContain("Filter tanggal tidak valid");
+    expect(ui.historyOptions.enabled).toBe(false);
+    ui.fields.get("history-to")!.onChange({ target: { value: "2030-03-11" } });
+    expect(render()).toContain("Tidak ada riwayat yang cocok dengan filter.");
+    expect(ui.historyOptions.enabled).toBe(true);
+    expect(render()).not.toContain("Belum ada riwayat perubahan status akun.");
+    ui.role = "participant";
+    const markup = render();
+    expect(ui.historyOptions.enabled).toBe(false);
+    expect(markup).not.toContain("history-actor");
+    expect(markup).not.toContain("Riwayat perubahan status akun");
   });
 });

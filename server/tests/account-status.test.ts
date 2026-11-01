@@ -237,6 +237,7 @@ describe("account status management", () => {
       expect((await setStatus(learnerId, false, actor)).status).toBe(403);
       expect((await request(actor, "/api/access/users")).status).toBe(403);
       expect((await request(actor, "/api/access/status-history")).status).toBe(403);
+      expect((await request(actor, "/api/access/status-history?actor=admin&target=deleted&from=2030-03-10&to=2030-03-10&limit=1")).status).toBe(403);
     }
     for (const body of [{}, { isActive: "false" }, { isActive: false, role: "admin" }]) {
       expect((await request("admin", `/api/access/users/${learnerId}/status`, "PATCH", body)).status).toBe(400);
@@ -525,5 +526,68 @@ describe("account status management", () => {
       })).rejects.toMatchObject({ code: "23514", constraint: "account_status_history_reason_valid" });
     }
     expect((await db.select().from(accountStatusHistory).where(eq(accountStatusHistory.id, legacy.id)))[0].reason).toBeNull();
+  });
+
+  it("combines snapshot identity and inclusive WIB dates with stable filtered pagination", async () => {
+    const targetId = randomUUID(); // Intentionally no corresponding user.
+    const snapshot = {
+      actorId: adminId, actorUsername: `Historical_Admin_%_${tag}`,
+      targetUserId: targetId, targetUsername: `Deleted_Target_${tag}`,
+      previousIsActive: true, newIsActive: false, reason: null,
+    };
+    const inserted = await db.insert(accountStatusHistory).values([
+      { ...snapshot, changedAt: new Date("2030-03-09T16:59:59.999Z") },
+      { ...snapshot, changedAt: new Date("2030-03-09T17:00:00.000Z") },
+      { ...snapshot, changedAt: new Date("2030-03-10T08:00:00.000Z") },
+      { ...snapshot, changedAt: new Date("2030-03-10T16:59:59.999Z") },
+      { ...snapshot, changedAt: new Date("2030-03-10T17:00:00.000Z") },
+      { ...snapshot, targetUserId: randomUUID(), targetUsername: "different-target",
+        changedAt: new Date("2030-03-10T08:00:00.000Z") },
+    ]).returning();
+    const query = new URLSearchParams({
+      actor: `historical_admin_%_${tag}`, target: targetId,
+      from: "2030-03-10", to: "2030-03-10", limit: "2",
+    });
+    const getPage = async (params = query) => {
+      const response = await request("admin", `/api/access/status-history?${params}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      return response.json();
+    };
+    const first = await getPage();
+    expect(first.entries.map((entry: { id: string }) => entry.id)).toEqual([inserted[3].id, inserted[2].id]);
+    expect(first.hasMore).toBe(true);
+    expect(first.entries[0]).toMatchObject({ ...snapshot, changedAt: "2030-03-10T16:59:59.999Z" });
+    query.set("offset", "2");
+    const last = await getPage();
+    expect(last.entries.map((entry: { id: string }) => entry.id)).toEqual([inserted[1].id]);
+    expect(last.hasMore).toBe(false);
+    query.set("offset", "3");
+    expect(await getPage()).toEqual({ entries: [], hasMore: false });
+
+    query.delete("offset");
+    query.set("actor", adminId);
+    query.set("target", `deleted_target_${tag}`);
+    expect((await getPage()).entries).toHaveLength(2);
+    query.set("target", "' OR 1=1 --");
+    expect(await getPage()).toEqual({ entries: [], hasMore: false });
+    query.set("actor", "%");
+    query.set("target", targetId);
+    expect((await getPage()).entries).toHaveLength(2); // Literal percent in the snapshot.
+    query.set("actor", `HistoricalXAdminXYX${tag}`);
+    expect(await getPage()).toEqual({ entries: [], hasMore: false });
+    query.set("actor", "no-such-actor");
+    expect(await getPage()).toEqual({ entries: [], hasMore: false });
+  });
+
+  it.each([
+    "from=2030-02-30", "to=2030-13-01", "from=2030-2-01", "from=not-a-date",
+    "from=2030-03-11&to=2030-03-10", "from=2030-03-10T00:00:00Z",
+    "from=", "limit=0", "limit=51", "limit=-1", "limit=1.5", "limit=abc",
+    "limit=2&limit=3", "offset=", "offset=1&offset=2",
+    "actor=a&actor=b", "target=a&target=b", "from=2030-01-01&from=2030-01-02",
+    `actor=${"a".repeat(201)}`, `target=${"a".repeat(201)}`,
+  ])("rejects invalid history queries: %s", async query => {
+    expect((await request("admin", `/api/access/status-history?${query}`)).status).toBe(400);
   });
 });

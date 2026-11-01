@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   accountStatusChangeSchema, ACCOUNT_STATUS_REASON_MAX_LENGTH,
+  accountStatusHistoryQuerySchema, ACCOUNT_STATUS_HISTORY_PAGE_SIZE,
   type AccountStatusHistoryEntry, type BujkInvitation, type BujkOrganization,
 } from "@shared/schema";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -38,7 +39,8 @@ interface AccountStatusHistoryResponse {
   hasMore: boolean;
 }
 
-const STATUS_HISTORY_PAGE_SIZE = 50;
+const STATUS_HISTORY_PAGE_SIZE = ACCOUNT_STATUS_HISTORY_PAGE_SIZE;
+const emptyHistoryFilters = { actor: "", target: "", from: "", to: "" };
 
 export default function AccessManagement() {
   const { data: user } = useCurrentUser();
@@ -46,6 +48,17 @@ export default function AccessManagement() {
   const isAdmin = user?.role === "admin";
   const [inviteLink, setInviteLink] = useState("");
   const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyFilters, setHistoryFilters] = useState(emptyHistoryFilters);
+  const updateHistoryFilter = (key: keyof typeof historyFilters, value: string) => {
+    setHistoryFilters(filters => ({ ...filters, [key]: value }));
+    setHistoryOffset(0);
+  };
+  const historyParams = new URLSearchParams({ offset: String(historyOffset) });
+  Object.entries(historyFilters).forEach(([key, value]) => {
+    if (value.trim()) historyParams.set(key, value.trim());
+  });
+  const historyValidation = accountStatusHistoryQuerySchema.safeParse(Object.fromEntries(historyParams));
+  const hasHistoryFilters = Object.values(historyFilters).some(value => value.trim());
   const { data: organizations = [], isError: organizationError } = useQuery<BujkOrganization[]>({
     queryKey: ["/api/access/bujks"],
   });
@@ -64,7 +77,7 @@ export default function AccessManagement() {
   const [accountToUpdate, setAccountToUpdate] = useState<AccountSummary | null>(null);
   const [statusChangeReason, setStatusChangeReason] = useState("");
   const reasonIsValid = accountStatusChangeSchema.shape.reason.safeParse(statusChangeReason).success;
-  const historyQueryKey = ["/api/access/status-history", user?.id, historyOffset] as const;
+  const historyQueryKey = ["/api/access/status-history", user?.id, historyOffset, historyFilters] as const;
   const {
     data: statusHistory,
     isLoading: historyLoading,
@@ -72,9 +85,9 @@ export default function AccessManagement() {
     refetch: refetchHistory,
   } = useQuery<AccountStatusHistoryResponse>({
     queryKey: historyQueryKey,
-    enabled: isAdmin && !!user?.id,
+    enabled: isAdmin && !!user?.id && historyValidation.success,
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/access/status-history?offset=${historyOffset}`);
+      const response = await apiRequest("GET", `/api/access/status-history?${historyParams}`);
       return response.json() as Promise<AccountStatusHistoryResponse>;
     },
   });
@@ -300,7 +313,38 @@ export default function AccessManagement() {
             <CardDescription>Perubahan terbaru ditampilkan lebih dahulu. Waktu dicatat dalam WIB.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {historyLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="history-actor">Pelaku</Label>
+                <Input id="history-actor" placeholder="Username atau ID pelaku" maxLength={200}
+                  value={historyFilters.actor} onChange={event => updateHistoryFilter("actor", event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history-target">Akun sasaran</Label>
+                <Input id="history-target" placeholder="Username atau ID akun sasaran" maxLength={200}
+                  value={historyFilters.target} onChange={event => updateHistoryFilter("target", event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history-from">Tanggal awal (WIB)</Label>
+                <Input id="history-from" type="date" min="1000-01-01" max="9999-12-31"
+                  value={historyFilters.from} onChange={event => updateHistoryFilter("from", event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history-to">Tanggal akhir (WIB)</Label>
+                <Input id="history-to" type="date" min="1000-01-01" max="9999-12-31"
+                  value={historyFilters.to} onChange={event => updateHistoryFilter("to", event.target.value)} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cari sebagian username historis atau ID lengkap, termasuk akun yang sudah dihapus. Tanggal akhir mencakup seluruh hari WIB.
+            </p>
+            <Button type="button" size="sm" variant="outline" disabled={!hasHistoryFilters}
+              onClick={() => { setHistoryFilters(emptyHistoryFilters); setHistoryOffset(0); }}>
+              Reset filter
+            </Button>
+            {!historyValidation.success ? (
+              <p role="alert" className="text-sm text-destructive">Filter tanggal tidak valid. Gunakan tanggal yang valid dan tanggal akhir tidak sebelum tanggal awal.</p>
+            ) : historyLoading ? (
               <div className="space-y-3 py-2" aria-label="Memuat riwayat perubahan status" aria-busy="true">
                 {[1, 2, 3].map(item => <div key={item} className="h-16 animate-pulse rounded-md bg-muted" />)}
               </div>
@@ -310,7 +354,13 @@ export default function AccessManagement() {
                 <Button type="button" size="sm" variant="outline" onClick={() => refetchHistory()}>Coba lagi</Button>
               </div>
             ) : (statusHistory?.entries.length ?? 0) === 0 ? (
-              <p className="py-2 text-sm text-muted-foreground">Belum ada riwayat perubahan status akun.</p>
+              <div className="space-y-2">
+                <p className="py-2 text-sm text-muted-foreground">
+                  {hasHistoryFilters ? "Tidak ada riwayat yang cocok dengan filter." : "Belum ada riwayat perubahan status akun."}
+                </p>
+                {historyOffset > 0 && <Button type="button" size="sm" variant="outline"
+                  onClick={() => setHistoryOffset(offset => Math.max(0, offset - STATUS_HISTORY_PAGE_SIZE))}>Sebelumnya</Button>}
+              </div>
             ) : (
               <>
                 <div className="space-y-2">
