@@ -6,6 +6,7 @@ import {
   certificatesTable,
   coursesTable,
   enrollmentsTable,
+  quizAttemptsTable,
   users,
 } from "@shared/schema";
 import { db, pool } from "../db";
@@ -160,6 +161,89 @@ afterAll(async () => {
 });
 
 describe("aturan progres kursus melalui API", () => {
+  it("menolak penilaian dengan ID kuis lain tanpa mengubah percobaan atau enrollment kedua kursus", async () => {
+    const courseIds: string[] = [];
+    try {
+      const fixtures = [];
+      for (const label of ["asli", "lain"]) {
+        const course = await storage.createCourse({
+          unitId: "tender-01",
+          targetLevel: "L2",
+          title: `Kursus isolasi penilaian ${label} ${Date.now()}`,
+          description: "Penilaian hanya boleh diterapkan pada percobaan milik kuis",
+          duration: "1 jam",
+        });
+        courseIds.push(course.id);
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: `Post-test esai ${label}`,
+          description: "Esai identik agar penolakan bukan akibat nilai tidak valid",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "essay",
+            text: "Jelaskan tahapan evaluasi",
+            points: 10,
+            order: 1,
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const submission = await submitQuiz(quiz.id, "Jawaban peserta untuk dinilai");
+        expect(submission.status).toBe(201);
+        const attempt = await submission.json();
+        const [attemptBefore] = await db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.id, attempt.id));
+        expect(attemptBefore).toMatchObject({
+          quizId: quiz.id,
+          score: 0,
+          passed: 0,
+          gradingStatus: "awaiting_review",
+          gradedAt: null,
+          gradedBy: null,
+        });
+        const [enrollmentBefore] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(enrollmentBefore).toMatchObject({
+          progress: 100,
+          status: "in_progress",
+          completedAt: null,
+        });
+        fixtures.push({ quiz, attemptBefore, enrollmentBefore });
+      }
+
+      const [original, other] = fixtures;
+      const response = await request(
+        `/api/quizzes/${other.quiz.id}/attempts/${original.attemptBefore.id}/grade`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ essayScores: { "question-1": 10 } }),
+        },
+      );
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ message: "Percobaan kuis tidak ditemukan" });
+
+      // Read persisted rows directly so a progress refresh cannot hide a write.
+      for (const { attemptBefore, enrollmentBefore } of fixtures) {
+        const [attemptAfter] = await db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.id, attemptBefore.id));
+        expect(attemptAfter).toEqual(attemptBefore);
+        const [enrollmentAfter] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollmentBefore.id));
+        expect(enrollmentAfter).toEqual(enrollmentBefore);
+      }
+    } finally {
+      for (const id of courseIds) await storage.deleteCourse(id);
+    }
+  });
+
   it.each(["perhitungan", "pembaruan progres"] as const)(
     "membatalkan penandaan materi saat %s gagal dan dapat dicoba ulang",
     async mode => {
