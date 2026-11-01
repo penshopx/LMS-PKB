@@ -68,7 +68,8 @@ describe("changeUserPassword", () => {
 
   it.each(acceptedPasswords)("accepts boundary password %j without trimming the stored value", async (password) => {
     const user = await createUser(`boundary-${crypto.randomUUID()}`, "short");
-    await expect(changeUserPassword(user.id, "short", password)).resolves.toBe("updated");
+    await expect(changeUserPassword(user.id, "short", password))
+      .resolves.toEqual({ sessionVersion: user.sessionVersion + 1 });
     const [stored] = await db.select().from(users).where(eq(users.id, user.id));
     expect(await comparePassword(password, stored.password)).toBe(true);
     if (password !== password.trim()) {
@@ -82,10 +83,12 @@ describe("changeUserPassword", () => {
 
     await expect(
       changeUserPassword(user.id, "current-password", "new-password"),
-    ).resolves.toBe("updated");
+    ).resolves.toEqual({ sessionVersion: user.sessionVersion + 1 });
 
     const [storedUser] = await db.select().from(users).where(eq(users.id, user.id));
     expect(storedUser).toBeDefined();
+    expect(storedUser.sessionVersion).toBe(user.sessionVersion + 1);
+    expect(storedUser.isActive).toBe(user.isActive);
     expect(await comparePassword("current-password", storedUser.password)).toBe(false);
     expect(await comparePassword("new-password", storedUser.password)).toBe(true);
   });

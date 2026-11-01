@@ -144,13 +144,25 @@ describe("password change session continuity", () => {
     }
   });
 
-  it("keeps the current session valid and accepts the new password after logout", async () => {
+  it("preserves the changing session, revokes the other device, and accepts only the new password", async () => {
+    await resetPasswordChangeAttemptLimiter();
     const loginResponse = await request("/api/login", {
       method: "POST",
       body: JSON.stringify({ username, password: originalPassword }),
     });
     expect(loginResponse.status).toBe(200);
     const sessionCookie = getSessionCookie(loginResponse);
+    const otherLoginResponse = await request("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password: originalPassword }),
+    });
+    expect(otherLoginResponse.status).toBe(200);
+    const otherSessionCookie = getSessionCookie(otherLoginResponse);
+    expect(otherSessionCookie).not.toBe(sessionCookie);
+    expect((await request("/api/me", {
+      headers: { Cookie: otherSessionCookie },
+    })).status).toBe(200);
+    const [beforeChange] = await db.select().from(users).where(eq(users.id, userId));
 
     const changeResponse = await request("/api/me/password", {
       method: "POST",
@@ -161,11 +173,31 @@ describe("password change session continuity", () => {
       }),
     });
     expect(changeResponse.status).toBe(200);
+    expect(await changeResponse.json()).toEqual({ message: "Password berhasil diubah" });
+    const [afterChange] = await db.select().from(users).where(eq(users.id, userId));
+    expect(afterChange.sessionVersion).toBe(beforeChange.sessionVersion + 1);
+    expect(afterChange.isActive).toBe(beforeChange.isActive);
 
     const currentSessionResponse = await request("/api/me", {
       headers: { Cookie: sessionCookie },
     });
     expect(currentSessionResponse.status).toBe(200);
+    expect(await currentSessionResponse.json()).toMatchObject({ id: userId, username });
+
+    const otherSessionResponse = await request("/api/me", {
+      headers: { Cookie: otherSessionCookie },
+    });
+    expect(otherSessionResponse.status).toBe(401);
+    expect(await otherSessionResponse.json()).toEqual({ message: "Not authenticated" });
+    const revokedChangeResponse = await request("/api/me/password", {
+      method: "POST",
+      headers: { Cookie: otherSessionCookie },
+      body: JSON.stringify({
+        currentPassword: updatedPassword,
+        newPassword: "another-updated-password",
+      }),
+    });
+    expect(revokedChangeResponse.status).toBe(401);
 
     const logoutResponse = await request("/api/logout", {
       method: "POST",
@@ -189,6 +221,7 @@ describe("password change session continuity", () => {
     const newSessionUserResponse = await request("/api/me", {
       headers: { Cookie: newSessionCookie },
     });
+    expect(newSessionUserResponse.status).toBe(200);
     expect(await newSessionUserResponse.json()).toMatchObject({
       id: userId,
       username,

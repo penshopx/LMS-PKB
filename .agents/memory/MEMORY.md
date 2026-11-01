@@ -13,3 +13,4 @@
 - [Unified password policy](unified-password-policy.md) — invitation signup and password replacement share validation; never automatically migrate existing account passwords.
 - [Protected UI verification](protected-ui-verification.md) — documented test-worker support can lag the runtime; verify private pages with normal sign-in and disposable fixtures.
 - [Ingress verification boundaries](ingress-verification.md) — different tools are not proof of distinct networks; verify source separation at the application boundary.
+- [Password session renewal](password-session-renewal.md) — retain only the version issued by the password change, never a newer version from a later account lookup.

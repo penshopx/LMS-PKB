@@ -548,7 +548,7 @@ export async function registerRoutes(
   // ---------- CHANGE PASSWORD ----------
   app.post("/api/me/password", async (req, res) => {
     try {
-      const user = req.user as { id: string };
+      const user = req.user as User;
       const { currentPassword, newPassword } = req.body ?? {};
 
       if (
@@ -586,6 +586,16 @@ export async function registerRoutes(
       if (result === "invalid_current_password") {
         return res.status(401).json({ message: "Password saat ini tidak benar" });
       }
+
+      // Preserve this session only, using the exact version committed with the
+      // new hash. Reading the version again could adopt a later revocation.
+      user.sessionVersion = result.sessionVersion;
+      Object.assign(req.session, {
+        passport: { user: { id: user.id, version: result.sessionVersion } },
+      });
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((error) => error ? reject(error) : resolve());
+      });
 
       try {
         await passwordChangeAttemptLimiter.recordSuccessfulChange(user.id, source);

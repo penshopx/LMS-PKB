@@ -66,7 +66,7 @@ export async function createUser(
 }
 
 export type ChangePasswordResult =
-  | "updated"
+  | { sessionVersion: number }
   | "user_not_found"
   | "invalid_new_password"
   | "unchanged_password"
@@ -217,16 +217,22 @@ export async function changeUserPassword(
   newPassword: string,
 ): Promise<ChangePasswordResult> {
   if (!newPasswordSchema.safeParse(newPassword).success) return "invalid_new_password";
-  const [storedUser] = await db.select().from(users).where(eq(users.id, userId));
-  if (!storedUser) return "user_not_found";
+  return db.transaction(async (tx): Promise<ChangePasswordResult> => {
+    const [storedUser] = await tx.select().from(users)
+      .where(eq(users.id, userId)).for("update");
+    if (!storedUser) return "user_not_found";
 
-  const currentPasswordMatches = await comparePassword(currentPassword, storedUser.password);
-  if (!currentPasswordMatches) return "invalid_current_password";
-  if (newPassword === currentPassword) return "unchanged_password";
+    const currentPasswordMatches = await comparePassword(currentPassword, storedUser.password);
+    if (!currentPasswordMatches) return "invalid_current_password";
+    if (newPassword === currentPassword) return "unchanged_password";
 
-  const hashed = await hashPassword(newPassword);
-  await db.update(users).set({ password: hashed }).where(eq(users.id, userId));
-  return "updated";
+    const hashed = await hashPassword(newPassword);
+    const [updated] = await tx.update(users).set({
+      password: hashed,
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+    }).where(eq(users.id, userId)).returning({ sessionVersion: users.sessionVersion });
+    return updated;
+  });
 }
 
 /** Bootstrap only an empty installation, using an operator-provided secret. */
