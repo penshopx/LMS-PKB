@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { pool } from "./db";
+import { normalizeClientSource } from "./client-source";
 
 export const LOGIN_ACCOUNT_MAX_ATTEMPTS = 5;
 export const LOGIN_SOURCE_MAX_ATTEMPTS = 30;
@@ -15,7 +16,7 @@ type Acquisition =
 // Hash identifiers so the limiter never stores usernames, addresses or passwords.
 export function loginAttemptKeys(username: string, source: string): string[] {
   const digest = (value: string) => createHash("sha256").update(value).digest("hex");
-  return [`account:${digest(username)}`, `source:${digest(source)}`];
+  return [`account:${digest(username)}`, `source:${digest(normalizeClientSource(source))}`];
 }
 
 export class LoginAttemptLimiter {

@@ -12,3 +12,4 @@
 - [Login throttling isolation](login-throttling-isolation.md) — rejected account attempts must not consume shared-source capacity; successful login refunds only its own reservation.
 - [Unified password policy](unified-password-policy.md) — invitation signup and password replacement share validation; never automatically migrate existing account passwords.
 - [Protected UI verification](protected-ui-verification.md) — documented test-worker support can lag the runtime; verify private pages with normal sign-in and disposable fixtures.
+- [Ingress verification boundaries](ingress-verification.md) — different tools are not proof of distinct networks; verify source separation at the application boundary.

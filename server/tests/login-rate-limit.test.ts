@@ -60,6 +60,24 @@ afterAll(async () => {
 });
 
 describe("persistent login protection", () => {
+  it("shares source capacity across IPv4 and mapped IPv6 spellings", async () => {
+    const forms = ["192.0.2.170", "::ffff:192.0.2.170", "::ffff:c000:2aa"];
+    for (let i = 0; i < LOGIN_SOURCE_MAX_ATTEMPTS; i++) {
+      expect((await login(`${prefix}-mapped-${i}`, "wrong", forms[i % forms.length])).status).toBe(401);
+    }
+    expect((await login(`${prefix}-mapped-blocked`, "wrong", forms[1])).status).toBe(429);
+    expect((await login(`${prefix}-mapped-other`, "wrong", "192.0.2.171")).status).toBe(401);
+  });
+
+  it("canonicalizes native IPv6 without combining distinct networks", async () => {
+    const forms = ["2001:db8:1234::ab", "2001:0DB8:1234:0000:0000:0000:0000:00AB"];
+    for (let i = 0; i < LOGIN_SOURCE_MAX_ATTEMPTS; i++) {
+      expect((await login(`${prefix}-ipv6-${i}`, "wrong", forms[i % forms.length])).status).toBe(401);
+    }
+    expect((await login(`${prefix}-ipv6-blocked`, "wrong", forms[1])).status).toBe(429);
+    expect((await login(`${prefix}-ipv6-other`, "wrong", "2001:db8:5678::ab")).status).toBe(401);
+  });
+
   it("limits repeated failures across sources, survives a new limiter, and recovers after expiry", async () => {
     const username = await account("repeated");
     for (let i = 0; i < LOGIN_ACCOUNT_MAX_ATTEMPTS; i++) {

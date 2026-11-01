@@ -5,6 +5,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { db, pool } from "./db";
+import { configureClientSource } from "./client-source";
 import { users } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Express, RequestHandler } from "express";
@@ -338,10 +339,7 @@ export async function checkDefaultAdminPassword(): Promise<void> {
 }
 
 export function setupAuth(app: Express): void {
-  // Replit ingress connects to the application through a local sidecar. Trust
-  // only loopback proxy hops so req.ip uses the edge-appended client address
-  // without accepting an arbitrary leftmost X-Forwarded-For value.
-  app.set("trust proxy", "loopback");
+  configureClientSource(app);
 
   app.use((req, res, next) => {
     if (!req.path.startsWith("/api/") || ["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
