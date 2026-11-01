@@ -851,6 +851,135 @@ describe("aturan progres kursus melalui API", () => {
   );
 
   it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
+    "menyimpan nilai esai setelah enrollment dihapus tanpa membuatnya ulang atau mengubah kursus lain: %s",
+    async mode => {
+      const courseIds: string[] = [];
+      try {
+        const course = await storage.createCourse({
+          unitId: "tender-01",
+          targetLevel: "L2",
+          title: `Kursus esai enrollment dihapus ${mode} ${Date.now()}`,
+          description: "Penilaian tetap tersimpan meskipun pendaftaran telah dihapus",
+          duration: "1 jam",
+        });
+        courseIds.push(course.id);
+        const otherCourse = await storage.createCourse({
+          unitId: "tender-01",
+          targetLevel: "L2",
+          title: `Kursus lain peserta ${mode} ${Date.now()}`,
+          description: "Progres kursus lain tidak boleh terpengaruh penilaian",
+          duration: "1 jam",
+        });
+        courseIds.push(otherCourse.id);
+        const otherEnrollment = await storage.createEnrollment(participantId, otherCourse.id);
+        expect(otherCourse.lessons.length).toBeGreaterThan(1);
+        await storage.markEnrollmentLessonCompleted(otherEnrollment.id, otherCourse.lessons[0].id);
+
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test esai tanpa enrollment",
+          description: "Esai dikirim sebelum pendaftaran dihapus",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "essay",
+            text: "Jelaskan tahapan evaluasi",
+            points: 10,
+            order: 1,
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const submission = await submitQuiz(quiz.id, "Jawaban peserta untuk dinilai");
+        expect(submission.status).toBe(201);
+        const attempt = await submission.json();
+        expect(attempt).toMatchObject({ gradingStatus: "awaiting_review", passed: false });
+
+        await db.delete(enrollmentsTable).where(eq(enrollmentsTable.id, enrollment.id));
+        const [pendingAttempt] = await db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.id, attempt.id));
+        expect(pendingAttempt).toMatchObject({
+          quizId: quiz.id,
+          participantId,
+          score: 0,
+          passed: 0,
+          gradingStatus: "awaiting_review",
+          gradedAt: null,
+          gradedBy: null,
+        });
+        const readEnrollments = () => db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.participantId, participantId))
+          .orderBy(enrollmentsTable.id);
+        const enrollmentsBefore = await readEnrollments();
+        expect(enrollmentsBefore.some(item => item.courseId === course.id)).toBe(false);
+        expect(enrollmentsBefore.find(item => item.id === otherEnrollment.id)).toMatchObject({
+          courseId: otherCourse.id,
+          status: "in_progress",
+          completedLessonIds: [otherCourse.lessons[0].id],
+          completedAt: null,
+        });
+
+        const response = mode === "POST nilai akhir"
+          ? await request(`/api/quiz-attempts/${attempt.id}/grade`, {
+              method: "POST",
+              body: JSON.stringify({ score: 90, feedback: "Jawaban sudah tepat." }),
+            })
+          : await request(`/api/quizzes/${quiz.id}/attempts/${attempt.id}/grade`, {
+              method: "PATCH",
+              body: JSON.stringify({ essayScores: { "question-1": 9 } }),
+            });
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        const gradedAttempt = mode === "POST nilai akhir" ? body.attempt : body;
+        expect(gradedAttempt).toMatchObject({
+          id: attempt.id,
+          quizId: quiz.id,
+          participantId,
+          score: 90,
+          passed: true,
+          gradingStatus: "graded",
+          gradedBy: userId,
+          gradedAt: expect.any(String),
+        });
+        if (mode === "POST nilai akhir") {
+          expect(gradedAttempt.gradingFeedback).toBe("Jawaban sudah tepat.");
+        } else {
+          expect(gradedAttempt.answers).toEqual([
+            expect.objectContaining({ questionId: "question-1", points: 9 }),
+          ]);
+        }
+
+        // Read persisted rows before any learning-state/progress refresh can mask a write.
+        const [storedAttempt] = await db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.id, attempt.id));
+        expect(storedAttempt).toEqual({
+          ...pendingAttempt,
+          answers: gradedAttempt.answers,
+          score: 90,
+          maxScore: mode === "POST nilai akhir" ? 100 : pendingAttempt.maxScore,
+          passed: 1,
+          gradingStatus: "graded",
+          gradingFeedback: mode === "POST nilai akhir" ? "Jawaban sudah tepat." : null,
+          gradedBy: userId,
+          gradedAt: gradedAttempt.gradedAt,
+        });
+        // Compare every enrollment to also catch recreation with a new ID.
+        expect(await readEnrollments()).toEqual(enrollmentsBefore);
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual([gradedAttempt]);
+      } finally {
+        for (const id of courseIds) await storage.deleteCourse(id);
+      }
+    },
+  );
+
+  it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
     "membatalkan nilai esai saat progres gagal dan menyimpan kelulusan saat dicoba ulang: %s",
     async mode => {
       const course = await storage.createCourse({
