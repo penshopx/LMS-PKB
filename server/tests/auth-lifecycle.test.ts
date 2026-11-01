@@ -7,6 +7,7 @@ import { db } from "../db";
 import { createUser, setupAuth } from "../auth";
 import { registerRoutes } from "../routes";
 import { bujksTable, bujkInvitationsTable, participantsTable, users } from "@shared/schema";
+import { rejectedPasswords } from "./helpers/password-policy";
 
 const tag = randomUUID();
 const password = "  lifecycle-password-strong  ";
@@ -165,7 +166,13 @@ describe("registration, login and logout lifecycle", () => {
       expect(Object.keys(await preview.json()).sort()).toEqual(["username", "participantName", "bujkName", "role", "expiresAt"].sort());
     }
     expect((await request("/api/invitations/accept", "POST", { token: invite.token, password, role: "admin" })).status).toBe(400);
-    expect((await request("/api/invitations/accept", "POST", { token: invite.token, password: " ".repeat(12) })).status).toBe(400);
+    for (const [rejected, message] of rejectedPasswords) {
+      const response = await request("/api/invitations/accept", "POST", { token: invite.token, password: rejected });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message });
+    }
+    expect(await db.select().from(users).where(eq(users.username, invite.username))).toHaveLength(0);
+    expect((await db.select().from(bujkInvitationsTable).where(eq(bujkInvitationsTable.id, invite.id)))[0].acceptedAt).toBeNull();
     const registered = await request("/api/invitations/accept", "POST", { token: invite.token, password });
     expect(registered.status).toBe(201);
     expect(await registered.json()).toMatchObject({ username: invite.username, role: "participant" });

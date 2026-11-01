@@ -37,7 +37,7 @@ import {
 } from "@shared/schema";
 import type { ApplicationRole, User } from "@shared/schema";
 import { z } from "zod";
-import { acceptInvitationSchema, invitationTokenSchema, loginCredentialsSchema, newPasswordSchema } from "@shared/auth-validation";
+import { acceptInvitationSchema, invitationTokenSchema, loginCredentialsSchema, newPasswordSchema, PASSWORD_POLICY_MESSAGE, PASSWORD_UNCHANGED_MESSAGE } from "@shared/auth-validation";
 import {
   evaluateCourseCompletion,
   gradeQuizSubmission,
@@ -292,7 +292,8 @@ export async function registerRoutes(
       res.status(201).json({ message: "Akun berhasil dibuat. Silakan masuk.", username: result.username, role: result.role });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Undangan harus valid dan kata sandi harus berisi 12–128 karakter, bukan hanya spasi." });
+        const passwordIssue = error.issues.find(issue => issue.path[0] === "password");
+        return res.status(400).json({ message: passwordIssue?.message ?? "Data atau tautan undangan tidak valid." });
       }
       const databaseError = error as { code?: string; cause?: { code?: string } } | null;
       if (databaseError?.code === "23505" || databaseError?.cause?.code === "23505") {
@@ -562,7 +563,10 @@ export async function registerRoutes(
 
       const result = await changeUserPassword(user.id, currentPassword, newPassword);
       if (result === "invalid_new_password") {
-        return res.status(400).json({ message: "Password baru tidak memenuhi kebijakan keamanan." });
+        return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+      }
+      if (result === "unchanged_password") {
+        return res.status(400).json({ message: PASSWORD_UNCHANGED_MESSAGE });
       }
       if (result === "user_not_found") {
         return res.status(404).json({ message: "User tidak ditemukan" });

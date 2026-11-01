@@ -10,18 +10,20 @@ export const invitationTokenSchema = z.string().min(32).max(256);
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export const LEGACY_DEFAULT_PASSWORD = "admin123";
+export const PASSWORD_POLICY_MESSAGE = "Kata sandi tidak memenuhi kebijakan keamanan.";
+export const PASSWORD_UNCHANGED_MESSAGE = "Kata sandi baru harus berbeda dari kata sandi saat ini.";
+const disallowedPasswords = new Set([LEGACY_DEFAULT_PASSWORD, "password123", "admin12345678"]);
 export const newPasswordSchema = z.string()
-  .refine(value => value.trim() !== LEGACY_DEFAULT_PASSWORD,
-    "Password baru tidak boleh menggunakan password bawaan lama.")
+  .refine(value => !disallowedPasswords.has(value.trim().toLowerCase()),
+    PASSWORD_POLICY_MESSAGE)
   .refine(value => value.trim().length >= PASSWORD_MIN_LENGTH,
-    "Password baru minimal 12 karakter, tidak termasuk spasi di awal dan akhir.")
+    `Kata sandi minimal ${PASSWORD_MIN_LENGTH} karakter, tidak termasuk spasi di awal dan akhir.`)
   .refine(value => value.length <= PASSWORD_MAX_LENGTH,
-    "Password baru maksimal 128 karakter.");
+    `Kata sandi maksimal ${PASSWORD_MAX_LENGTH} karakter.`);
 
-export const invitationPasswordSchema = z.string()
-  .min(12, "Kata sandi minimal 12 karakter.")
-  .max(128, "Kata sandi maksimal 128 karakter.")
-  .refine(value => value.trim().length > 0, "Kata sandi tidak boleh hanya berupa spasi.");
+// Registration and password changes must use the exact same policy.
+// Validation never transforms the password that will be hashed.
+export const invitationPasswordSchema = newPasswordSchema;
 export const acceptInvitationSchema = z.object({
   token: invitationTokenSchema,
   password: invitationPasswordSchema,

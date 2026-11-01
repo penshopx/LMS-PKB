@@ -76,6 +76,24 @@ describe("change password dialog validation", () => {
     expect(markup).toContain("Minimal 12 karakter");
     expect(markup).toContain("maksimal 128 karakter");
     expect(markup).not.toContain("6 karakter");
+    for (const id of ["new-password", "confirm-password"]) {
+      expect(find(tree, element => element.props.id === id)?.props).toMatchObject({
+        minLength: 12, maxLength: 128, required: true,
+      });
+    }
+  });
+
+  it("rejects a password identical to the current password before sending any request", () => {
+    expect(submit("current-password", "current-password", "current-password"))
+      .toContain("Kata sandi baru harus berbeda dari kata sandi saat ini.");
+    expect(ui.mutate).not.toHaveBeenCalled();
+  });
+
+  it("does not silently trim a distinct replacement password", () => {
+    submit(" current-password ", " current-password ", "current-password");
+    expect(ui.mutate).toHaveBeenCalledExactlyOnceWith({
+      currentPassword: "current-password", newPassword: " current-password ",
+    });
   });
 
   it("preserves required-field and confirmation validation", () => {

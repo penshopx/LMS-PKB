@@ -130,6 +130,14 @@ describe("password change session continuity", () => {
         body: JSON.stringify({ username: legacyUsername, password: current }),
       });
       expect(loginWithExactPassword.status).toBe(200);
+      const [beforeSame] = await db.select().from(users).where(eq(users.id, user.id));
+      const unchanged = await change(current, current);
+      expect(unchanged.status).toBe(400);
+      expect(await unchanged.json()).toEqual({ message: "Kata sandi baru harus berbeda dari kata sandi saat ini." });
+      const [afterSame] = await db.select().from(users).where(eq(users.id, user.id));
+      expect(afterSame.password).toBe(beforeSame.password);
+      expect(afterSame.sessionVersion).toBe(beforeSame.sessionVersion);
+      expect((await request("/api/me", { headers: { Cookie: cookie } })).status).toBe(200);
     } finally {
       await db.delete(users).where(eq(users.id, user.id));
       await resetPasswordChangeAttemptLimiter();

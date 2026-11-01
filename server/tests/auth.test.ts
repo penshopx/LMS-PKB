@@ -102,6 +102,17 @@ describe("changeUserPassword", () => {
     expect(await comparePassword("current-password", storedUser.password)).toBe(true);
   });
 
+  it("rejects an unchanged password only after checking the current credential, without changing the stored hash", async () => {
+    const user = await createUser(`unchanged-${crypto.randomUUID()}`, "current-password");
+    await expect(changeUserPassword(user.id, "incorrect-password", "incorrect-password"))
+      .resolves.toBe("invalid_current_password");
+    await expect(changeUserPassword(user.id, "current-password", "current-password"))
+      .resolves.toBe("unchanged_password");
+    const [stored] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(stored.password).toBe(user.password);
+    expect(stored.sessionVersion).toBe(user.sessionVersion);
+  });
+
   it("reports a missing user without attempting an update", async () => {
     await expect(
       changeUserPassword("missing-user-id", "current-password", "new-password"),

@@ -68,6 +68,7 @@ export type ChangePasswordResult =
   | "updated"
   | "user_not_found"
   | "invalid_new_password"
+  | "unchanged_password"
   | "invalid_current_password";
 
 export const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
@@ -220,6 +221,7 @@ export async function changeUserPassword(
 
   const currentPasswordMatches = await comparePassword(currentPassword, storedUser.password);
   if (!currentPasswordMatches) return "invalid_current_password";
+  if (newPassword === currentPassword) return "unchanged_password";
 
   const hashed = await hashPassword(newPassword);
   await db.update(users).set({ password: hashed }).where(eq(users.id, userId));

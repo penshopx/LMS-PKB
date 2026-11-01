@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { newPasswordSchema } from "@shared/auth-validation";
+import { newPasswordSchema, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, PASSWORD_UNCHANGED_MESSAGE } from "@shared/auth-validation";
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -58,6 +58,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mutation.isPending) return;
     setValidationError("");
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -71,6 +72,10 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
     }
     if (newPassword !== confirmPassword) {
       setValidationError("Konfirmasi password tidak cocok");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setValidationError(PASSWORD_UNCHANGED_MESSAGE);
       return;
     }
 
@@ -103,6 +108,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 type="password"
                 placeholder="••••••••"
                 autoComplete="current-password"
+                required
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 disabled={mutation.isPending}
@@ -117,6 +123,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 type="password"
                 placeholder="••••••••"
                 autoComplete="new-password"
+                required
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={mutation.isPending}
@@ -124,8 +133,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 aria-describedby="new-password-help"
               />
               <p id="new-password-help" className="text-xs text-muted-foreground">
-                Minimal 12 karakter, tidak termasuk spasi di awal dan akhir; maksimal 128 karakter.
-                Jangan gunakan password bawaan lama.
+                {`Minimal ${PASSWORD_MIN_LENGTH} karakter, tidak termasuk spasi di awal dan akhir; maksimal ${PASSWORD_MAX_LENGTH} karakter. Jangan gunakan kata sandi bawaan lama atau kata sandi yang mudah ditebak.`}
               </p>
             </div>
 
@@ -136,6 +144,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 type="password"
                 placeholder="••••••••"
                 autoComplete="new-password"
+                required
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={mutation.isPending}

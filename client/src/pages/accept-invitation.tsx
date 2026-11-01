@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useLogout } from "@/hooks/use-logout";
-import { invitationPasswordSchema, invitationTokenSchema, type InvitationPreview } from "@shared/auth-validation";
+import { invitationPasswordSchema, invitationTokenSchema, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, type InvitationPreview } from "@shared/auth-validation";
 
 export default function AcceptInvitation({ token }: { token: string }) {
   const [error, setError] = useState("");
@@ -89,12 +89,12 @@ export default function AcceptInvitation({ token }: { token: string }) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-password">Kata sandi baru</Label>
-                <Input id="invite-password" name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={12} maxLength={128} required disabled={accept.isPending} />
-                <p className="text-xs text-muted-foreground">12–128 karakter. Gunakan kata sandi yang panjang dan unik.</p>
+                <Input id="invite-password" name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required disabled={accept.isPending} />
+                <p className="text-xs text-muted-foreground">{`Minimal ${PASSWORD_MIN_LENGTH} karakter, tidak termasuk spasi di awal dan akhir; maksimal ${PASSWORD_MAX_LENGTH} karakter. Jangan gunakan kata sandi bawaan lama atau kata sandi yang mudah ditebak.`}</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-confirmation">Ulangi kata sandi</Label>
-                <Input id="invite-confirmation" name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={12} maxLength={128} required disabled={accept.isPending} />
+                <Input id="invite-confirmation" name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required disabled={accept.isPending} />
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)} />

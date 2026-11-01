@@ -10,3 +10,4 @@
 - [Practice reminder calendar](practice-reminder-calendar.md) — date-only schedules use WIB; new practice rounds fulfill prior reminders, but network retries do not.
 - [Authentication privacy boundaries](authentication-privacy-boundaries.md) — account changes must also discard late response bodies, not just cached data.
 - [Login throttling isolation](login-throttling-isolation.md) — rejected account attempts must not consume shared-source capacity; successful login refunds only its own reservation.
+- [Unified password policy](unified-password-policy.md) — invitation signup and password replacement share validation; never automatically migrate existing account passwords.
