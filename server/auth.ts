@@ -51,6 +51,8 @@ export async function createUser(
     username,
     password: hashed,
     role: access.role ?? "admin",
+    isActive: true,
+    sessionVersion: 0,
     participantId: access.participantId ?? null,
     bujkId: access.bujkId ?? null,
   };
@@ -382,6 +384,7 @@ export function setupAuth(app: Express): void {
         if (!user) return done(null, false, { message: "Username atau password salah" });
         const match = await comparePassword(password, user.password);
         if (!match) return done(null, false, { message: "Username atau password salah" });
+        if (!user.isActive) return done(null, false, { message: "Akun dinonaktifkan. Hubungi admin untuk mengaktifkan kembali." });
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -390,13 +393,17 @@ export function setupAuth(app: Express): void {
   );
 
   passport.serializeUser((user: Express.User, done) => {
-    done(null, (user as User).id);
+    const account = user as User;
+    done(null, { id: account.id, version: account.sessionVersion });
   });
 
-  passport.deserializeUser(async (id: string, done) => {
+  passport.deserializeUser(async (sessionUser: string | { id: string; version: number }, done) => {
     try {
+      // Existing sessions predate versioning and are treated as version zero.
+      const id = typeof sessionUser === "string" ? sessionUser : sessionUser.id;
+      const version = typeof sessionUser === "string" ? 0 : sessionUser.version;
       const user = await getUserById(id);
-      done(null, user ?? null);
+      done(null, user?.isActive && user.sessionVersion === version ? user : false);
     } catch (err) {
       done(err);
     }

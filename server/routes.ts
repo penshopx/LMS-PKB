@@ -274,6 +274,7 @@ export async function registerRoutes(
         id: users.id,
         username: users.username,
         role: users.role,
+        isActive: users.isActive,
         participantId: users.participantId,
         participantName: participantsTable.name,
         bujkId: users.bujkId,
@@ -285,6 +286,36 @@ export async function registerRoutes(
       res.json(accounts);
     } catch {
       res.status(500).json({ message: "Daftar akun tidak dapat dimuat." });
+    }
+  });
+
+  app.patch("/api/access/users/:id/status", requireRole("admin"), async (req, res) => {
+    const input = z.object({ isActive: z.boolean() }).strict().safeParse(req.body);
+    if (!input.success) {
+      return res.status(400).json({ message: "Status akun harus berupa isActive boolean." });
+    }
+    try {
+      const accountId = String(req.params.id);
+      // Serialize status changes and protect the role in the same transaction.
+      const result = await db.transaction(async tx => {
+        const [account] = await tx.select().from(users)
+          .where(eq(users.id, accountId)).for("update");
+        if (!account) return { status: 404, body: { message: "Akun tidak ditemukan." } };
+        if (account.role === "admin") {
+          return { status: 403, body: { message: "Status akun admin tidak dapat diubah." } };
+        }
+        if (account.isActive !== input.data.isActive) {
+          await tx.update(users).set({
+            isActive: input.data.isActive,
+            // Never restore sessions issued before a deactivation, even after reactivation.
+            sessionVersion: account.sessionVersion + 1,
+          }).where(eq(users.id, account.id));
+        }
+        return { status: 200, body: { id: account.id, isActive: input.data.isActive } };
+      });
+      res.status(result.status).json(result.body);
+    } catch {
+      res.status(500).json({ message: "Status akun gagal disimpan." });
     }
   });
 

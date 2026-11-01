@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AccountSummary {
   id: string;
@@ -16,6 +26,7 @@ interface AccountSummary {
   role: string;
   bujkName: string | null;
   participantName: string | null;
+  isActive: boolean;
 }
 
 export default function AccessManagement() {
@@ -29,10 +40,16 @@ export default function AccessManagement() {
   const { data: invitations = [], isError: invitationError } = useQuery<BujkInvitation[]>({
     queryKey: ["/api/access/invitations"],
   });
-  const { data: accounts = [] } = useQuery<AccountSummary[]>({
+  const {
+    data: accounts = [],
+    isLoading: accountsLoading,
+    isError: accountsError,
+    refetch: refetchAccounts,
+  } = useQuery<AccountSummary[]>({
     queryKey: ["/api/access/users"],
     enabled: isAdmin,
   });
+  const [accountToUpdate, setAccountToUpdate] = useState<AccountSummary | null>(null);
 
   const createOrganization = useMutation({
     mutationFn: async (name: string) => apiRequest("POST", "/api/access/bujks", { name }),
@@ -60,6 +77,28 @@ export default function AccessManagement() {
     mutationFn: async (id: string) => apiRequest("POST", `/api/access/invitations/${id}/revoke`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/access/invitations"] }),
     onError: (error: Error) => toast({ title: "Undangan gagal dicabut", description: error.message, variant: "destructive" }),
+  });
+
+  const updateAccountStatus = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/access/users/${id}/status`, { isActive });
+      return response.json() as Promise<{ id: string; isActive: boolean }>;
+    },
+    onSuccess: result => {
+      queryClient.invalidateQueries({ queryKey: ["/api/access/users"] });
+      toast({
+        title: result.isActive ? "Akun diaktifkan" : "Akun dinonaktifkan",
+        description: result.isActive
+          ? "Pengguna dapat kembali masuk ke LMS."
+          : "Sesi pengguna telah dicabut. Riwayat belajar tetap tersimpan.",
+      });
+      setAccountToUpdate(null);
+    },
+    onError: (error: Error) => toast({
+      title: "Status akun gagal diperbarui",
+      description: error.message,
+      variant: "destructive",
+    }),
   });
 
   return (
@@ -174,17 +213,86 @@ export default function AccessManagement() {
 
       {isAdmin && (
         <Card>
-          <CardHeader><CardTitle>Akun aktif</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Akun pengguna</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {accounts.map(account => (
-              <div key={account.id} className="flex flex-wrap justify-between gap-2 border-b py-2 last:border-0">
-                <div><p className="font-medium">{account.username}</p><p className="text-xs text-muted-foreground">{account.participantName ?? account.bujkName ?? "Pengelola aplikasi"}</p></div>
-                <Badge variant="secondary">{account.role === "admin" ? "Admin" : account.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</Badge>
+            {accountsLoading ? (
+              <div className="space-y-3 py-2" aria-label="Memuat daftar akun" aria-busy="true">
+                {[1, 2, 3].map(item => <div key={item} className="h-12 animate-pulse rounded-md bg-muted" />)}
+              </div>
+            ) : accountsError ? (
+              <div className="space-y-3 py-2" role="alert">
+                <p className="text-sm text-destructive">Daftar akun gagal dimuat.</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => refetchAccounts()}>Coba lagi</Button>
+              </div>
+            ) : accounts.length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">Belum ada akun pengguna.</p>
+            ) : accounts.map(account => (
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 border-b py-2 last:border-0">
+                <div>
+                  <p className="font-medium">{account.username}</p>
+                  <p className="text-xs text-muted-foreground">{account.participantName ?? account.bujkName ?? "Pengelola aplikasi"}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{account.role === "admin" ? "Admin" : account.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</Badge>
+                  {account.role !== "admin" && (
+                    <>
+                      <Badge variant={account.isActive ? "outline" : "destructive"} aria-label={`Status akun ${account.username}: ${account.isActive ? "aktif" : "nonaktif"}`}>
+                        {account.isActive ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={updateAccountStatus.isPending}
+                        onClick={() => setAccountToUpdate(account)}
+                        aria-label={`${account.isActive ? "Nonaktifkan" : "Aktifkan"} akun ${account.username}`}
+                      >
+                        {account.isActive ? "Nonaktifkan" : "Aktifkan"}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!accountToUpdate} onOpenChange={open => {
+        if (!open && !updateAccountStatus.isPending) setAccountToUpdate(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {accountToUpdate?.isActive ? "Nonaktifkan akun ini?" : "Aktifkan kembali akun ini?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {accountToUpdate?.isActive
+                ? `Akun ${accountToUpdate.username} tidak dapat digunakan untuk masuk. Semua sesi aktif akan dicabut, tetapi riwayat belajar dan data akun tetap tersimpan.`
+                : `Akun ${accountToUpdate?.username} akan dapat digunakan kembali untuk masuk ke LMS. Riwayat belajar tetap tersimpan.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {updateAccountStatus.isError && (
+            <p className="text-sm text-destructive" role="alert">
+              Perubahan status gagal. Silakan coba lagi.
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={updateAccountStatus.isPending}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={updateAccountStatus.isPending}
+              onClick={event => {
+                event.preventDefault();
+                if (accountToUpdate) {
+                  updateAccountStatus.mutate({ id: accountToUpdate.id, isActive: !accountToUpdate.isActive });
+                }
+              }}
+            >
+              {updateAccountStatus.isPending ? "Menyimpan..." : accountToUpdate?.isActive ? "Ya, nonaktifkan" : "Ya, aktifkan"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

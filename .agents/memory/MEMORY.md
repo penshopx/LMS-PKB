@@ -4,3 +4,4 @@
 - [LMS product direction](lms-product-direction.md) — members and BUJK learn through PIC invitations, assigned and elective courses, with course-completion certificates only.
 - [PostgreSQL JSONB parameter typing](postgres-jsonb-parameter-typing.md) — explicitly cast bound text values used with JSONB operators.
 - [Supplemental workplace practice](practice-missions-scope.md) — adapted microlearning missions support practice without altering graduation or formal-certification rules.
+- [Account reactivation policy](account-reactivation-policy.md) — restoring account access must never restore sessions issued before deactivation.
