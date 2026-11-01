@@ -271,28 +271,40 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
-  it("membatasi percobaan kuis pada kiriman paralel tanpa mengubah progres saat ditolak", async () => {
-    const tag = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const raceCourse = await storage.createCourse({
-      unitId: "tender-01",
-      targetLevel: "L2",
-      title: `Kursus uji batas percobaan ${tag}`,
-      description: "Kursus khusus pengujian kiriman kuis paralel",
-      duration: "1 jam",
-    });
+  it.each(["multiple_choice", "essay"] as const)(
+    "menjaga jatah dua peserta pada kuis %s saat kiriman paralel tanpa mengubah progres saat ditolak",
+    async questionType => {
+      const tag = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const otherParticipant = await storage.createParticipant({
+        nip: `RACE${tag}`.slice(0, 18),
+        name: "Peserta kedua uji batas percobaan",
+        position: "Staf",
+        unit: "Uji",
+        email: `lms-race-${tag}@test.go.id`,
+      });
+      const participantIds = [participantId, otherParticipant.id];
+      let raceCourseId = "";
+      try {
+      const raceCourse = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus uji batas percobaan ${tag}`,
+        description: "Kursus khusus pengujian kiriman kuis paralel",
+        duration: "1 jam",
+      });
 
-    try {
+      raceCourseId = raceCourse.id;
       const quiz = await storage.createQuiz({
         courseId: raceCourse.id,
         title: "Post-test batas percobaan",
         description: "Menguji batas percobaan secara paralel",
         passingScore: 70,
-        maxAttempts: 2,
+        maxAttempts: questionType === "essay" ? 1 : 2,
         shuffleQuestions: false,
         showResults: true,
         questions: [{
           id: "question-1",
-          type: "multiple_choice",
+          type: questionType,
           text: "Pilih jawaban benar",
           points: 10,
           options: [{ id: "a", text: "Tepat", isCorrect: true }, { id: "b", text: "Keliru", isCorrect: false }],
@@ -303,42 +315,66 @@ describe("aturan progres kursus melalui API", () => {
       await db.update(coursesTable)
         .set({ postTestId: quiz.id })
         .where(eq(coursesTable.id, raceCourse.id));
-      await storage.createEnrollment(participantId, raceCourse.id);
+      for (const id of participantIds) {
+        await storage.createEnrollment(id, raceCourse.id);
+      }
 
+      // Interleave both participants' requests so they compete on the same quiz.
       const responses = await Promise.all(
-        Array.from({ length: 10 }, () => submitQuiz(quiz.id, "Tepat")),
+        Array.from({ length: 10 }, () => participantIds.map(async id => ({
+          participantId: id,
+          response: await submitQuiz(quiz.id, "Tepat", { participantId: id }),
+        }))).flat(),
       );
-      expect(responses.filter(response => response.status === 201)).toHaveLength(quiz.maxAttempts);
-      expect(responses.filter(response => response.status === 409)).toHaveLength(10 - quiz.maxAttempts);
-      expect((await storage.getQuizAttempts(quiz.id)).filter(
-        attempt => attempt.participantId === participantId,
-      )).toHaveLength(quiz.maxAttempts);
+      const attempts = await storage.getQuizAttempts(quiz.id);
+      expect(attempts).toHaveLength(participantIds.length * quiz.maxAttempts);
+      for (const id of participantIds) {
+        const ownResponses = responses.filter(result => result.participantId === id);
+        expect(ownResponses.filter(({ response }) => response.status === 201))
+          .toHaveLength(quiz.maxAttempts);
+        expect(ownResponses.filter(({ response }) => response.status === 409))
+          .toHaveLength(10 - quiz.maxAttempts);
+        const ownAttempts = attempts.filter(attempt => attempt.participantId === id);
+        expect(ownAttempts).toHaveLength(quiz.maxAttempts);
+        for (const attempt of ownAttempts) {
+          expect(attempt.gradingStatus)
+            .toBe(questionType === "essay" ? "awaiting_review" : "graded");
+        }
 
-      const enrollmentBeforeRejection = (await storage.getEnrollmentsByParticipant(participantId))
-        .find(enrollment => enrollment.courseId === raceCourse.id)!;
-      const learningStateBeforeRejection = await (
-        await request(`/api/courses/${raceCourse.id}/learning-state?participantId=${participantId}`)
-      ).json();
-      const extraAttempt = await submitQuiz(quiz.id, "Tepat");
-      expect(extraAttempt.status).toBe(409);
+        const enrollmentBeforeRejection = (await storage.getEnrollmentsByParticipant(id))
+          .find(enrollment => enrollment.courseId === raceCourse.id)!;
+        const learningStateBeforeRejection = await (
+          await request(`/api/courses/${raceCourse.id}/learning-state?participantId=${id}`)
+        ).json();
+        const extraAttempt = await submitQuiz(quiz.id, "Tepat", { participantId: id });
+        expect(extraAttempt.status).toBe(409);
+        expect(await extraAttempt.json()).toMatchObject({
+          message: questionType === "essay"
+            ? "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang."
+            : "Batas percobaan kuis telah tercapai",
+        });
 
-      const enrollmentAfterRejection = (await storage.getEnrollmentsByParticipant(participantId))
-        .find(enrollment => enrollment.courseId === raceCourse.id)!;
-      const learningStateAfterRejection = await (
-        await request(`/api/courses/${raceCourse.id}/learning-state?participantId=${participantId}`)
-      ).json();
-      expect(enrollmentAfterRejection).toMatchObject({
-        progress: enrollmentBeforeRejection.progress,
-        status: enrollmentBeforeRejection.status,
-        startedAt: enrollmentBeforeRejection.startedAt,
-        completedAt: enrollmentBeforeRejection.completedAt,
-        lastAccessedAt: enrollmentBeforeRejection.lastAccessedAt,
-      });
-      expect(learningStateAfterRejection).toEqual(learningStateBeforeRejection);
-    } finally {
-      await storage.deleteCourse(raceCourse.id);
-    }
-  });
+        const enrollmentAfterRejection = (await storage.getEnrollmentsByParticipant(id))
+          .find(enrollment => enrollment.courseId === raceCourse.id)!;
+        const learningStateAfterRejection = await (
+          await request(`/api/courses/${raceCourse.id}/learning-state?participantId=${id}`)
+        ).json();
+        expect(enrollmentAfterRejection).toMatchObject({
+          progress: enrollmentBeforeRejection.progress,
+          status: enrollmentBeforeRejection.status,
+          startedAt: enrollmentBeforeRejection.startedAt,
+          completedAt: enrollmentBeforeRejection.completedAt,
+          lastAccessedAt: enrollmentBeforeRejection.lastAccessedAt,
+        });
+        expect(learningStateAfterRejection).toEqual(learningStateBeforeRejection);
+      }
+      expect(await storage.getQuizAttempts(quiz.id)).toEqual(attempts);
+      } finally {
+        if (raceCourseId) await storage.deleteCourse(raceCourseId);
+        await storage.deleteParticipant(otherParticipant.id);
+      }
+    },
+  );
 
   it("menolak sertifikat sebelum semua syarat terpenuhi dan menilai post-test di server", async () => {
     const certificateData = {

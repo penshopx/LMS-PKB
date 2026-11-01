@@ -1119,11 +1119,14 @@ export class DrizzleStorage implements IStorage {
         participantId: quizAttemptsTable.participantId,
         gradingStatus: quizAttemptsTable.gradingStatus,
       }).from(quizAttemptsTable)
-        .where(eq(quizAttemptsTable.quizId, attempt.quizId));
+        .where(and(
+          eq(quizAttemptsTable.quizId, attempt.quizId),
+          eq(quizAttemptsTable.participantId, attempt.participantId),
+        ));
       if (quizAttempts.some(existing => existing.gradingStatus === "awaiting_review")) {
         return { rejected: true as const, rejection: "awaiting_review" as const };
       }
-      if (quizAttempts.filter(existing => existing.participantId === attempt.participantId).length >= quiz.maxAttempts) {
+      if (quizAttempts.length >= quiz.maxAttempts) {
         return { rejected: true as const, rejection: "max_attempts" as const };
       }
 
