@@ -7,6 +7,7 @@ import { CoursePlayerDialog } from "@/components/course-player-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PracticeReminders } from "@/components/missions/practice-reminders";
 
 function evidenceLink(value: string | undefined) {
   if (!value) return null;
@@ -84,6 +85,7 @@ export function ParticipantHome() {
         ))}
       </div>
       <section className="space-y-3">
+        <PracticeReminders />
         <h2 className="text-xl font-semibold">Katalog pembelajaran</h2>
         {isLoading && <p>Memuat kursus...</p>}
         <div className="grid gap-4 md:grid-cols-2">

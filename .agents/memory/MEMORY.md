@@ -6,3 +6,4 @@
 - [Supplemental workplace practice](practice-missions-scope.md) — adapted microlearning missions support practice without altering graduation or formal-certification rules.
 - [Account reactivation policy](account-reactivation-policy.md) — restoring account access must never restore sessions issued before deactivation.
 - [Quiz retry intent](quiz-retry-intent.md) — distinguish network retries from intentional retakes; identical answers alone are not evidence of a duplicate submission.
+- [Practice reminder calendar](practice-reminder-calendar.md) — date-only schedules use WIB; new practice rounds fulfill prior reminders, but network retries do not.

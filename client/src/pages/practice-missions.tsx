@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { ECourse } from "@shared/schema";
 import type { MissionSubmission, PracticeMission } from "@shared/practice-missions";
 import { MissionCreateDialog, MissionReviewDialog, MissionSubmitDialog } from "@/components/missions/mission-forms";
+import { PracticeReminders, PRACTICE_REMINDERS_KEY } from "@/components/missions/practice-reminders";
 import { DurationLabel, MissionEmpty, MissionNotice, MissionRound, MissionSkeleton, MissionStatus } from "@/components/missions/mission-ui";
 
 const MISSIONS_KEY = ["/api/practice-missions"];
@@ -86,6 +87,7 @@ export default function PracticeMissions() {
   const invalidate = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: MISSIONS_KEY }),
     queryClient.invalidateQueries({ queryKey: SUBMISSIONS_KEY }),
+    queryClient.invalidateQueries({ queryKey: PRACTICE_REMINDERS_KEY }),
   ]);
 
   const createMutation = useMutation({
@@ -132,6 +134,7 @@ export default function PracticeMissions() {
       <MissionNotice><strong>Praktik pendamping, bukan sertifikasi kompetensi atau syarat kelulusan tambahan.</strong> Misi tidak menandai pelajaran selesai, mengubah kuota kuis, atau menerbitkan sertifikat.</MissionNotice>
 
       {role === "participant" && <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Bukti dan refleksi dikirim untuk ditinjau administrator. Refleksi pribadi hanya terlihat oleh Anda dan administrator, bukan PIC BUJK.</p>}
+      {role === "participant" && <div className="mt-6"><PracticeReminders /></div>}
       {role === "bujk_pic" && <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Tampilan PIC bersifat baca-saja. Refleksi pribadi peserta tidak ditampilkan di sini.</p>}
       {role === "admin" && <div className="mt-6 grid gap-3 sm:grid-cols-3"><Metric label="Misi tersedia" value={missions.filter(item => item.active).length} /><Metric label="Perlu tinjauan" value={reviewQueue.length} /><Metric label="Bukti masuk" value={submissions.length} /></div>}
 

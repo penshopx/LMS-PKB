@@ -1,5 +1,31 @@
 import { z } from "zod";
 
+/** Date-only practice schedules use Jakarta calendar days, regardless of device timezone. */
+export const PRACTICE_TIME_ZONE = "Asia/Jakarta";
+export type PracticeDueStatus = "upcoming" | "today" | "overdue";
+export interface PracticeReminder {
+  submissionId: string;
+  missionId: string;
+  missionTitle: string;
+  round: number;
+  nextPracticeAt: string;
+}
+
+export function practiceDueStatus(nextPracticeAt: string, now = new Date()): PracticeDueStatus {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PRACTICE_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find(item => item.type === type)!.value;
+  const today = `${part("year")}-${part("month")}-${part("day")}`;
+  return nextPracticeAt < today ? "overdue" : nextPracticeAt === today ? "today" : "upcoming";
+}
+
+export function formatPracticeDate(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: PRACTICE_TIME_ZONE, day: "numeric", month: "long", year: "numeric",
+  }).format(new Date(`${value}T00:00:00+07:00`));
+}
+
 export const missionInputSchema = z.object({
   courseId: z.string().min(1),
   title: z.string().trim().min(5).max(180),

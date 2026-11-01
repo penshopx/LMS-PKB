@@ -145,6 +145,71 @@ describe("misi praktik: akses dan validasi", () => {
 });
 
 describe("misi praktik: kirim ulang, privasi, feedback dan pengulangan", () => {
+  it("pengingat hanya untuk akun peserta terkait tanpa refleksi, bukti, atau data peserta lain", async () => {
+    const id = await createMission();
+    const own = await (await send("a", id)).json();
+    const other = await (await send("b", id)).json();
+    await review(own.id, { status: "repeat_requested", feedback: "Ulangi latihan sesuai arahan tindak lanjut.", nextPracticeAt: "2026-11-01" });
+    await review(other.id, { status: "repeat_requested", feedback: "Ulangi latihan sesuai arahan tindak lanjut.", nextPracticeAt: "2026-11-02" });
+    expect((await request("", "/api/practice-missions/reminders")).status).toBe(401);
+    for (const role of ["pic", "admin"]) {
+      expect((await request(role, "/api/practice-missions/reminders")).status).toBe(403);
+    }
+    for (const [role, saved] of [["a", own], ["b", other]] as const) {
+      // Client-supplied identity must not change the authenticated scope.
+      const response = await request(role, `/api/practice-missions/reminders?participantId=${participantIds[2]}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const reminders = await response.json();
+      const item = reminders.find((item: { missionId: string }) => item.missionId === id);
+      expect(item).toEqual({
+        submissionId: saved.id, missionId: id, missionTitle: missionData.title,
+        round: 1, nextPracticeAt: role === "a" ? "2026-11-01" : "2026-11-02",
+      });
+      expect(reminders.some((item: { submissionId: string }) => item.submissionId === (role === "a" ? other.id : own.id))).toBe(false);
+      expect(reminders.every((item: object) => Object.keys(item).sort().join(",") === "missionId,missionTitle,nextPracticeAt,round,submissionId")).toBe(true);
+    }
+    expect(await (await request("unenrolled", "/api/practice-missions/reminders")).json()).toEqual([]);
+  });
+
+  it("putaran baru menyelesaikan pengingat lama dan feedback berikutnya membuat satu jadwal baru", async () => {
+    const id = await createMission();
+    const body = submission();
+    const first = await (await send("a", id, body)).json();
+    const scheduled = async () => {
+      const results = await (await request("a", "/api/practice-missions/reminders")).json();
+      return results.filter((item: { missionId: string }) => item.missionId === id);
+    };
+    expect(await scheduled()).toEqual([]);
+    await review(first.id, { status: "repeat_requested", feedback: "Terapkan feedback pada latihan berikutnya.", nextPracticeAt: "2000-01-01" });
+    expect(await scheduled()).toMatchObject([{ submissionId: first.id, round: 1, nextPracticeAt: "2000-01-01" }]);
+    await send("a", id, body); // Network retry does not fulfill the reminder.
+    expect(await scheduled()).toHaveLength(1);
+    const second = await (await send("a", id)).json();
+    expect(await scheduled()).toEqual([]); // No duplicate reminders while awaiting feedback.
+    await review(second.id, { status: "repeat_requested", feedback: "Jadwalkan putaran praktik berikutnya.", nextPracticeAt: "2099-01-01" });
+    expect(await scheduled()).toMatchObject([{ submissionId: second.id, round: 2, nextPracticeAt: "2099-01-01" }]);
+    const third = await (await send("a", id)).json();
+    await review(third.id);
+    expect(await scheduled()).toEqual([]);
+  });
+
+  it("tidak mengingatkan misi arsip atau kursus yang tidak lagi diikuti", async () => {
+    const id = await createMission();
+    const first = await (await send("a", id)).json();
+    await review(first.id, { status: "repeat_requested", feedback: "Ulangi setelah melengkapi tindak lanjut.", nextPracticeAt: "2099-01-01" });
+    const scheduled = async () => (await (await request("a", "/api/practice-missions/reminders")).json())
+      .some((item: { missionId: string }) => item.missionId === id);
+    expect(await scheduled()).toBe(true);
+    await request("admin", `/api/practice-missions/${id}`, "PATCH", { active: false });
+    expect(await scheduled()).toBe(false);
+    await request("admin", `/api/practice-missions/${id}`, "PATCH", { active: true });
+    expect(await scheduled()).toBe(true);
+    await db.delete(enrollmentsTable).where(and(eq(enrollmentsTable.participantId, participantIds[0]), eq(enrollmentsTable.courseId, courseIds[0])));
+    expect(await scheduled()).toBe(false);
+    await storage.createEnrollment(participantIds[0], courseIds[0]);
+  });
+
   it("dua kiriman identik bersamaan hanya menyimpan satu putaran dan retry mengembalikan hasil yang sama", async () => {
     const id = await createMission();
     const body = submission();

@@ -46,6 +46,7 @@ function roleAllowsPath(role: ApplicationRole, method: string, path: string): bo
   if (role === "admin") return true;
   if (method === "POST" && path === "/api/me/password") return true;
   if (method === "GET" && ["/api/practice-missions", "/api/practice-missions/submissions"].includes(path)) return true;
+  if (role === "participant" && method === "GET" && path === "/api/practice-missions/reminders") return true;
   if (role === "participant" && method === "POST" && /^\/api\/practice-missions\/[^/]+\/submissions$/.test(path)) return true;
 
   const readOnlyRoutes = [

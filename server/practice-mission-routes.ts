@@ -40,6 +40,39 @@ function participantScope(user: User) {
 
 /** Called only after the application's authentication and role boundary middleware. */
 export function registerPracticeMissionRoutes(app: Express) {
+  app.get("/api/practice-missions/reminders", requireRole("participant"), handle(async (req, res) => {
+    const user = req.user as User;
+    res.setHeader("Cache-Control", "no-store");
+    if (!user.participantId) {
+      res.json([]);
+      return;
+    }
+    // Select only schedule metadata, never evidence or reflections. A later round
+    // fulfills the prior schedule even while it is still awaiting review.
+    const reminders = await db.select({
+      submissionId: missionSubmissionsTable.id,
+      missionId: missionSubmissionsTable.missionId,
+      missionTitle: practiceMissionsTable.title,
+      round: missionSubmissionsTable.round,
+      nextPracticeAt: missionSubmissionsTable.nextPracticeAt,
+    }).from(missionSubmissionsTable)
+      .innerJoin(practiceMissionsTable, eq(practiceMissionsTable.id, missionSubmissionsTable.missionId))
+      .where(and(
+        eq(missionSubmissionsTable.participantId, user.participantId),
+        eq(practiceMissionsTable.active, true),
+        sql`${missionSubmissionsTable.status} <> 'pending_review'`,
+        sql`${missionSubmissionsTable.nextPracticeAt} IS NOT NULL`,
+        sql`EXISTS (SELECT 1 FROM ${enrollmentsTable}
+          WHERE ${enrollmentsTable.participantId} = ${user.participantId}
+          AND ${enrollmentsTable.courseId} = ${practiceMissionsTable.courseId})`,
+        sql`NOT EXISTS (SELECT 1 FROM ${missionSubmissionsTable} AS newer
+          WHERE newer.mission_id = ${missionSubmissionsTable.missionId}
+          AND newer.participant_id = ${missionSubmissionsTable.participantId}
+          AND newer.round > ${missionSubmissionsTable.round})`,
+      )).orderBy(missionSubmissionsTable.nextPracticeAt, missionSubmissionsTable.id);
+    res.json(reminders);
+  }));
+
   app.get("/api/practice-missions", handle(async (req, res) => {
     const user = req.user as User;
     let scope = sql`true`;
