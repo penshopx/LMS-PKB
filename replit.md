@@ -118,6 +118,13 @@ Preferred communication style: Simple, everyday language.
 
 ## External Dependencies
 
+### Initial administrator setup and legacy recovery
+- On an empty installation, set `ADMIN_RECOVERY_PASSWORD` as a secret with at least 12 non-padding characters before starting the server (development and production). No shared default password is generated.
+- The initial login username is `admin`; its password is the configured secret. Credentials are never printed in startup logs.
+- After confirming access, remove the secret. Existing accounts are not recreated or overwritten on restart.
+- In production only, the same secret can recover a legacy `admin` account that still uses the old default password. Recovery invalidates existing sessions, does not reactivate disabled accounts, and never resets an account whose password has already changed.
+- Missing or invalid setup configuration on an empty installation stops startup. A legacy default password without configured recovery also blocks production startup.
+
 ### Database
 - **PostgreSQL**: Primary database (configured via `DATABASE_URL` environment variable)
 - **Drizzle Kit**: Database migrations with `npm run db:push`

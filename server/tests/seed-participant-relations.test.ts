@@ -25,6 +25,7 @@ import {
   participantCompetenciesTable,
   participantsTable,
   quizzesTable,
+  users,
 } from "@shared/schema";
 import { DrizzleStorage } from "../db-storage";
 import { inArray } from "drizzle-orm";
@@ -76,6 +77,7 @@ describe("fresh seed participant relations", () => {
   it("seeds relational participant data that getParticipant exposes", async () => {
     expect(await db.select().from(participantsTable)).toEqual([]);
     await seedDatabase();
+    expect(await db.select({ id: users.id }).from(users)).toEqual([]);
 
     const tenderCourse = await storage.getCourse("course-tender01-l2");
     expect(tenderCourse?.lessons.map(lesson => lesson.title)).toEqual([

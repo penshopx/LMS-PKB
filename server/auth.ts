@@ -6,7 +6,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { db, pool } from "./db";
 import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Express, RequestHandler } from "express";
 import type { ApplicationRole, User } from "@shared/schema";
 
@@ -220,18 +220,33 @@ export async function changeUserPassword(
   return "updated";
 }
 
-/** Creates a default admin account if no users exist. */
+/** Bootstrap only an empty installation, using an operator-provided secret. */
 export async function ensureAdminUser(): Promise<void> {
-  try {
-    const existing = await db.select().from(users).limit(1);
-    if (existing.length === 0) {
-      await createUser("admin", "admin123");
-      console.log("[auth] Default admin created — username: admin, password: admin123");
-      console.log("[auth] Change your password after first login!");
+  await db.transaction(async (tx) => {
+    // Serialize first-start workers so no worker can replace an existing account.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(749210040)`);
+    const existing = await tx.select().from(users).limit(1);
+    if (existing.length > 0) return;
+
+    const password = readAdminSetupPassword(process.env);
+    if (!password) {
+      throw new Error(
+        `First-time admin setup requires ${ADMIN_RECOVERY_PASSWORD_ENV} ` +
+          `with at least ${ADMIN_RECOVERY_PASSWORD_MIN_LENGTH} characters. ` +
+          "Configure it as a secret and restart the server.",
+      );
     }
-  } catch (err) {
-    console.error("[auth] Failed to ensure admin user:", err);
-  }
+    await tx.insert(users).values({
+      username: "admin",
+      password: await hashPassword(password),
+      role: "admin",
+      isActive: true,
+    });
+    console.log(
+      "[auth] Initial administrator created from the configured secret. " +
+        "Remove the setup secret after confirming access.",
+    );
+  });
 }
 
 const DEFAULT_PASSWORD = "admin123";
@@ -242,11 +257,14 @@ export function getAdminRecoveryPassword(
   environment: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   if (environment.NODE_ENV !== "production") return undefined;
+  return readAdminSetupPassword(environment);
+}
 
+function readAdminSetupPassword(environment: NodeJS.ProcessEnv): string | undefined {
   const password = environment[ADMIN_RECOVERY_PASSWORD_ENV];
   if (!password?.trim()) return undefined;
 
-  if (password.length < ADMIN_RECOVERY_PASSWORD_MIN_LENGTH) {
+  if (password.trim().length < ADMIN_RECOVERY_PASSWORD_MIN_LENGTH) {
     throw new Error(
       `${ADMIN_RECOVERY_PASSWORD_ENV} must contain at least ` +
         `${ADMIN_RECOVERY_PASSWORD_MIN_LENGTH} characters.`,
@@ -266,22 +284,25 @@ export function getAdminRecoveryPassword(
  * has changed, and its value is never logged.
  */
 export async function recoverDefaultAdminPassword(): Promise<boolean> {
-  const recoveryPassword = getAdminRecoveryPassword();
-  if (!recoveryPassword) return false;
+  if (process.env.NODE_ENV !== "production") return false;
+  return db.transaction(async (tx) => {
+    const [admin] = await tx.select().from(users)
+      .where(eq(users.username, "admin")).for("update");
+    if (!admin || !(await comparePassword(DEFAULT_PASSWORD, admin.password))) return false;
 
-  const [admin] = await db.select().from(users).where(eq(users.username, "admin"));
-  if (!admin) return false;
+    const recoveryPassword = getAdminRecoveryPassword();
+    if (!recoveryPassword) return false;
 
-  const isDefault = await comparePassword(DEFAULT_PASSWORD, admin.password);
-  if (!isDefault) return false;
-
-  const hashed = await hashPassword(recoveryPassword);
-  await db.update(users).set({ password: hashed }).where(eq(users.id, admin.id));
-  console.log(
-    `[auth] Admin password recovered from ${ADMIN_RECOVERY_PASSWORD_ENV}. ` +
-      "Remove this secret after the deployment is healthy.",
-  );
-  return true;
+    await tx.update(users).set({
+      password: await hashPassword(recoveryPassword),
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+    }).where(eq(users.id, admin.id));
+    console.log(
+      `[auth] Admin password recovered from ${ADMIN_RECOVERY_PASSWORD_ENV}. ` +
+        "Remove this secret after the deployment is healthy.",
+    );
+    return true;
+  });
 }
 
 /**
@@ -291,43 +312,21 @@ export async function recoverDefaultAdminPassword(): Promise<boolean> {
  * In development / test it only prints a prominent warning.
  */
 export async function checkDefaultAdminPassword(): Promise<void> {
-  try {
-    const rows = await db.select().from(users).where(eq(users.username, "admin"));
-    if (rows.length === 0) return; // no admin user — nothing to check
+  const [admin] = await db.select().from(users).where(eq(users.username, "admin"));
+  if (!admin || !(await comparePassword(DEFAULT_PASSWORD, admin.password))) return;
 
-    const admin = rows[0];
-    const isDefault = await comparePassword(DEFAULT_PASSWORD, admin.password);
-    if (!isDefault) return; // password has been changed — all good
+  const warning =
+    "[auth] CRITICAL SECURITY WARNING: The administrator still uses the legacy " +
+    "default password. Configure secure recovery before serving production traffic.";
 
-    const warning = [
-      "",
-      "╔══════════════════════════════════════════════════════════════╗",
-      "║          ⚠  CRITICAL SECURITY WARNING  ⚠                   ║",
-      "║                                                              ║",
-      "║  The admin account is still using the default password.     ║",
-      "║  Anyone who knows this password can log in to your app.     ║",
-      "║                                                              ║",
-      "║  Log in as admin and change the password immediately.       ║",
-      "╚══════════════════════════════════════════════════════════════╝",
-      "",
-    ].join("\n");
-
-    if (process.env.NODE_ENV === "production") {
-      console.error(warning);
-      throw new Error(
-        "Server refused to start: admin account is using the default password. " +
-          "Change the password and restart the server."
-      );
-    } else {
-      console.warn(warning);
-    }
-  } catch (err) {
-    // Re-throw only errors we deliberately raised above; swallow DB / lookup errors
-    if (err instanceof Error && err.message.startsWith("Server refused to start")) {
-      throw err;
-    }
-    console.error("[auth] Could not verify admin password security:", err);
+  if (process.env.NODE_ENV === "production") {
+    console.error(warning);
+    throw new Error(
+      "Server refused to start: admin account is using the default password. " +
+        `Configure ${ADMIN_RECOVERY_PASSWORD_ENV} as a secret and restart the server.`,
+    );
   }
+  console.warn(warning);
 }
 
 export function setupAuth(app: Express): void {

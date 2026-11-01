@@ -84,13 +84,7 @@ process.on("unhandledRejection", (reason) => {
     await runMigrations();
     await verifyRequiredTables();
 
-    // Seed the database with initial data if empty
-    const { seedDatabase } = await import("./seed");
-    await seedDatabase();
-    const { seedPracticeMissions } = await import("./practice-mission-seed");
-    await seedPracticeMissions();
-
-    // Ensure a default admin user exists
+    // Bootstrap an empty installation only from an operator-configured secret.
     await ensureAdminUser();
 
     // If production is locked out by the default-password guard, allow a
@@ -99,6 +93,12 @@ process.on("unhandledRejection", (reason) => {
 
     // In production, refuse to start if the default password is still in use
     await checkDefaultAdminPassword();
+
+    // Catalog seeding must never create login credentials.
+    const { seedDatabase } = await import("./seed");
+    await seedDatabase();
+    const { seedPracticeMissions } = await import("./practice-mission-seed");
+    await seedPracticeMissions();
 
     const { registerRoutes } = await import("./routes");
     await registerRoutes(httpServer, app);

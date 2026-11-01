@@ -17,9 +17,7 @@ import {
   lspOrganizationsTable,
   notificationsTable,
   quizzesTable,
-  users,
 } from "@shared/schema";
-import { hashPassword } from "./auth";
 import { eq } from "drizzle-orm";
 import {
   PUB_CLUSTERS,
@@ -169,14 +167,6 @@ async function synchronizeParticipantRelations(participantIds: Set<string>) {
 }
 
 export async function seedDatabase() {
-  // Ensure default admin user exists
-  const existingAdmin = await db.select().from(users).where(eq(users.username, "admin"));
-  if (existingAdmin.length === 0) {
-    const hashed = await hashPassword("admin123");
-    await db.insert(users).values({ username: "admin", password: hashed });
-    console.log("[seed] Default admin user created (username: admin, password: admin123)");
-  }
-
   // Check if data already exists
   const existingClusters = await db.select().from(clustersTable).limit(1);
   if (existingClusters.length > 0) {
