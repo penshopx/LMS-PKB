@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { DEFAULT_QUIZ_PASSING_SCORE } from "@shared/schema";
 import type { 
   CompetencyCluster,
   UnitCompetency,
@@ -1095,7 +1096,7 @@ export class MemStorage implements IStorage {
       lessonId: data.lessonId,
       title: data.title,
       description: data.description,
-      passingScore: data.passingScore ?? 70,
+      passingScore: data.passingScore ?? DEFAULT_QUIZ_PASSING_SCORE,
       timeLimit: data.timeLimit,
       maxAttempts: data.maxAttempts ?? 3,
       shuffleQuestions: data.shuffleQuestions ?? false,

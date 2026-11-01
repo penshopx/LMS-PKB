@@ -79,7 +79,7 @@ describe("PUB-ASPEKINDO catalog", () => {
     expect(pretest?.questions).toHaveLength(5);
     expect(pretest?.passingScore).toBe(0);
     expect(posttest?.questions).toHaveLength(10);
-    expect(posttest?.passingScore).toBe(80);
+    expect(posttest?.passingScore).toBe(60);
     expect(posttest?.questions.every(question =>
       question.options?.some(option => option.text === question.correctAnswer && option.isCorrect)
     )).toBe(true);

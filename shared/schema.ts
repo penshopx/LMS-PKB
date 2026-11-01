@@ -324,6 +324,8 @@ export interface Enrollment {
 // Quiz and Questions
 export type QuestionType = "multiple_choice" | "true_false" | "essay" | "matching" | "fill_blank";
 
+export const DEFAULT_QUIZ_PASSING_SCORE = 60;
+
 export interface Quiz {
   id: string;
   courseId: string;
@@ -407,7 +409,7 @@ export const insertQuizSchema = z.object({
   lessonId: z.string().optional(),
   title: z.string().min(1, "Judul quiz wajib diisi"),
   description: z.string().min(1, "Deskripsi wajib diisi"),
-  passingScore: z.number().min(0).max(100).default(70),
+  passingScore: z.number().min(0).max(100).default(DEFAULT_QUIZ_PASSING_SCORE),
   timeLimit: z.number().optional(),
   maxAttempts: z.number().min(1).default(3),
   shuffleQuestions: z.boolean().default(false),
@@ -899,7 +901,7 @@ export const quizzesTable = pgTable("quizzes", {
   lessonId: varchar("lesson_id"),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  passingScore: integer("passing_score").notNull().default(70),
+  passingScore: integer("passing_score").notNull().default(DEFAULT_QUIZ_PASSING_SCORE),
   timeLimit: integer("time_limit"),
   maxAttempts: integer("max_attempts").notNull().default(3),
   shuffleQuestions: integer("shuffle_questions").notNull().default(0),

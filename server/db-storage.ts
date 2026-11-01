@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { and, eq, inArray, like, or, sql as drizzleSql } from "drizzle-orm";
 import { db } from "./db";
 import {
+  DEFAULT_QUIZ_PASSING_SCORE,
   clustersTable,
   unitsTable,
   coursesTable,
@@ -1031,7 +1032,7 @@ export class DrizzleStorage implements IStorage {
       lessonId: data.lessonId ?? null,
       title: data.title,
       description: data.description,
-      passingScore: data.passingScore ?? 70,
+      passingScore: data.passingScore ?? DEFAULT_QUIZ_PASSING_SCORE,
       timeLimit: data.timeLimit ?? null,
       maxAttempts: data.maxAttempts ?? 3,
       shuffleQuestions: data.shuffleQuestions ? 1 : 0,

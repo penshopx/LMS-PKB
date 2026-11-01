@@ -25,7 +25,7 @@ import {
   AlignLeft,
   Check
 } from "lucide-react";
-import type { Quiz, ECourse, QuizAttempt } from "@shared/schema";
+import { DEFAULT_QUIZ_PASSING_SCORE, type Quiz, type ECourse, type QuizAttempt } from "@shared/schema";
 import type { Participant } from "@shared/schema";
 import { EssayReviewQueue } from "@/components/essay-review-queue";
 import {
@@ -242,7 +242,7 @@ export default function Quizzes() {
       title: formData.get("title"),
       description: formData.get("description"),
       timeLimit: parseInt(formData.get("timeLimit") as string) || 30,
-      passingScore: parseInt(formData.get("passingScore") as string) || 70,
+      passingScore: Number(formData.get("passingScore") ?? DEFAULT_QUIZ_PASSING_SCORE),
       questions: newQuestions
     });
   };
@@ -342,7 +342,7 @@ export default function Quizzes() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Penilaian Esai</h1>
-            <p className="text-muted-foreground">Nilai akhir 0–100; peserta lulus mulai dari batas nilai pada kuis.</p>
+            <p className="text-muted-foreground">Nilai akhir 0–100; batas lulus standar 60%, mengikuti batas yang ditetapkan pada kuis.</p>
           </div>
           <Button variant="outline" onClick={() => setIsReviewingEssays(false)}>Kembali ke kuis</Button>
         </div>
@@ -555,7 +555,7 @@ export default function Quizzes() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="passingScore">Nilai Lulus (%)</Label>
-                      <Input id="passingScore" name="passingScore" type="number" defaultValue={70} data-testid="input-quiz-passing" />
+                      <Input id="passingScore" name="passingScore" type="number" min={0} max={100} required defaultValue={DEFAULT_QUIZ_PASSING_SCORE} data-testid="input-quiz-passing" />
                     </div>
                   </div>
                 </div>

@@ -441,7 +441,7 @@ Nilai tiap kriteria 0–2:
 4. Tindak lanjut: 0 tidak ada tindakan; 1 tindakan tanpa pemilik atau tenggat; 2 tindakan, pemilik, dan tenggat tercatat.
 
 Aturan penyelesaian yang dirancang
-Pre-test bersifat diagnostik. Lesson wajib diselesaikan. Jika post-test diwajibkan, nilai lulus yang dirancang adalah 80/100 dengan percobaan ulang. Worksheet digunakan untuk latihan dan umpan balik, bukan syarat tambahan sertifikat. Aturan ini belum mengaktifkan penerbitan sertifikat otomatis.
+Pre-test bersifat diagnostik. Lesson wajib diselesaikan. Jika post-test diwajibkan, nilai lulus adalah 60/100 dengan percobaan ulang. Worksheet digunakan untuk latihan dan umpan balik, bukan syarat tambahan sertifikat. Sertifikat penyelesaian kursus hanya dapat diterbitkan setelah semua syarat kelulusan terpenuhi.
 ${regulatoryReferenceNote("Simulasi pembelajaran dan batas arti sertifikat kursus; bukan penilaian resmi kompetensi atau hasil tender.")}`,
     activities: [
       {
@@ -477,7 +477,7 @@ Refleksi pribadi tidak dibagikan kepada PIC. Unggah evidensi hanya jika diminta 
         id: "tender01-posttest",
         type: "quiz",
         title: "Post-test SIAP Tender",
-        description: "Sepuluh soal, nilai lulus usulan 80/100, dapat diulang.",
+        description: "Sepuluh soal, nilai lulus 60/100, dapat diulang.",
         duration: "15 menit",
       },
     ],
@@ -610,8 +610,8 @@ export const PUB_QUIZZES: Quiz[] = [
     courseId: SIAP_TENDER_COURSE_ID,
     lessonId: "tender01-reflection",
     title: "Post-test SIAP Tender",
-    description: "Sepuluh soal pemahaman. Nilai lulus yang diusulkan 80/100; hasil ini belum mengaktifkan sertifikat otomatis.",
-    passingScore: 80,
+    description: "Sepuluh soal pemahaman. Nilai lulus 60/100; kelulusan kursus tetap mensyaratkan seluruh materi selesai dan penilaian esai bila ada.",
+    passingScore: 60,
     timeLimit: 20,
     maxAttempts: 99,
     shuffleQuestions: false,
