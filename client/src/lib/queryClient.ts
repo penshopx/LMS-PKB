@@ -1,4 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { parseRetryAfterSeconds } from "./retry-after";
+
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number, public readonly retryAfterSeconds?: number) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
 
 let sessionEpoch = 0;
 export function advanceSessionEpoch() { sessionEpoch++; }
@@ -11,12 +19,18 @@ function assertCurrentSession(epoch: number, url: string) {
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
-    let details: { message?: string; code?: string } = {};
+    let details: { message?: string; code?: string; retryAfterSeconds?: unknown } = {};
     try { details = JSON.parse(text); } catch { /* A proxy can return plain text. */ }
     if (res.status === 401 && details?.code === "SESSION_EXPIRED") {
       void queryClient.invalidateQueries({ queryKey: ["/api/me"] });
     }
-    throw new Error(details?.message || `Permintaan gagal (${res.status}). Silakan coba lagi.`);
+    throw new ApiRequestError(
+      details?.message || `Permintaan gagal (${res.status}). Silakan coba lagi.`,
+      res.status,
+      res.status === 429
+        ? parseRetryAfterSeconds(details?.retryAfterSeconds, res.headers.get("Retry-After"))
+        : undefined,
+    );
   }
 }
 

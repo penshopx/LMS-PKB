@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Redirect, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiRequestError } from "@/lib/queryClient";
+import { formatLoginWait } from "@/lib/retry-after";
 import { replaceSessionUser } from "@/lib/auth-session";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { currentUserSchema, loginCredentialsSchema } from "@shared/auth-validation";
@@ -20,6 +21,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [retryUntil, setRetryUntil] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  useEffect(() => {
+    if (retryUntil === null) return;
+    const update = () => setRemainingSeconds(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000)));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryUntil]);
+
+  useEffect(() => {
+    if (retryUntil !== null && remainingSeconds === 0) setRetryUntil(null);
+  }, [retryUntil, remainingSeconds]);
 
   const loginMutation = useMutation({
     mutationFn: async (creds: { username: string; password: string }) => {
@@ -33,14 +48,21 @@ export default function Login() {
       navigate("/app");
     },
     onError: (err: Error) => {
+      if (err instanceof ApiRequestError && err.status === 429 && err.retryAfterSeconds) {
+        setRemainingSeconds(err.retryAfterSeconds);
+        setRetryUntil(Date.now() + err.retryAfterSeconds * 1000);
+        setErrorMsg("");
+        return;
+      }
       setErrorMsg(err.message);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginMutation.isPending) return;
+    if (loginMutation.isPending || (retryUntil !== null && Date.now() < retryUntil)) return;
     setErrorMsg("");
+    setRetryUntil(null);
     const input = loginCredentialsSchema.safeParse({ username, password });
     if (!input.success) {
       setErrorMsg("Username dan password wajib diisi");
@@ -125,10 +147,16 @@ export default function Login() {
                 </div>
               )}
 
+              {remainingSeconds > 0 && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Terlalu banyak percobaan login. Coba lagi dalam {formatLoginWait(remainingSeconds)}.
+                </p>
+              )}
+
               <Button
                 type="submit"
                 className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                disabled={loginMutation.isPending}
+                disabled={loginMutation.isPending || remainingSeconds > 0}
               >
                 {loginMutation.isPending ? (
                   <>
@@ -136,7 +164,7 @@ export default function Login() {
                     Masuk...
                   </>
                 ) : (
-                  "Masuk"
+                  remainingSeconds > 0 ? `Tunggu ${formatLoginWait(remainingSeconds)}` : "Masuk"
                 )}
               </Button>
             </form>
