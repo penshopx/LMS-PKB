@@ -70,6 +70,8 @@ import type {
 import type { IStorage } from "./storage";
 import { evaluateCourseCompletion } from "@shared/lms-course-rules";
 
+type StorageTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // Helper to convert DB row to CompetencyCluster
 function toCluster(row: typeof clustersTable.$inferSelect): CompetencyCluster {
   return {
@@ -934,16 +936,31 @@ export class DrizzleStorage implements IStorage {
   }
 
   async refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined> {
-    const rows = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
+    return db.transaction(tx => this.refreshCourseEnrollmentProgressInTransaction(tx, id));
+  }
+
+  private async refreshCourseEnrollmentProgressInTransaction(
+    tx: StorageTransaction,
+    id: string,
+  ): Promise<Enrollment | undefined> {
+    const rows = await tx.select().from(enrollmentsTable)
+      .where(eq(enrollmentsTable.id, id)).for("update");
     const enrollment = rows[0];
     if (!enrollment?.courseId) return undefined;
-    const course = await this.getCourse(enrollment.courseId);
-    if (!course) return undefined;
+    const [courseRow] = await tx.select().from(coursesTable)
+      .where(eq(coursesTable.id, enrollment.courseId));
+    if (!courseRow) return undefined;
+    const course = toCourse(courseRow);
 
-    const postTest = course.postTestId ? await this.getQuiz(course.postTestId) : undefined;
+    const [postTest] = course.postTestId
+      ? await tx.select().from(quizzesTable).where(eq(quizzesTable.id, course.postTestId))
+      : [];
     const postTestAttempts = postTest
-      ? await db.select().from(quizAttemptsTable)
-          .where(eq(quizAttemptsTable.quizId, postTest.id))
+      ? await tx.select().from(quizAttemptsTable)
+          .where(and(
+            eq(quizAttemptsTable.quizId, postTest.id),
+            eq(quizAttemptsTable.participantId, enrollment.participantId),
+          ))
       : [];
     const postTestPassed = postTestAttempts.some(
       attempt =>
@@ -966,9 +983,26 @@ export class DrizzleStorage implements IStorage {
     };
     if (completion.progress > 0 && !enrollment.startedAt) updates.startedAt = now;
 
-    await db.update(enrollmentsTable).set(updates).where(eq(enrollmentsTable.id, id));
-    const updated = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
+    const updated = await tx.update(enrollmentsTable).set(updates)
+      .where(eq(enrollmentsTable.id, id)).returning();
     return updated[0] ? toEnrollment(updated[0]) : undefined;
+  }
+
+  private async refreshPostTestEnrollmentInTransaction(
+    tx: StorageTransaction,
+    quiz: Pick<Quiz, "id" | "courseId">,
+    participantId: string,
+  ): Promise<void> {
+    const [course] = await tx.select().from(coursesTable)
+      .where(eq(coursesTable.id, quiz.courseId));
+    if (course?.postTestId !== quiz.id) return;
+    const enrollments = await tx.select().from(enrollmentsTable).where(and(
+      eq(enrollmentsTable.participantId, participantId),
+      eq(enrollmentsTable.courseId, course.id),
+    ));
+    for (const enrollment of enrollments) {
+      await this.refreshCourseEnrollmentProgressInTransaction(tx, enrollment.id);
+    }
   }
 
   // LMS - Quizzes
@@ -1058,14 +1092,12 @@ export class DrizzleStorage implements IStorage {
       completedAt: attempt.completedAt ?? null,
       timeSpent: attempt.timeSpent ?? null,
     };
-    await db.insert(quizAttemptsTable).values(row);
-    const quiz = await this.getQuiz(attempt.quizId);
-    const course = quiz ? await this.getCourse(quiz.courseId) : undefined;
-    if (quiz && course && course.postTestId === quiz.id) {
-      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
-      const enrollment = enrollments.find(item => item.courseId === course.id);
-      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
-    }
+    await db.transaction(async tx => {
+      await tx.insert(quizAttemptsTable).values(row);
+      const [quiz] = await tx.select().from(quizzesTable)
+        .where(eq(quizzesTable.id, attempt.quizId));
+      if (quiz) await this.refreshPostTestEnrollmentInTransaction(tx, quiz, attempt.participantId);
+    });
     return toQuizAttempt(row);
   }
 
@@ -1112,16 +1144,11 @@ export class DrizzleStorage implements IStorage {
         timeSpent: attempt.timeSpent ?? null,
       };
       await tx.insert(quizAttemptsTable).values(row);
-      return { rejected: false as const, row, quiz };
+      await this.refreshPostTestEnrollmentInTransaction(tx, quiz, attempt.participantId);
+      return { rejected: false as const, row };
     });
 
     if (result.rejected) return { rejection: result.rejection };
-    const course = await this.getCourse(result.quiz.courseId);
-    if (course?.postTestId === result.quiz.id) {
-      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
-      const enrollment = enrollments.find(item => item.courseId === course.id);
-      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
-    }
     return { attempt: toQuizAttempt(result.row) };
   }
 

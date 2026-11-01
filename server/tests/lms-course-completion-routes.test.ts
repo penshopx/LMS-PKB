@@ -1,10 +1,11 @@
 import express from "express";
 import { createServer, type Server } from "http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   certificatesTable,
   coursesTable,
+  enrollmentsTable,
   users,
 } from "@shared/schema";
 import { db } from "../db";
@@ -159,6 +160,117 @@ afterAll(async () => {
 });
 
 describe("aturan progres kursus melalui API", () => {
+  it.each(["API pilihan ganda", "API esai", "storage langsung"])(
+    "membatalkan percobaan dan menjaga jatah ketika pembaruan progres gagal: %s",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus rollback ${mode} ${Date.now()}`,
+        description: "Pengujian transaksi percobaan dan progres",
+        duration: "1 jam",
+      });
+      try {
+        const isEssay = mode === "API esai";
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test rollback",
+          description: "Kegagalan progres tidak menghabiskan jatah",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: isEssay ? "essay" : "multiple_choice",
+            text: "Jelaskan atau pilih jawaban yang tepat",
+            points: 10,
+            options: isEssay ? [] : [{ id: "a", text: "Tepat", isCorrect: true }],
+            correctAnswer: isEssay ? "" : "Tepat",
+            order: 1,
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const before = (await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)!;
+        expect(before.status).not.toBe("completed");
+        const stateBefore = await (await request(
+          `/api/courses/${course.id}/learning-state?participantId=${participantId}`,
+        )).json();
+
+        const submit = () => mode === "storage langsung"
+          ? storage.createQuizAttempt({
+              quizId: quiz.id,
+              participantId,
+              answers: { "question-1": "Tepat" },
+              score: 100,
+              maxScore: 100,
+              passed: true,
+              startedAt: new Date().toISOString(),
+            })
+          : submitQuiz(quiz.id, "Tepat");
+
+        // Use a real transaction and insert, but fail its enrollment update.
+        // Checking persisted rows below therefore verifies an actual DB rollback.
+        let failedUpdates = 0;
+        const transaction = db.transaction.bind(db);
+        const failure = vi.spyOn(db, "transaction").mockImplementation((callback, config) =>
+          transaction(async tx => {
+            const update = tx.update.bind(tx);
+            vi.spyOn(tx, "update").mockImplementation(table => {
+              if (table === enrollmentsTable) {
+                failedUpdates++;
+                throw new Error("Simulasi kegagalan pembaruan progres");
+              }
+              return update(table);
+            });
+            return callback(tx);
+          }, config),
+        );
+        try {
+          if (mode === "storage langsung") {
+            await expect(submit()).rejects.toThrow("Simulasi kegagalan pembaruan progres");
+          } else {
+            expect((await submit() as Response).status).toBe(500);
+          }
+          expect(failedUpdates).toBe(1);
+        } finally {
+          failure.mockRestore();
+        }
+
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual([]);
+        expect((await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)).toEqual(before);
+        expect(await (await request(
+          `/api/courses/${course.id}/learning-state?participantId=${participantId}`,
+        )).json()).toEqual(stateBefore);
+
+        // The sole attempt remains available after a failed submission.
+        const retry = await submit();
+        if (mode !== "storage langsung") expect((retry as Response).status).toBe(201);
+        const attempts = await storage.getQuizAttempts(quiz.id);
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0]).toMatchObject({
+          gradingStatus: isEssay ? "awaiting_review" : "graded",
+          passed: !isEssay,
+        });
+        expect((await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)).toMatchObject({
+            status: isEssay ? "in_progress" : "completed",
+            progress: 100,
+            completedAt: isEssay ? undefined : expect.any(String),
+          });
+      } finally {
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it("membatasi percobaan kuis pada kiriman paralel tanpa mengubah progres saat ditolak", async () => {
     const tag = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const raceCourse = await storage.createCourse({
