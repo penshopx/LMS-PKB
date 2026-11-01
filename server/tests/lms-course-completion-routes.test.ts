@@ -466,6 +466,124 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
+  it.each(
+    (["POST nilai akhir", "PATCH nilai per soal"] as const).flatMap(mode =>
+      [90, 40].flatMap(score =>
+        [false, true].map(courseCompleted => ({ mode, score, courseCompleted })),
+      ),
+    ),
+  )(
+    "menyimpan nilai pre-test tanpa mengubah enrollment: $mode, nilai $score, kursus lulus $courseCompleted",
+    async ({ mode, score, courseCompleted }) => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus isolasi pre-test ${mode} ${score} ${courseCompleted} ${Date.now()}`,
+        description: "Penilaian diagnostik tidak mengubah kelulusan kursus",
+        duration: "1 jam",
+      });
+      try {
+        const preTest = await storage.createQuiz({
+          courseId: course.id,
+          title: "Pre-test esai diagnostik",
+          description: "Bukan syarat kelulusan kursus",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "essay",
+            text: "Jelaskan pengetahuan awal Anda",
+            points: 10,
+            order: 1,
+          }],
+        });
+        const postTest = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test syarat kelulusan terpisah",
+          description: "Hanya post-test ini menentukan kelulusan",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "multiple_choice",
+            text: "Pilih jawaban benar",
+            points: 10,
+            options: [{ id: "a", text: "Tepat", isCorrect: true }],
+            correctAnswer: "Tepat",
+            order: 1,
+          }],
+        });
+        expect(preTest.id).not.toBe(postTest.id);
+        await db.update(coursesTable)
+          .set({ preTestId: preTest.id, postTestId: postTest.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        expect(course.lessons.length).toBeGreaterThan(0);
+        for (const lesson of course.lessons) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        if (courseCompleted) {
+          const submission = await submitQuiz(postTest.id, "Tepat");
+          expect(submission.status).toBe(201);
+          expect(await submission.json()).toMatchObject({ passed: true });
+        }
+        const submission = await submitQuiz(preTest.id, "Jawaban diagnostik peserta");
+        expect(submission.status).toBe(201);
+        const attempt = await submission.json();
+        expect(attempt).toMatchObject({ gradingStatus: "awaiting_review", passed: false });
+
+        // Use historical timestamps so an unwanted refresh cannot look unchanged.
+        await db.update(enrollmentsTable).set({
+          lastAccessedAt: "2025-01-02T03:04:05.000Z",
+          completedAt: courseCompleted ? "2025-01-01T03:04:05.000Z" : null,
+        }).where(eq(enrollmentsTable.id, enrollment.id));
+        const [before] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(before).toMatchObject({
+          progress: 100,
+          status: courseCompleted ? "completed" : "in_progress",
+          completedAt: courseCompleted ? "2025-01-01T03:04:05.000Z" : null,
+          lastAccessedAt: "2025-01-02T03:04:05.000Z",
+        });
+        const postTestAttemptsBefore = await storage.getQuizAttempts(postTest.id);
+
+        const grade = mode === "POST nilai akhir"
+          ? await request(`/api/quiz-attempts/${attempt.id}/grade`, {
+              method: "POST",
+              body: JSON.stringify({ score, feedback: "Hasil penilaian diagnostik." }),
+            })
+          : await request(`/api/quizzes/${preTest.id}/attempts/${attempt.id}/grade`, {
+              method: "PATCH",
+              body: JSON.stringify({ essayScores: { "question-1": score / 10 } }),
+            });
+        expect(grade.status).toBe(200);
+        const body = await grade.json();
+        const gradedAttempt = mode === "POST nilai akhir" ? body.attempt : body;
+        expect(gradedAttempt).toMatchObject({
+          id: attempt.id,
+          quizId: preTest.id,
+          score,
+          passed: score >= preTest.passingScore,
+          gradingStatus: "graded",
+          gradedBy: userId,
+          gradedAt: expect.any(String),
+        });
+        expect(await storage.getQuizAttempts(preTest.id)).toEqual([gradedAttempt]);
+        const [after] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        // Includes progress, status, completedAt and lastAccessedAt, not just API output.
+        expect(after).toEqual(before);
+        expect(await storage.getQuizAttempts(postTest.id)).toEqual(postTestAttemptsBefore);
+      } finally {
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
     "menyimpan nilai esai lulus tanpa meluluskan kursus sebelum materi terakhir selesai: %s",
     async mode => {
