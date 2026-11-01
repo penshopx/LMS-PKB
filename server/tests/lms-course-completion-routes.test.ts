@@ -850,6 +850,287 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
+  it.each(
+    (["kirim pilihan ganda", "kirim esai", "POST nilai akhir", "PATCH nilai per soal"] as const)
+      .flatMap(mode => (["materi dahulu", "post-test dahulu"] as const)
+        .map(order => ({ mode, order }))),
+  )(
+    "mempertahankan materi terakhir saat post-test paralel rollback: $mode, $order",
+    async ({ mode, order }) => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus rollback paralel ${mode} ${order} ${Date.now()}`,
+        description: "Rollback post-test tidak membatalkan materi pada enrollment yang sama",
+        duration: "1 jam",
+      });
+      const signal = () => {
+        let resolve!: () => void;
+        const promise = new Promise<void>(done => { resolve = done; });
+        return { promise, resolve };
+      };
+      const firstReady = signal();
+      const secondLockRequested = signal();
+      const releaseFirst = signal();
+      const waitFor = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`Transaksi tidak mencapai ${label}`)), 5000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const requests: Promise<Response>[] = [];
+      let transactionSpy: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        const isSubmission = mode.startsWith("kirim");
+        const isEssay = mode !== "kirim pilihan ganda";
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test rollback paralel",
+          description: "Jatah tunggal harus tetap tersedia setelah rollback",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: isEssay ? "essay" : "multiple_choice",
+            text: "Jelaskan atau pilih tahapan yang tepat",
+            points: 10,
+            order: 1,
+            ...(isEssay ? {} : {
+              options: [{ id: "a", text: "Tepat", isCorrect: true }],
+              correctAnswer: "Tepat",
+            }),
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        const lessonIds = course.lessons.map(lesson => lesson.id);
+        expect(lessonIds.length).toBeGreaterThan(1);
+        for (const id of lessonIds.slice(0, -1)) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, id);
+        }
+        let attemptId = "";
+        if (!isSubmission) {
+          const submission = await submitQuiz(quiz.id, "Jawaban peserta untuk dinilai");
+          expect(submission.status).toBe(201);
+          attemptId = (await submission.json()).id;
+        }
+        const rawEnrollment = async () => (await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id)))[0];
+        const rawAttempts = () => db.select().from(quizAttemptsTable)
+          .where(eq(quizAttemptsTable.quizId, quiz.id));
+        const before = await rawEnrollment();
+        const attemptsBefore = await rawAttempts();
+        const accessorAttemptsBefore = await storage.getQuizAttempts(quiz.id);
+        expect(before).toMatchObject({
+          completedLessonIds: lessonIds.slice(0, -1),
+          progress: Math.round((lessonIds.length - 1) / lessonIds.length * 100),
+          status: "in_progress",
+          completedAt: null,
+        });
+        expect(attemptsBefore).toHaveLength(isSubmission ? 0 : 1);
+        if (!isSubmission) {
+          expect(accessorAttemptsBefore[0]).toMatchObject({
+            id: attemptId, passed: false, gradingStatus: "awaiting_review",
+          });
+        }
+        const completeLesson = () => request(
+          `/api/enrollments/${enrollment.id}/lessons/${lessonIds.at(-1)!}/complete`,
+          { method: "POST", body: "{}" },
+        );
+        const grade = () => mode === "PATCH nilai per soal"
+          ? request(`/api/quizzes/${quiz.id}/attempts/${attemptId}/grade`, {
+              method: "PATCH",
+              body: JSON.stringify({ essayScores: { "question-1": 9 } }),
+            })
+          : request(`/api/quiz-attempts/${attemptId}/grade`, {
+              method: "POST",
+              body: JSON.stringify({ score: 90, feedback: "Jawaban sudah tepat." }),
+            });
+        const finishPostTest = () => isSubmission ? submitQuiz(quiz.id, "Tepat") : grade();
+        const operations = order === "materi dahulu"
+          ? [completeLesson, finishPostTest] : [finishPostTest, completeLesson];
+        const postTestNumber = order === "materi dahulu" ? 2 : 1;
+        const transaction = db.transaction.bind(db);
+        const outcomes: string[] = [];
+        let transactionCount = 0;
+        let injectedFailures = 0;
+        let observedSecondLock = false;
+        let firstReleased = false;
+        transactionSpy = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+          const number = ++transactionCount;
+          try {
+            const result = await transaction(async tx => {
+              const { client } = (tx as unknown as {
+                session: { client: {
+                  query: (query: string | { text: string }, values?: unknown[]) => Promise<unknown>;
+                } };
+              }).session;
+              const query = client.query.bind(client);
+              let enrollmentLocked = false;
+              let attemptWritten = false;
+              const querySpy = vi.spyOn(client, "query").mockImplementation(async (sql, values) => {
+                const text = typeof sql === "string" ? sql : sql.text;
+                const isLock = text.includes('from "enrollments"') && text.includes("for update");
+                const pending = query(sql, values);
+                if (isLock && number === 2 && !observedSecondLock) {
+                  expect(values).toContain(enrollment.id);
+                  expect(firstReleased).toBe(false);
+                  observedSecondLock = true;
+                  secondLockRequested.resolve();
+                }
+                const result = await pending;
+                if (isLock) {
+                  expect(values).toContain(enrollment.id);
+                  enrollmentLocked = true;
+                }
+                if (text.startsWith('insert into "quiz_attempts"') ||
+                    text.startsWith('update "quiz_attempts"')) {
+                  attemptWritten = true;
+                }
+                if (number === postTestNumber && enrollmentLocked &&
+                    text.startsWith("select ") && text.includes('from "quiz_attempts"')) {
+                  // Fail the real progress calculation only after the INSERT or
+                  // grade UPDATE and the shared enrollment lock have executed.
+                  expect(attemptWritten).toBe(true);
+                  expect(values).toContain(quiz.id);
+                  expect(values).toContain(participantId);
+                  if (number === 1) {
+                    firstReady.resolve();
+                    await releaseFirst.promise;
+                  }
+                  injectedFailures++;
+                  throw new Error("Simulasi kegagalan perhitungan progres post-test paralel");
+                }
+                return result;
+              });
+              try {
+                const updated = await callback(tx);
+                if (number === 1) {
+                  firstReady.resolve();
+                  await releaseFirst.promise;
+                }
+                return updated;
+              } finally {
+                querySpy.mockRestore();
+              }
+            }, config);
+            outcomes.push(`${number}:commit`);
+            return result;
+          } catch (error) {
+            outcomes.push(`${number}:rollback`);
+            throw error;
+          }
+        });
+        requests.push(operations[0]());
+        await waitFor(firstReady.promise, "transaksi pertama menahan lock");
+        requests.push(operations[1]());
+        await waitFor(secondLockRequested.promise, "permintaan lock enrollment kedua");
+        expect(transactionCount).toBe(2);
+        expect(outcomes).toEqual([]);
+        firstReleased = true;
+        releaseFirst.resolve();
+        const responses = await waitFor(Promise.all(requests), "hasil kedua transaksi");
+        expect(responses.map(response => response.status))
+          .toEqual(order === "materi dahulu" ? [200, 500] : [500, 200]);
+        expect(outcomes).toEqual(order === "materi dahulu"
+          ? ["1:commit", "2:rollback"] : ["1:rollback", "2:commit"]);
+        expect(observedSecondLock).toBe(true);
+        expect(injectedFailures).toBe(1);
+        transactionSpy.mockRestore();
+
+        // Raw rows and read-only DBStorage accessors must agree BEFORE any
+        // learning-state request can recalculate or repair enrollment progress.
+        const stored = await rawEnrollment();
+        expect(stored).toMatchObject({
+          completedLessonIds: lessonIds,
+          progress: 100,
+          status: "in_progress",
+          startedAt: before.startedAt,
+          completedAt: null,
+        });
+        expect(new Set(stored.completedLessonIds as string[]).size).toBe(lessonIds.length);
+        expect(await rawAttempts()).toEqual(attemptsBefore);
+        const persisted = (await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)!;
+        expect(persisted).toMatchObject({
+          completedLessonIds: lessonIds, progress: 100, status: "in_progress",
+          startedAt: before.startedAt,
+        });
+        expect(persisted.completedAt).toBeUndefined();
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual(accessorAttemptsBefore);
+        const statePath = `/api/courses/${course.id}/learning-state?participantId=${participantId}`;
+        const failedState = await request(statePath);
+        expect(failedState.status).toBe(200);
+        expect(await failedState.json()).toMatchObject({
+          enrollment: { id: enrollment.id, completedLessonIds: lessonIds, status: "in_progress" },
+          completion: { progress: 100, lessonsCompleted: true, postTestPassed: false, isComplete: false },
+        });
+        expect(await rawEnrollment()).toEqual(stored);
+
+        const retry = await finishPostTest();
+        expect(retry.status).toBe(isSubmission ? 201 : 200);
+        if (mode === "kirim esai") {
+          attemptId = (await retry.json()).id;
+          expect(await storage.getQuizAttempts(quiz.id)).toEqual([
+            expect.objectContaining({ id: attemptId, passed: false, gradingStatus: "awaiting_review" }),
+          ]);
+          expect(await rawEnrollment()).toMatchObject({
+            completedLessonIds: lessonIds, status: "in_progress", completedAt: null,
+          });
+          expect((await grade()).status).toBe(200);
+        }
+        const afterRetry = await rawEnrollment();
+        expect(afterRetry).toMatchObject({
+          completedLessonIds: lessonIds, progress: 100, status: "completed",
+          startedAt: before.startedAt, completedAt: expect.any(String),
+        });
+        const attemptsAfter = await rawAttempts();
+        expect(attemptsAfter).toHaveLength(1);
+        expect(attemptsAfter[0]).toMatchObject({
+          ...(isSubmission ? {} : { id: attemptId }),
+          passed: 1, gradingStatus: "graded", score: isEssay ? 90 : 100,
+        });
+        expect((await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)).toMatchObject({
+            completedLessonIds: lessonIds, progress: 100, status: "completed",
+            completedAt: afterRetry.completedAt,
+          });
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual([
+          expect.objectContaining({
+            id: attemptsAfter[0].id, passed: true, gradingStatus: "graded",
+            score: isEssay ? 90 : 100,
+          }),
+        ]);
+        const completedState = await request(statePath);
+        expect(completedState.status).toBe(200);
+        expect(await completedState.json()).toMatchObject({
+          enrollment: {
+            completedLessonIds: lessonIds, status: "completed", completedAt: afterRetry.completedAt,
+          },
+          completion: { progress: 100, lessonsCompleted: true, postTestPassed: true, isComplete: true },
+        });
+        expect((await finishPostTest()).status).toBe(409);
+        expect(await rawAttempts()).toEqual(attemptsAfter);
+        expect(await rawEnrollment()).toEqual(afterRetry);
+      } finally {
+        releaseFirst.resolve();
+        await Promise.allSettled(requests);
+        transactionSpy?.mockRestore();
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
     "menyimpan nilai esai setelah enrollment dihapus tanpa membuatnya ulang atau mengubah kursus lain: %s",
     async mode => {
