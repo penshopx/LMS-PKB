@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:password-dialog": "tsx script/check-password-dialog.ts",
+    "test:password-dialog-network": "playwright test --config playwright.password-dialog.config.ts",
     "test:practice-reminders": "playwright test --config playwright.practice-reminders.config.ts"
   },
   "dependencies": {

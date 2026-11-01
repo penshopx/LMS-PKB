@@ -10,6 +10,7 @@ export class ApiRequestError extends Error {
 
 let sessionEpoch = 0;
 export function advanceSessionEpoch() { sessionEpoch++; }
+export function getSessionEpoch() { return sessionEpoch; }
 function assertCurrentSession(epoch: number, url: string) {
   if (epoch !== sessionEpoch && !/^\/api\/(?:login|logout|invitations)(?:\/|$)/.test(url)) {
     throw new Error("Sesi akun telah berubah. Muat ulang data untuk melanjutkan.");

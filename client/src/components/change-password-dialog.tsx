@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { newPasswordSchema, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, PASSWORD_UNCHANGED_MESSAGE } from "@shared/auth-validation";
+import { requestPasswordChange, UnconfirmedPasswordChange } from "@/lib/change-password-request";
+import { getSessionEpoch } from "@/lib/queryClient";
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -26,6 +28,8 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
   const [validationError, setValidationError] = useState("");
   const [newPasswordTouched, setNewPasswordTouched] = useState(false);
   const [confirmationTouched, setConfirmationTouched] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
+  const requestEpoch = useRef<number | null>(null);
   const passwordValidation = newPasswordSchema.safeParse(newPassword);
   const passwordError = !passwordValidation.success
     ? passwordValidation.error.issues[0].message
@@ -34,29 +38,32 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
   const canSubmit = !!currentPassword && !passwordError && !!confirmPassword && !confirmationError;
 
   const mutation = useMutation({
+    retry: false,
     mutationFn: async (body: { currentPassword: string; newPassword: string }) => {
-      const res = await fetch("/api/me/password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ message: "Gagal mengubah password" }));
-        throw new Error(data.message || "Gagal mengubah password");
+      const controller = new AbortController();
+      activeRequest.current = controller;
+      try {
+        await requestPasswordChange(body, controller);
+      } finally {
+        if (activeRequest.current === controller) activeRequest.current = null;
       }
-      return res.json();
     },
   });
 
+  useEffect(() => () => { activeRequest.current?.abort(); }, []);
+
+  const ownsResult = requestEpoch.current === null || requestEpoch.current === getSessionEpoch();
+  const unconfirmed = mutation.error instanceof UnconfirmedPasswordChange;
   useEffect(() => {
-    if (!open || !mutation.isSuccess) return;
-    const timer = setTimeout(() => handleClose(), 1500);
+    if (!open || !mutation.isSuccess || !ownsResult) return;
+    const timer = setTimeout(() => {
+      if (requestEpoch.current === getSessionEpoch()) handleClose();
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [open, mutation.isSuccess]);
+  }, [open, mutation.isSuccess, ownsResult]);
 
   function handleClose() {
-    if (mutation.isPending) return;
+    if (mutation.isPending && ownsResult) return;
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -69,7 +76,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (mutation.isPending) return;
+    if (mutation.isPending || unconfirmed || !ownsResult) return;
     setValidationError("");
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -80,10 +87,11 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
     setConfirmationTouched(true);
     if (!canSubmit) return;
 
+    requestEpoch.current = getSessionEpoch();
     mutation.mutate({ currentPassword, newPassword });
   }
 
-  const isSuccess = mutation.isSuccess;
+  const isSuccess = mutation.isSuccess && ownsResult;
 
   return (
     <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) handleClose(); }}>
@@ -114,7 +122,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 onChange={e => {
                   setCurrentPassword(e.target.value);
                   setValidationError("");
-                  mutation.reset();
+                  if (!unconfirmed) mutation.reset();
                 }}
                 disabled={mutation.isPending}
                 data-testid="input-current-password"
@@ -136,7 +144,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                   setNewPassword(e.target.value);
                   setNewPasswordTouched(true);
                   setValidationError("");
-                  mutation.reset();
+                  if (!unconfirmed) mutation.reset();
                 }}
                 onBlur={() => setNewPasswordTouched(true)}
                 disabled={mutation.isPending}
@@ -167,7 +175,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                   setConfirmPassword(e.target.value);
                   setConfirmationTouched(true);
                   setValidationError("");
-                  mutation.reset();
+                  if (!unconfirmed) mutation.reset();
                 }}
                 onBlur={() => setConfirmationTouched(true)}
                 aria-invalid={confirmationTouched && !!confirmationError}
@@ -180,10 +188,10 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
               )}
             </div>
 
-            {(validationError || mutation.isError) && (
+            {(validationError || (mutation.isError && ownsResult) || !ownsResult) && (
               <div role="alert" className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{validationError || (mutation.error as Error)?.message}</span>
+                <span>{!ownsResult ? "Sesi akun telah berubah. Tutup dialog dan periksa akun yang sedang masuk." : validationError || (mutation.error as Error)?.message}</span>
               </div>
             )}
 
@@ -192,13 +200,13 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 type="button"
                 variant="outline"
                 onClick={handleClose}
-                disabled={mutation.isPending}
+                disabled={mutation.isPending && ownsResult}
               >
                 Batal
               </Button>
               <Button
                 type="submit"
-                disabled={mutation.isPending || !canSubmit}
+                disabled={mutation.isPending || !canSubmit || unconfirmed || !ownsResult}
                 className="bg-sky-500 hover:bg-sky-600 text-white"
                 data-testid="button-submit-change-password"
               >

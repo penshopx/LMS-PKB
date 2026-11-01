@@ -133,6 +133,7 @@ function UserMenu() {
       </DropdownMenu>
 
       <ChangePasswordDialog
+        key={`${user?.id ?? "signed-out"}:${changePasswordOpen}`}
         open={changePasswordOpen}
         onOpenChange={setChangePasswordOpen}
       />

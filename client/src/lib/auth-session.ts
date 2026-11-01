@@ -27,6 +27,7 @@ export async function replaceSessionUser(user: AuthenticatedUser | null) {
 export function subscribeToAuthChanges() {
   const onStorage = (event: StorageEvent) => {
     if (event.key === AUTH_CHANGE_EVENT) {
+      advanceSessionEpoch();
       void queryClient.invalidateQueries({ queryKey: ["/api/me"] });
     }
   };

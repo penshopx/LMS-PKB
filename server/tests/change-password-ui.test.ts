@@ -7,6 +7,8 @@ import { acceptedPasswords, rejectedPasswords } from "./helpers/password-policy"
 const ui = vi.hoisted(() => ({
   states: [] as unknown[],
   index: 0,
+  refs: [] as { current: unknown }[],
+  refIndex: 0,
   mutate: vi.fn(),
   pending: false,
   onOpenChange: vi.fn(),
@@ -14,6 +16,10 @@ const ui = vi.hoisted(() => ({
 vi.mock("react", async importOriginal => ({
   ...await importOriginal<typeof import("react")>(),
   useEffect: vi.fn(),
+  useRef: (initial: unknown) => {
+    const index = ui.refIndex++;
+    return ui.refs[index] ??= { current: initial };
+  },
   useState: (initial: unknown) => {
     const index = ui.index++;
     if (!(index in ui.states)) ui.states[index] = initial;
@@ -23,6 +29,7 @@ vi.mock("react", async importOriginal => ({
 vi.mock("@tanstack/react-query", () => ({
   useMutation: () => ({ mutate: ui.mutate, reset: vi.fn(), isPending: ui.pending, isSuccess: false, isError: false }),
 }));
+vi.mock("@/lib/queryClient", () => ({ getSessionEpoch: () => 0 }));
 vi.mock("@/components/ui/dialog", () => {
   const Container = ({ children }: { children: ReactNode }) => children;
   return Object.fromEntries([
@@ -33,6 +40,7 @@ vi.mock("@/components/ui/dialog", () => {
 
 function render() {
   ui.index = 0;
+  ui.refIndex = 0;
   return ChangePasswordDialog({ open: true, onOpenChange: ui.onOpenChange });
 }
 
@@ -56,6 +64,7 @@ function submit(password: string, confirmation = password, current = "admin123")
 
 beforeEach(() => {
   ui.states = [];
+  ui.refs = [];
   ui.index = 0;
   ui.mutate.mockReset();
   ui.pending = false;
