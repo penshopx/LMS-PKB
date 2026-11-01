@@ -1231,28 +1231,25 @@ export class DrizzleStorage implements IStorage {
       };
     }
 
-    const [row] = await db.update(quizAttemptsTable)
-      .set({
-        ...updates,
-        gradingStatus: "graded",
-        gradingFeedback: grade.feedback ?? null,
-        gradedBy: grade.gradedBy,
-        gradedAt: grade.gradedAt,
-      })
-      .where(and(
-        eq(quizAttemptsTable.id, id),
-        eq(quizAttemptsTable.gradingStatus, "awaiting_review"),
-      ))
-      .returning();
-    if (!row) return undefined;
+    return db.transaction(async tx => {
+      const [row] = await tx.update(quizAttemptsTable)
+        .set({
+          ...updates,
+          gradingStatus: "graded",
+          gradingFeedback: grade.feedback ?? null,
+          gradedBy: grade.gradedBy,
+          gradedAt: grade.gradedAt,
+        })
+        .where(and(
+          eq(quizAttemptsTable.id, id),
+          eq(quizAttemptsTable.gradingStatus, "awaiting_review"),
+        ))
+        .returning();
+      if (!row) return undefined;
 
-    const course = await this.getCourse(quiz.courseId);
-    if (course?.postTestId === quiz.id) {
-      const enrollments = await this.getEnrollmentsByParticipant(attempt.participantId);
-      const enrollment = enrollments.find(item => item.courseId === course.id);
-      if (enrollment) await this.refreshCourseEnrollmentProgress(enrollment.id);
-    }
-    return toQuizAttempt(row);
+      await this.refreshPostTestEnrollmentInTransaction(tx, quiz, attempt.participantId);
+      return toQuizAttempt(row);
+    });
   }
 
   // LMS - Certificates

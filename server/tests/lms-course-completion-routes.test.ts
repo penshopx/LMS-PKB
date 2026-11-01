@@ -160,6 +160,131 @@ afterAll(async () => {
 });
 
 describe("aturan progres kursus melalui API", () => {
+  it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
+    "membatalkan nilai esai saat progres gagal dan menyimpan kelulusan saat dicoba ulang: %s",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus rollback penilaian ${mode} ${Date.now()}`,
+        description: "Nilai esai dan progres harus tersimpan bersama",
+        duration: "1 jam",
+      });
+      try {
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test esai transaksional",
+          description: "Penilaian dapat dicoba kembali setelah kegagalan",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "essay",
+            text: "Jelaskan tahapan evaluasi",
+            points: 10,
+            order: 1,
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const submission = await submitQuiz(quiz.id, "Jawaban peserta untuk dinilai");
+        expect(submission.status).toBe(201);
+        const { id: attemptId } = await submission.json();
+        const attemptsBefore = await storage.getQuizAttempts(quiz.id);
+        expect(attemptsBefore[0]).toMatchObject({
+          gradingStatus: "awaiting_review",
+          passed: false,
+        });
+        const enrollmentBefore = (await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)!;
+        expect(enrollmentBefore).toMatchObject({ progress: 100, status: "in_progress" });
+        expect(enrollmentBefore.completedAt).toBeUndefined();
+        const statePath = `/api/courses/${course.id}/learning-state?participantId=${participantId}`;
+        const stateBefore = await (await request(statePath)).json();
+        expect(stateBefore).toMatchObject({
+          completion: { postTestPassed: false, isComplete: false },
+        });
+
+        const grade = () => mode === "POST nilai akhir"
+          ? request(`/api/quiz-attempts/${attemptId}/grade`, {
+              method: "POST",
+              body: JSON.stringify({ score: 90, feedback: "Jawaban sudah tepat." }),
+            })
+          : request(`/api/quizzes/${quiz.id}/attempts/${attemptId}/grade`, {
+              method: "PATCH",
+              body: JSON.stringify({ essayScores: { "question-1": 9 } }),
+            });
+
+        // Fail after the real grade UPDATE so persisted rows prove a DB rollback.
+        let failedUpdates = 0;
+        const transaction = db.transaction.bind(db);
+        const failure = vi.spyOn(db, "transaction").mockImplementation((callback, config) =>
+          transaction(async tx => {
+            const update = tx.update.bind(tx);
+            vi.spyOn(tx, "update").mockImplementation(table => {
+              if (table === enrollmentsTable) {
+                failedUpdates++;
+                throw new Error("Simulasi kegagalan progres setelah penilaian");
+              }
+              return update(table);
+            });
+            return callback(tx);
+          }, config),
+        );
+        try {
+          expect((await grade()).status).toBe(500);
+          expect(failedUpdates).toBe(1);
+        } finally {
+          failure.mockRestore();
+        }
+
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual(attemptsBefore);
+        expect((await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)).toEqual(enrollmentBefore);
+        expect(await (await request(statePath)).json()).toEqual(stateBefore);
+        const queueAfterFailure = await (await request("/api/quiz-attempts/pending-review")).json();
+        expect(queueAfterFailure).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: attemptId }),
+        ]));
+
+        const retry = await grade();
+        expect(retry.status).toBe(200);
+        const body = await retry.json();
+        const gradedAttempt = mode === "POST nilai akhir" ? body.attempt : body;
+        expect(gradedAttempt).toMatchObject({
+          id: attemptId,
+          score: 90,
+          passed: true,
+          gradingStatus: "graded",
+          gradedBy: userId,
+          gradedAt: expect.any(String),
+        });
+        const attemptsAfter = await storage.getQuizAttempts(quiz.id);
+        expect(attemptsAfter).toHaveLength(1);
+        expect(attemptsAfter[0]).toEqual(gradedAttempt);
+        expect((await storage.getEnrollmentsByParticipant(participantId))
+          .find(item => item.id === enrollment.id)).toMatchObject({
+            progress: 100,
+            status: "completed",
+            completedAt: expect.any(String),
+          });
+        expect(await (await request(statePath)).json()).toMatchObject({
+          completion: { progress: 100, postTestPassed: true, isComplete: true },
+        });
+        expect((await grade()).status).toBe(409);
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual(attemptsAfter);
+      } finally {
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["API pilihan ganda", "API esai", "storage langsung"])(
     "membatalkan percobaan dan menjaga jatah ketika pembaruan progres gagal: %s",
     async mode => {
