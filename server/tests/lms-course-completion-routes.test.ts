@@ -8,7 +8,7 @@ import {
   enrollmentsTable,
   users,
 } from "@shared/schema";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { createUser, setupAuth } from "../auth";
 import { registerRoutes } from "../routes";
 import { storage } from "../storage";
@@ -160,6 +160,187 @@ afterAll(async () => {
 });
 
 describe("aturan progres kursus melalui API", () => {
+  it.each(["perhitungan", "pembaruan progres"] as const)(
+    "membatalkan penandaan materi saat %s gagal dan dapat dicoba ulang",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus rollback materi ${mode} ${Date.now()}`,
+        description: "Materi selesai dan progres harus tersimpan bersama",
+        duration: "1 jam",
+        postTestId,
+      });
+      try {
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons.slice(0, -1)) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const lessonId = course.lessons.at(-1)!.id;
+        const complete = () => request(
+          `/api/enrollments/${enrollment.id}/lessons/${lessonId}/complete`,
+          { method: "POST", body: "{}" },
+        );
+        const [before] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(before.progress).toBeLessThan(100);
+        expect(before.completedLessonIds).not.toContain(lessonId);
+
+        const transactional = storage as unknown as {
+          refreshCourseEnrollmentProgressInTransaction: (...args: unknown[]) => Promise<unknown>;
+        };
+        const calculationFailure = mode === "perhitungan"
+          ? vi.spyOn(transactional, "refreshCourseEnrollmentProgressInTransaction")
+              .mockRejectedValueOnce(new Error("Simulasi kegagalan perhitungan"))
+          : undefined;
+        let lessonWrites = 0;
+        let progressWrites = 0;
+        const transaction = db.transaction.bind(db);
+        const failure = vi.spyOn(db, "transaction").mockImplementation((callback, config) =>
+          transaction(async tx => {
+            const update = tx.update.bind(tx);
+            vi.spyOn(tx, "update").mockImplementation(table => {
+              if (table === enrollmentsTable) {
+                if (lessonWrites === 0) {
+                  lessonWrites++;
+                } else {
+                  progressWrites++;
+                  throw new Error("Simulasi kegagalan pembaruan progres");
+                }
+              }
+              return update(table);
+            });
+            return callback(tx);
+          }, config),
+        );
+        try {
+          expect((await complete()).status).toBe(500);
+          expect(lessonWrites).toBe(1);
+          expect(progressWrites).toBe(mode === "perhitungan" ? 0 : 1);
+          if (calculationFailure) expect(calculationFailure).toHaveBeenCalledOnce();
+        } finally {
+          failure.mockRestore();
+          calculationFailure?.mockRestore();
+        }
+
+        // Check raw persisted fields before any read path can refresh progress.
+        expect((await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id)))[0]).toEqual(before);
+        const retry = await complete();
+        expect(retry.status).toBe(200);
+        expect(await retry.json()).toMatchObject({
+          completedLessonIds: course.lessons.map(lesson => lesson.id),
+          progress: 100,
+          status: "in_progress",
+          startedAt: before.startedAt,
+        });
+        const [afterRetry] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(afterRetry.completedAt).toBeNull();
+        expect((await complete()).status).toBe(200);
+        const [afterDuplicate] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(afterDuplicate).toMatchObject({
+          completedLessonIds: afterRetry.completedLessonIds,
+          progress: 100,
+          status: "in_progress",
+          startedAt: before.startedAt,
+          completedAt: null,
+        });
+      } finally {
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
+  it.each(["materi berbeda", "materi yang sama"] as const)(
+    "menjaga progres dan penandaan idempoten untuk penyelesaian paralel: %s",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus materi paralel ${mode} ${Date.now()}`,
+        description: "Dua transaksi penandaan harus mempertahankan semua materi",
+        duration: "1 jam",
+      });
+      const blocker = await pool.connect();
+      let releaseTransactions!: () => void;
+      const gate = new Promise<void>(resolve => { releaseTransactions = resolve; });
+      let callbacksStarted!: () => void;
+      const bothStarted = new Promise<void>(resolve => { callbacksStarted = resolve; });
+      let callbackCount = 0;
+      const transaction = db.transaction.bind(db);
+      let transactionSpy: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons.slice(0, -2)) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const lessonIds = mode === "materi berbeda"
+          ? course.lessons.slice(-2).map(lesson => lesson.id)
+          : [course.lessons.at(-2)!.id, course.lessons.at(-2)!.id];
+
+        await blocker.query("BEGIN");
+        await blocker.query("SELECT id FROM enrollments WHERE id = $1 FOR UPDATE", [enrollment.id]);
+        transactionSpy = vi.spyOn(db, "transaction").mockImplementation((callback, config) =>
+          transaction(async tx => {
+            await gate;
+            // Both first SELECT ... FOR UPDATE queries start behind the held lock.
+            const result = callback(tx);
+            callbackCount++;
+            if (callbackCount === 2) callbacksStarted();
+            return result;
+          }, config),
+        );
+        const completions = lessonIds.map(lessonId => request(
+          `/api/enrollments/${enrollment.id}/lessons/${lessonId}/complete`,
+          { method: "POST", body: "{}" },
+        ));
+        releaseTransactions();
+        await bothStarted;
+        await blocker.query("COMMIT");
+        const responses = await Promise.all(completions);
+        expect(responses.map(response => response.status)).toEqual([200, 200]);
+        transactionSpy.mockRestore();
+
+        const [stored] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        const expectedIds = [...new Set([
+          ...course.lessons.slice(0, -2).map(lesson => lesson.id),
+          ...lessonIds,
+        ])];
+        expect(stored.completedLessonIds).toHaveLength(expectedIds.length);
+        expect(stored.completedLessonIds).toEqual(expect.arrayContaining(expectedIds));
+        expect(stored.progress).toBe(Math.round(expectedIds.length / course.lessons.length * 100));
+        expect(stored.status).toBe(mode === "materi berbeda" ? "completed" : "in_progress");
+        expect(stored.startedAt).toEqual(expect.any(String));
+        if (mode === "materi berbeda") {
+          expect(stored.completedAt).toEqual(expect.any(String));
+          const duplicate = await request(
+            `/api/enrollments/${enrollment.id}/lessons/${lessonIds[0]}/complete`,
+            { method: "POST", body: "{}" },
+          );
+          expect(duplicate.status).toBe(200);
+          expect(await duplicate.json()).toMatchObject({
+            completedLessonIds: stored.completedLessonIds,
+            progress: 100,
+            status: "completed",
+            startedAt: stored.startedAt,
+            completedAt: stored.completedAt,
+          });
+        } else {
+          expect(stored.completedAt).toBeNull();
+        }
+      } finally {
+        transactionSpy?.mockRestore();
+        releaseTransactions();
+        await blocker.query("ROLLBACK");
+        blocker.release();
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
     "membatalkan nilai esai saat progres gagal dan menyimpan kelulusan saat dicoba ulang: %s",
     async mode => {

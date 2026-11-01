@@ -918,24 +918,30 @@ export class DrizzleStorage implements IStorage {
   }
 
   async markEnrollmentLessonCompleted(id: string, lessonId: string): Promise<Enrollment | undefined> {
-    const rows = await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, id));
-    const enrollment = rows[0];
-    if (!enrollment?.courseId) return undefined;
-    const course = await this.getCourse(enrollment.courseId);
-    if (!course?.lessons.some(lesson => lesson.id === lessonId)) return undefined;
+    return db.transaction(async tx => {
+      // Serialize lesson completions before reading or changing enrollment state.
+      const [enrollment] = await tx.select().from(enrollmentsTable)
+        .where(eq(enrollmentsTable.id, id)).for("update");
+      if (!enrollment?.courseId) return undefined;
+      const [courseRow] = await tx.select().from(coursesTable)
+        .where(eq(coursesTable.id, enrollment.courseId));
+      if (!courseRow || !toCourse(courseRow).lessons.some(lesson => lesson.id === lessonId)) {
+        return undefined;
+      }
 
-    await db.update(enrollmentsTable)
-      .set({
-        completedLessonIds: drizzleSql`
-          CASE
-            WHEN ${enrollmentsTable.completedLessonIds} ? ${lessonId}::text
-              THEN ${enrollmentsTable.completedLessonIds}
-            ELSE ${enrollmentsTable.completedLessonIds} || jsonb_build_array(${lessonId}::text)
-          END
-        `,
-      })
-      .where(eq(enrollmentsTable.id, id));
-    return this.refreshCourseEnrollmentProgress(id);
+      await tx.update(enrollmentsTable)
+        .set({
+          completedLessonIds: drizzleSql`
+            CASE
+              WHEN ${enrollmentsTable.completedLessonIds} ? ${lessonId}::text
+                THEN ${enrollmentsTable.completedLessonIds}
+              ELSE ${enrollmentsTable.completedLessonIds} || jsonb_build_array(${lessonId}::text)
+            END
+          `,
+        })
+        .where(eq(enrollmentsTable.id, id));
+      return this.refreshCourseEnrollmentProgressInTransaction(tx, id);
+    });
   }
 
   async refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined> {
