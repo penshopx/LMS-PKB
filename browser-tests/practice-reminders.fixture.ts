@@ -28,7 +28,12 @@ async function post(api: APIRequestContext, url: string, data: unknown, status: 
   return response.json();
 }
 
-export const test = base.extend<{ learner: Fixture }>({
+export const test = base.extend<{ learner: Fixture }, { databasePool: void }>({
+  // Files share the worker's imported pool; a per-file afterAll closes it
+  // before the next spec can create its fixtures.
+  databasePool: [async ({}, use) => {
+    try { await use(); } finally { await pool.end(); }
+  }, { scope: "worker", auto: true }],
   learner: async ({ playwright, baseURL }, use) => {
     const tag = randomUUID();
     const username = `reminder-learner-${tag}`;
@@ -104,8 +109,6 @@ export const test = base.extend<{ learner: Fixture }>({
     }
   },
 });
-
-test.afterAll(async () => { await pool.end(); });
 
 export async function freezeClock(page: Page) {
   await page.clock.install({ time: beforeMidnight });

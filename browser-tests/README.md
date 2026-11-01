@@ -33,6 +33,14 @@ Coverage:
 - Sending a new round through the real form clears reminders on missions and on
   the previously visited home page using SPA links, without a document reload.
   Time stays paused, so polling cannot mask a missing mutation invalidation.
+- A logs out and B logs in in the same tab and JS runtime, for both reminder
+  pages and for participants in the same or different BUJK. A's real reminder
+  and private-history caches are warmed first. B's real reminder response is held
+  until the loading card is inspected; a DOM observer also catches transient
+  leaks of A's title, schedule or reflection during the switch.
+- The same tab then signs in as PIC: neither page requests participant reminders,
+  and real, nonempty team submission responses omit private reflections even when
+  the PIC opens A's evidence history. No query cache or auth response is mocked.
 
 The browser clock is controlled by Playwright. Tiny clock ticks flush React Query's
 zero-delay batched notifications while real HTTP requests finish; no test sleeps
