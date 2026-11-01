@@ -15,8 +15,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useLogout } from "@/hooks/use-logout";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 import { GUSTAFTA_HOME_URL } from "@/lib/gustafta";
 import { trackGustaftaLinkClick } from "@/lib/analytics";
@@ -110,17 +109,7 @@ const ecosystemMenu = {
 };
 
 function LogoutButton() {
-  const [, navigate] = useLocation();
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/logout", { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error("Logout failed");
-    },
-    onSuccess: () => {
-      queryClient.clear();
-      navigate("/login");
-    },
-  });
+  const logoutMutation = useLogout();
 
   return (
     <button

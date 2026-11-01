@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useMutation } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useLogout } from "@/hooks/use-logout";
+import { subscribeToAuthChanges } from "@/lib/auth-session";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -86,19 +88,9 @@ function AppRouter() {
 
 function UserMenu() {
   const { data: user } = useCurrentUser();
-  const [, navigate] = useLocation();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/logout", { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error("Logout gagal");
-    },
-    onSuccess: () => {
-      queryClient.clear();
-      navigate("/login");
-    },
-  });
+  const logoutMutation = useLogout();
 
   return (
     <>
@@ -184,7 +176,7 @@ function AppLayout() {
 }
 
 function ProtectedApp() {
-  const { data: user, isLoading } = useCurrentUser();
+  const { data: user, isLoading, isError, refetch } = useCurrentUser();
 
   if (isLoading) {
     return (
@@ -194,11 +186,23 @@ function ProtectedApp() {
     );
   }
 
+  if (isError) {
+    return <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+      <p role="alert">Sesi belum dapat diverifikasi. Periksa koneksi Anda, lalu coba lagi.</p>
+      <Button onClick={() => refetch()}>Periksa sesi kembali</Button>
+    </main>;
+  }
+
   if (!user) {
     return <Redirect to="/login" />;
   }
 
-  return <AppLayout />;
+  return <AppLayout key={`${user.id}:${user.role}:${user.bujkId}:${user.participantId}`} />;
+}
+
+function AuthSessionSync() {
+  useEffect(subscribeToAuthChanges, []);
+  return null;
 }
 
 function App() {
@@ -210,11 +214,12 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthSessionSync />
       <TooltipProvider>
         {isLanding && <Landing />}
         {isLogin && <Login />}
         {isApp && <ProtectedApp />}
-        {isInvitation && <AcceptInvitation token={location.split("/")[2] ?? ""} />}
+        {isInvitation && <AcceptInvitation key={location} token={location.split("/")[2] ?? ""} />}
         {!isLanding && !isLogin && !isApp && !isInvitation && (
           <Switch>
             <Route component={NotFound} />

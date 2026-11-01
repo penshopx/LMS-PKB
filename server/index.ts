@@ -48,7 +48,7 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       // Audit explanations are admin-only content, not operational log data.
-      if (capturedJsonResponse && !path.toLowerCase().startsWith("/api/access/status-history")) {
+      if (capturedJsonResponse && !/^\/api\/(?:me|login|logout|invitations|access\/(?:status-history|invitations))(?:\/|$)/i.test(path)) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 

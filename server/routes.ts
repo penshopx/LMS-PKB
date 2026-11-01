@@ -37,6 +37,7 @@ import {
 } from "@shared/schema";
 import type { ApplicationRole, User } from "@shared/schema";
 import { z } from "zod";
+import { acceptInvitationSchema, invitationTokenSchema, loginCredentialsSchema } from "@shared/auth-validation";
 import {
   evaluateCourseCompletion,
   gradeQuizSubmission,
@@ -94,12 +95,22 @@ async function canAccessParticipant(user: User, participantId: string): Promise<
   return false;
 }
 
+function invitationExpired(expiresAt: string) {
+  const timestamp = Date.parse(expiresAt);
+  return !Number.isFinite(timestamp) || timestamp <= Date.now();
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
   // ---------- AUTH ROUTES (public) ----------
+  // API responses can contain account-specific LMS data, even after a browser's back navigation.
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   app.get("/api/me", (req, res) => {
     if (req.isAuthenticated()) {
       const user = req.user as User;
@@ -116,6 +127,11 @@ export async function registerRoutes(
   });
 
   app.post("/api/login", (req, res, next) => {
+    const credentials = loginCredentialsSchema.safeParse(req.body);
+    if (!credentials.success) {
+      return res.status(400).json({ message: "Username dan kata sandi wajib diisi dengan benar." });
+    }
+    req.body = credentials.data;
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) {
@@ -137,22 +153,52 @@ export async function registerRoutes(
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
       if (err) return next(err);
-      res.json({ message: "Logged out" });
+      req.session.destroy(destroyError => {
+        if (destroyError) return next(destroyError);
+        res.clearCookie("connect.sid", {
+          path: "/", httpOnly: true, sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+        });
+        res.json({ message: "Anda berhasil keluar." });
+      });
     });
+  });
+
+  app.post("/api/invitations/preview", async (req, res) => {
+    const input = z.object({ token: invitationTokenSchema }).strict().safeParse(req.body);
+    if (!input.success) return res.status(400).json({ message: "Tautan undangan tidak valid." });
+    try {
+      const tokenHash = createHash("sha256").update(input.data.token).digest("hex");
+      const [invitation] = await db.select({
+        username: bujkInvitationsTable.email,
+        participantName: bujkInvitationsTable.participantName,
+        bujkName: bujksTable.name,
+        role: bujkInvitationsTable.role,
+        expiresAt: bujkInvitationsTable.expiresAt,
+        acceptedAt: bujkInvitationsTable.acceptedAt,
+      }).from(bujkInvitationsTable)
+        .innerJoin(bujksTable, eq(bujksTable.id, bujkInvitationsTable.bujkId))
+        .where(eq(bujkInvitationsTable.tokenHash, tokenHash)).limit(1);
+      if (!invitation || invitation.acceptedAt || invitationExpired(invitation.expiresAt)) {
+        return res.status(400).json({ message: "Undangan tidak tersedia, sudah digunakan, atau telah kedaluwarsa. Minta undangan baru kepada PIC BUJK." });
+      }
+      const { acceptedAt: _accepted, ...preview } = invitation;
+      res.json(preview);
+    } catch {
+      res.status(500).json({ message: "Undangan belum dapat diperiksa. Silakan coba lagi." });
+    }
   });
 
   // Invitation acceptance is public, but requires an unexpired, single-use token.
   app.post("/api/invitations/accept", async (req, res) => {
     try {
+      if (req.isAuthenticated()) return res.status(409).json({ message: "Keluar dari akun saat ini sebelum mengaktifkan akun undangan." });
       res.setHeader("Cache-Control", "no-store");
-      const input = z.object({
-        token: z.string().min(32).max(256),
-        password: z.string().min(12).max(128),
-      }).parse(req.body);
+      const input = acceptInvitationSchema.parse(req.body);
       const tokenHash = createHash("sha256").update(input.token).digest("hex");
       const [preview] = await db.select().from(bujkInvitationsTable)
         .where(eq(bujkInvitationsTable.tokenHash, tokenHash)).limit(1);
-      if (!preview || preview.acceptedAt || new Date(preview.expiresAt).getTime() <= Date.now()) {
+      if (!preview || preview.acceptedAt || invitationExpired(preview.expiresAt)) {
         return res.status(400).json({ message: "Tautan undangan tidak valid atau sudah kedaluwarsa." });
       }
 
@@ -170,10 +216,12 @@ export async function registerRoutes(
           .where(eq(bujkInvitationsTable.tokenHash, tokenHash))
           .for("update")
           .limit(1);
-        if (!invitation || invitation.acceptedAt || new Date(invitation.expiresAt).getTime() <= Date.now()) {
+        if (!invitation || invitation.acceptedAt || invitationExpired(invitation.expiresAt)) {
           return { ok: false as const, code: "invalid" };
         }
 
+        // Different invitation tokens for the same email must not create two accounts.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${normalizedEmail}, 0))`);
         const [duplicate] = await tx.select({ id: users.id }).from(users)
           .where(sql`lower(${users.username}) = ${normalizedEmail}`).limit(1);
         if (duplicate) return { ok: false as const, code: "duplicate" };
@@ -218,7 +266,11 @@ export async function registerRoutes(
       res.status(201).json({ message: "Akun berhasil dibuat. Silakan masuk.", username: result.username, role: result.role });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Kata sandi wajib berisi 12–128 karakter." });
+        return res.status(400).json({ message: "Undangan harus valid dan kata sandi harus berisi 12–128 karakter, bukan hanya spasi." });
+      }
+      const databaseError = error as { code?: string; cause?: { code?: string } } | null;
+      if (databaseError?.code === "23505" || databaseError?.cause?.code === "23505") {
+        return res.status(409).json({ message: "Akun atau data peserta sudah tersedia. Hubungi PIC BUJK." });
       }
       res.status(500).json({ message: "Undangan tidak dapat diproses." });
     }

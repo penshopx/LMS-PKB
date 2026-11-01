@@ -26,7 +26,10 @@ export async function comparePassword(supplied: string, stored: string): Promise
 }
 
 export async function getUserByUsername(username: string): Promise<User | undefined> {
-  const rows = await db.select().from(users).where(eq(users.username, username));
+  const normalized = username.trim();
+  const rows = await db.select().from(users).where(normalized.includes("@")
+    ? sql`lower(${users.username}) = ${normalized.toLowerCase()}`
+    : eq(users.username, normalized));
   return rows[0];
 }
 
@@ -335,6 +338,16 @@ export function setupAuth(app: Express): void {
   // without accepting an arbitrary leftmost X-Forwarded-For value.
   app.set("trust proxy", "loopback");
 
+  app.use((req, res, next) => {
+    if (!req.path.startsWith("/api/") || ["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+    const origin = req.get("Origin");
+    if (req.get("Sec-Fetch-Site") === "cross-site" ||
+        (origin && origin !== `${req.protocol}://${req.get("host")}`)) {
+      return res.status(403).json({ message: "Permintaan dari situs lain tidak diizinkan.", code: "INVALID_ORIGIN" });
+    }
+    next();
+  });
+
   const PgSession = connectPgSimple(session);
 
   const configuredSecret = process.env.SESSION_SECRET;
@@ -396,11 +409,18 @@ export function setupAuth(app: Express): void {
     done(null, { id: account.id, version: account.sessionVersion });
   });
 
-  passport.deserializeUser(async (sessionUser: string | { id: string; version: number }, done) => {
+  passport.deserializeUser(async (sessionUser: unknown, done) => {
     try {
       // Existing sessions predate versioning and are treated as version zero.
-      const id = typeof sessionUser === "string" ? sessionUser : sessionUser.id;
-      const version = typeof sessionUser === "string" ? 0 : sessionUser.version;
+      const identity = typeof sessionUser === "string"
+        ? { id: sessionUser, version: 0 }
+        : sessionUser as { id?: unknown; version?: unknown } | null;
+      if (!identity || typeof identity.id !== "string" || !identity.id.trim() ||
+          identity.id.length > 256 || typeof identity.version !== "number" ||
+          !Number.isSafeInteger(identity.version) || identity.version < 0) {
+        return done(null, false);
+      }
+      const { id, version } = identity;
       const user = await getUserById(id);
       done(null, user?.isActive && user.sessionVersion === version ? user : false);
     } catch (err) {
@@ -414,13 +434,13 @@ export function setupAuth(app: Express): void {
 
 export const requireAuth: RequestHandler = (req, res, next) => {
   if (req.isAuthenticated()) return next();
-  res.status(401).json({ message: "Unauthorized" });
+  res.status(401).json({ message: "Sesi berakhir. Silakan masuk kembali.", code: "SESSION_EXPIRED" });
 };
 
 export function requireRole(...roles: ApplicationRole[]): RequestHandler {
   return (req, res, next) => {
     if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
+      return res.status(401).json({ message: "Sesi berakhir. Silakan masuk kembali.", code: "SESSION_EXPIRED" });
     }
     const user = req.user as User;
     if (roles.includes(user.role)) return next();

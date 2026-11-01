@@ -1,9 +1,22 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+let sessionEpoch = 0;
+export function advanceSessionEpoch() { sessionEpoch++; }
+function assertCurrentSession(epoch: number, url: string) {
+  if (epoch !== sessionEpoch && !/^\/api\/(?:login|logout|invitations)(?:\/|$)/.test(url)) {
+    throw new Error("Sesi akun telah berubah. Muat ulang data untuk melanjutkan.");
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const text = await res.text();
+    let details: { message?: string; code?: string } = {};
+    try { details = JSON.parse(text); } catch { /* A proxy can return plain text. */ }
+    if (res.status === 401 && details?.code === "SESSION_EXPIRED") {
+      void queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    }
+    throw new Error(details?.message || `Permintaan gagal (${res.status}). Silakan coba lagi.`);
   }
 }
 
@@ -12,6 +25,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const epoch = sessionEpoch;
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -19,6 +33,20 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  assertCurrentSession(epoch, url);
+  // Fetch resolves on headers. Ownership must also hold after a slow body download.
+  const readJson = res.json.bind(res);
+  const readText = res.text.bind(res);
+  res.json = async () => {
+    const data = await readJson();
+    assertCurrentSession(epoch, url);
+    return data;
+  };
+  res.text = async () => {
+    const text = await readText();
+    assertCurrentSession(epoch, url);
+    return text;
+  };
   await throwIfResNotOk(res);
   return res;
 }
@@ -28,17 +56,23 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+  async ({ queryKey, signal }) => {
+    const epoch = sessionEpoch;
+    const url = queryKey.join("/");
+    const res = await fetch(url, {
       credentials: "include",
+      signal,
     });
 
+    assertCurrentSession(epoch, url);
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const data = await res.json();
+    assertCurrentSession(epoch, url);
+    return data;
   };
 
 export const queryClient = new QueryClient({

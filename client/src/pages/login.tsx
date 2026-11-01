@@ -1,41 +1,35 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
+import { replaceSessionUser } from "@/lib/auth-session";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { currentUserSchema, loginCredentialsSchema } from "@shared/auth-validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
 
-interface LoginError {
-  message: string;
-}
-
 export default function Login() {
   const [, navigate] = useLocation();
-  const [username, setUsername] = useState("");
+  const { data: user } = useCurrentUser();
+  const [username, setUsername] = useState(() => new URLSearchParams(window.location.search).get("username")?.slice(0, 254) ?? "");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const loginMutation = useMutation({
     mutationFn: async (creds: { username: string; password: string }) => {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(creds),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ message: "Login gagal" }));
-        throw new Error((data as LoginError).message || "Login gagal");
-      }
-      return res.json();
+      const res = await apiRequest("POST", "/api/login", creds);
+      const current = currentUserSchema.parse(await res.json());
+      await replaceSessionUser(current);
+      return current;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["/api/me"], data);
+      setPassword("");
       navigate("/app");
     },
     onError: (err: Error) => {
@@ -45,13 +39,17 @@ export default function Login() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (loginMutation.isPending) return;
     setErrorMsg("");
-    if (!username.trim() || !password.trim()) {
+    const input = loginCredentialsSchema.safeParse({ username, password });
+    if (!input.success) {
       setErrorMsg("Username dan password wajib diisi");
       return;
     }
-    loginMutation.mutate({ username, password });
+    loginMutation.mutate(input.data);
   };
+
+  if (user) return <Redirect to="/app" />;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
@@ -73,17 +71,22 @@ export default function Login() {
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold">Masuk</CardTitle>
             <CardDescription>
-              Masukkan username dan password Anda
+              Gunakan email undangan atau username dan kata sandi Anda.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">Email atau username</Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="admin"
+                  placeholder="Email undangan atau username"
+                  name="username"
+                  required
+                  maxLength={254}
+                  autoCapitalize="none"
+                  spellCheck={false}
                   autoComplete="username"
                   autoFocus
                   value={username}
@@ -93,19 +96,30 @@ export default function Login() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
+                <div className="relative">
                 <Input
                   id="password"
-                  type="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  className="pr-12"
+                  required
+                  maxLength={1024}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loginMutation.isPending}
                 />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0"
+                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                </div>
               </div>
 
               {errorMsg && (
-                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+                <div role="alert" className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
@@ -126,6 +140,11 @@ export default function Login() {
                 )}
               </Button>
             </form>
+            <p className="mt-5 text-sm text-muted-foreground">
+              Belum punya akun? Buka tautan undangan dari PIC BUJK untuk mendaftar.
+              Jika lupa kata sandi atau undangan kedaluwarsa, hubungi PIC BUJK atau admin.
+            </p>
+            <Link href="/" className="mt-3 inline-block text-sm text-sky-700 underline dark:text-sky-300">Kembali ke beranda</Link>
           </CardContent>
         </Card>
       </div>

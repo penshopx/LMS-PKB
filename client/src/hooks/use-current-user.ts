@@ -1,24 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ApplicationRole } from "@shared/schema";
+import { currentUserSchema, type AuthenticatedUser } from "@shared/auth-validation";
+import { queryClient } from "@/lib/queryClient";
+import { clearPrivateQueries } from "@/lib/auth-session";
 
-export interface CurrentUser {
-  id: string;
-  username: string;
-  role: ApplicationRole;
-  participantId: string | null;
-  bujkId: string | null;
-}
+export type CurrentUser = AuthenticatedUser;
 
 export function useCurrentUser() {
   return useQuery<CurrentUser | null>({
     queryKey: ["/api/me"],
-    queryFn: async () => {
-      const response = await fetch("/api/me", { credentials: "include" });
-      if (response.status === 401) return null;
-      if (!response.ok) throw new Error("Informasi akun tidak dapat dimuat.");
-      return response.json();
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/me", { credentials: "include", cache: "no-store", signal });
+      if (response.status !== 401 && !response.ok) throw new Error("Informasi akun tidak dapat dimuat.");
+      const current = response.status === 401 ? null : currentUserSchema.parse(await response.json());
+      const previous = queryClient.getQueryData<CurrentUser | null>(["/api/me"]);
+      if (previous?.id !== current?.id || previous?.role !== current?.role ||
+          previous?.participantId !== current?.participantId || previous?.bujkId !== current?.bujkId) {
+        await clearPrivateQueries();
+      }
+      return current;
     },
     retry: false,
     staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    refetchOnMount: "always",
   });
 }
