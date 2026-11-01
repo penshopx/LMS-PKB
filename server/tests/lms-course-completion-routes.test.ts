@@ -466,6 +466,138 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
+  it.each(["POST nilai akhir", "PATCH nilai per soal"] as const)(
+    "menyimpan nilai esai lulus tanpa meluluskan kursus sebelum materi terakhir selesai: %s",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus esai sebelum materi selesai ${mode} ${Date.now()}`,
+        description: "Nilai post-test tidak menggantikan kewajiban menyelesaikan materi",
+        duration: "1 jam",
+      });
+      try {
+        expect(course.lessons.length).toBeGreaterThan(1);
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test esai sebelum materi selesai",
+          description: "Lulus esai saat masih ada satu materi tersisa",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: "essay",
+            text: "Jelaskan tahapan evaluasi",
+            points: 10,
+            order: 1,
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        for (const lesson of course.lessons.slice(0, -1)) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, lesson.id);
+        }
+        const submission = await submitQuiz(quiz.id, "Jawaban peserta untuk dinilai");
+        expect(submission.status).toBe(201);
+        const attempt = await submission.json();
+        expect(attempt).toMatchObject({ gradingStatus: "awaiting_review", passed: false });
+
+        const grade = mode === "POST nilai akhir"
+          ? await request(`/api/quiz-attempts/${attempt.id}/grade`, {
+              method: "POST",
+              body: JSON.stringify({ score: 90, feedback: "Jawaban sudah tepat." }),
+            })
+          : await request(`/api/quizzes/${quiz.id}/attempts/${attempt.id}/grade`, {
+              method: "PATCH",
+              body: JSON.stringify({ essayScores: { "question-1": 9 } }),
+            });
+        expect(grade.status).toBe(200);
+        const body = await grade.json();
+        const gradedAttempt = mode === "POST nilai akhir" ? body.attempt : body;
+        expect(gradedAttempt).toMatchObject({
+          id: attempt.id,
+          score: 90,
+          passed: true,
+          gradingStatus: "graded",
+          gradedBy: userId,
+          gradedAt: expect.any(String),
+        });
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual([gradedAttempt]);
+
+        const expectedProgress = Math.round((course.lessons.length - 1) / course.lessons.length * 100);
+        const [beforeLastLesson] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(beforeLastLesson).toMatchObject({
+          status: "in_progress",
+          progress: expectedProgress,
+          completedLessonIds: course.lessons.slice(0, -1).map(lesson => lesson.id),
+          completedAt: null,
+        });
+        const statePath = `/api/courses/${course.id}/learning-state?participantId=${participantId}`;
+        expect(await (await request(statePath)).json()).toMatchObject({
+          completion: {
+            progress: expectedProgress,
+            lessonsCompleted: false,
+            postTestPassed: true,
+            isComplete: false,
+          },
+        });
+        const certificateData = {
+          participantId,
+          courseId: course.id,
+          title: "Sertifikat Penyelesaian Kursus",
+          description: "Sertifikat uji esai sebelum materi selesai",
+        };
+        const earlyCertificate = await request("/api/certificates", {
+          method: "POST",
+          body: JSON.stringify(certificateData),
+        });
+        expect(earlyCertificate.status).toBe(409);
+        expect(await db.select().from(certificatesTable)
+          .where(eq(certificatesTable.courseId, course.id))).toEqual([]);
+
+        const completion = await request(
+          `/api/enrollments/${enrollment.id}/lessons/${course.lessons.at(-1)!.id}/complete`,
+          { method: "POST", body: JSON.stringify({}) },
+        );
+        expect(completion.status).toBe(200);
+        expect(await completion.json()).toMatchObject({
+          status: "completed",
+          progress: 100,
+          completedAt: expect.any(String),
+          completedLessonIds: course.lessons.map(lesson => lesson.id),
+        });
+        const [completedEnrollment] = await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id));
+        expect(completedEnrollment).toMatchObject({
+          status: "completed",
+          progress: 100,
+          completedAt: expect.any(String),
+        });
+        expect(await (await request(statePath)).json()).toMatchObject({
+          completion: {
+            progress: 100,
+            lessonsCompleted: true,
+            postTestPassed: true,
+            isComplete: true,
+          },
+        });
+        expect(await storage.getQuizAttempts(quiz.id)).toEqual([gradedAttempt]);
+        const certificate = await request("/api/certificates", {
+          method: "POST",
+          body: JSON.stringify(certificateData),
+        });
+        expect(certificate.status).toBe(201);
+      } finally {
+        await db.delete(certificatesTable).where(eq(certificatesTable.courseId, course.id));
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["API pilihan ganda", "API esai", "storage langsung"])(
     "membatalkan percobaan dan menjaga jatah ketika pembaruan progres gagal: %s",
     async mode => {
