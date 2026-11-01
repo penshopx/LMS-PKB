@@ -11,7 +11,8 @@ import {
   FileQuestion,
   BarChart3,
   LogOut,
-  ExternalLink
+  ExternalLink,
+  ClipboardList,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
@@ -63,6 +64,11 @@ const mainMenu = [
     title: "Quiz Engine",
     url: "/app/quizzes",
     icon: FileQuestion,
+  },
+  {
+    title: "Misi praktik",
+    url: "/app/practice-missions",
+    icon: ClipboardList,
   },
 ];
 
@@ -135,6 +141,7 @@ export function AppSidebar() {
   if (user && user.role !== "admin") {
     const items = [
       { title: user.role === "participant" ? "Pembelajaran Saya" : "Peserta BUJK", url: "/app", icon: BookOpen },
+      { title: "Misi praktik", url: "/app/practice-missions", icon: ClipboardList },
       ...(user.role === "bujk_pic" ? [{ title: "Undang Peserta", url: "/app/access", icon: Users }] : []),
     ];
     return (

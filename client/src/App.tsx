@@ -32,6 +32,7 @@ import LearningPaths from "@/pages/learning-paths";
 import Assessment from "@/pages/assessment";
 import Certificates from "@/pages/certificates";
 import Quizzes from "@/pages/quizzes";
+import PracticeMissions from "@/pages/practice-missions";
 import Analytics from "@/pages/analytics";
 import AccessManagement from "@/pages/access";
 import AcceptInvitation from "@/pages/accept-invitation";
@@ -50,15 +51,18 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/certificates": "Sertifikat",
   "/app/analytics": "Analitik & Laporan",
   "/app/access": "Akun & Undangan BUJK",
+  "/app/practice-missions": "Misi praktik",
 };
 
 function AppRouter() {
   const { data: user } = useCurrentUser();
   const [location] = useLocation();
   if (user?.role === "participant") {
+    if (location === "/app/practice-missions") return <PracticeMissions />;
     return location === "/app/quizzes" ? <Quizzes /> : <ParticipantHome />;
   }
   if (user?.role === "bujk_pic") {
+    if (location === "/app/practice-missions") return <PracticeMissions />;
     return location === "/app/access" ? <AccessManagement /> : <PicHome />;
   }
   return (
@@ -68,6 +72,7 @@ function AppRouter() {
       <Route path="/app/courses" component={Courses} />
       <Route path="/app/learning-paths" component={LearningPaths} />
       <Route path="/app/quizzes" component={Quizzes} />
+      <Route path="/app/practice-missions" component={PracticeMissions} />
       <Route path="/app/participants" component={Participants} />
       <Route path="/app/passport" component={Passport} />
       <Route path="/app/assessment" component={Assessment} />

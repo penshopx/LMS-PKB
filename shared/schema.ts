@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, index, boolean, uniqueIndex, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1102,3 +1102,45 @@ export const learningRecordsTable = pgTable(
   },
   (t) => [index("idx_learning_records_participant_id").on(t.participantId)],
 );
+
+// Supplemental workplace practice. These records never change course/quiz completion.
+export const practiceMissionsTable = pgTable("practice_missions", {
+  id: varchar("id").primaryKey(),
+  courseId: varchar("course_id").references(() => coursesTable.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  objective: text("objective").notNull(),
+  scenario: text("scenario").notNull(),
+  sourceText: text("source_text").notNull().default(""),
+  durationMinutes: integer("duration_minutes").notNull(),
+  checklist: jsonb("checklist").$type<string[]>().notNull(),
+  active: boolean("active").notNull().default(true),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+}, table => [
+  index("practice_missions_course_idx").on(table.courseId),
+  check("practice_missions_duration_check", sql`${table.durationMinutes} BETWEEN 5 AND 15`),
+]);
+
+export const missionSubmissionsTable = pgTable("mission_submissions", {
+  id: varchar("id").primaryKey(),
+  missionId: varchar("mission_id").notNull().references(() => practiceMissionsTable.id, { onDelete: "restrict" }),
+  participantId: varchar("participant_id").notNull().references(() => participantsTable.id, { onDelete: "cascade" }),
+  submissionKey: varchar("submission_key").notNull(),
+  round: integer("round").notNull(),
+  completedChecklist: jsonb("completed_checklist").$type<string[]>().notNull(),
+  evidenceText: text("evidence_text").notNull(),
+  evidenceUrl: text("evidence_url").notNull().default(""),
+  privateReflection: text("private_reflection").notNull().default(""),
+  status: text("status").notNull().default("pending_review"),
+  feedback: text("feedback"),
+  nextPracticeAt: text("next_practice_at"),
+  submittedAt: text("submitted_at").notNull(),
+  reviewedAt: text("reviewed_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+}, table => [
+  uniqueIndex("mission_submissions_key_unique").on(table.missionId, table.participantId, table.submissionKey),
+  uniqueIndex("mission_submissions_round_unique").on(table.missionId, table.participantId, table.round),
+  index("mission_submissions_participant_idx").on(table.participantId),
+  check("mission_submissions_status_check", sql`${table.status} IN ('pending_review', 'accepted', 'repeat_requested')`),
+  check("mission_submissions_round_check", sql`${table.round} > 0`),
+]);

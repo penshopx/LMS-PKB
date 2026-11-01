@@ -12,6 +12,7 @@ import {
 } from "./auth";
 import { db } from "./db";
 import { storage } from "./storage";
+import { registerPracticeMissionRoutes } from "./practice-mission-routes";
 import { 
   insertParticipantSchema, 
   insertEvidenceSchema, 
@@ -43,6 +44,8 @@ import {
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
   if (method === "POST" && path === "/api/me/password") return true;
+  if (method === "GET" && ["/api/practice-missions", "/api/practice-missions/submissions"].includes(path)) return true;
+  if (role === "participant" && method === "POST" && /^\/api\/practice-missions\/[^/]+\/submissions$/.test(path)) return true;
 
   const readOnlyRoutes = [
     /^\/api\/courses(?:\/[^/]+)?$/,
@@ -225,6 +228,8 @@ export async function registerRoutes(
     if (roleAllowsPath(user.role, req.method, path)) return next();
     res.status(403).json({ message: "Akses tidak diizinkan untuk peran akun ini." });
   });
+
+  registerPracticeMissionRoutes(app);
 
   // ============ BUJK ACCESS & INVITATIONS ============
   app.get("/api/access/bujks", async (req, res) => {

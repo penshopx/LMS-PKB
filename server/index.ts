@@ -87,6 +87,8 @@ process.on("unhandledRejection", (reason) => {
     // Seed the database with initial data if empty
     const { seedDatabase } = await import("./seed");
     await seedDatabase();
+    const { seedPracticeMissions } = await import("./practice-mission-seed");
+    await seedPracticeMissions();
 
     // Ensure a default admin user exists
     await ensureAdminUser();
