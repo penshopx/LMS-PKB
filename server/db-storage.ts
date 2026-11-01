@@ -1531,22 +1531,29 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Notifications
-  async getNotifications(): Promise<Notification[]> {
-    const rows = await db.select().from(notificationsTable);
+  async createNotification(data: Omit<Notification, "id" | "isRead" | "createdAt">): Promise<Notification> {
+    const [row] = await db.insert(notificationsTable).values({
+      ...data, id: randomUUID(), isRead: 0, createdAt: new Date().toISOString(),
+    }).returning();
+    return toNotification(row);
+  }
+
+  async getNotifications(userId: string): Promise<Notification[]> {
+    const rows = await db.select().from(notificationsTable).where(eq(notificationsTable.userId, userId));
     return rows
       .map(toNotification)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async markNotificationRead(id: string): Promise<Notification | undefined> {
-    const rows = await db.select().from(notificationsTable).where(eq(notificationsTable.id, id));
-    if (!rows[0]) return undefined;
-    await db.update(notificationsTable).set({ isRead: 1 }).where(eq(notificationsTable.id, id));
-    return { ...toNotification(rows[0]), isRead: true };
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
+    const [row] = await db.update(notificationsTable).set({ isRead: 1 }).where(and(
+      eq(notificationsTable.id, id), eq(notificationsTable.userId, userId),
+    )).returning();
+    return row ? toNotification(row) : undefined;
   }
 
-  async markAllNotificationsRead(): Promise<void> {
-    await db.update(notificationsTable).set({ isRead: 1 });
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notificationsTable).set({ isRead: 1 }).where(eq(notificationsTable.userId, userId));
   }
 
   // Search

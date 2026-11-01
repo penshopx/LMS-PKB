@@ -425,9 +425,10 @@ export interface IStorage {
   getLSPOrganization(id: string): Promise<LSPOrganization | undefined>;
 
   // Notifications
-  getNotifications(): Promise<Notification[]>;
-  markNotificationRead(id: string): Promise<Notification | undefined>;
-  markAllNotificationsRead(): Promise<void>;
+  createNotification(data: Omit<Notification, "id" | "isRead" | "createdAt">): Promise<Notification>;
+  getNotifications(userId: string): Promise<Notification[]>;
+  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
 
   // Search
   searchAll(query: string): Promise<{ participants: Participant[]; courses: ECourse[]; units: UnitCompetency[] }>;
@@ -1520,22 +1521,29 @@ export class MemStorage implements IStorage {
   }
 
   // Notifications
-  async getNotifications(): Promise<Notification[]> {
-    return Array.from(this.notifications.values()).sort(
+  async createNotification(data: Omit<Notification, "id" | "isRead" | "createdAt">): Promise<Notification> {
+    const notification = { ...data, id: randomUUID(), isRead: false, createdAt: new Date().toISOString() };
+    this.notifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return Array.from(this.notifications.values()).filter(n => n.userId === userId).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }
 
-  async markNotificationRead(id: string): Promise<Notification | undefined> {
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
     const notif = this.notifications.get(id);
-    if (!notif) return undefined;
+    if (!notif || notif.userId !== userId) return undefined;
     notif.isRead = true;
     this.notifications.set(id, notif);
     return notif;
   }
 
-  async markAllNotificationsRead(): Promise<void> {
+  async markAllNotificationsRead(userId: string): Promise<void> {
     this.notifications.forEach((notif, id) => {
+      if (notif.userId !== userId) return;
       notif.isRead = true;
       this.notifications.set(id, notif);
     });

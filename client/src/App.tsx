@@ -162,7 +162,8 @@ function AppLayout() {
               </span>
             )}
             <div className="flex-1" />
-            {user?.role === "admin" && <><GlobalSearch /><NotificationCenter /></>}
+            {user?.role === "admin" && <GlobalSearch />}
+            <NotificationCenter />
             <ThemeToggle />
             <UserMenu />
           </header>

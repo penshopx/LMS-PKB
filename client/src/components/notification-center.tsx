@@ -124,7 +124,7 @@ export function NotificationCenter() {
                         <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.message}</p>
+                    <p className={`text-xs text-muted-foreground mt-0.5 ${notif.category === "system" ? "" : "line-clamp-2"}`}>{notif.message}</p>
                     <p className="text-xs text-muted-foreground mt-1">{timeAgo(notif.createdAt)}</p>
                   </div>
                 </div>

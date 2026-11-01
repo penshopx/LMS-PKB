@@ -51,6 +51,8 @@ import { loginAttemptLimiter } from "./login-attempt-limiter";
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
   if (method === "POST" && path === "/api/me/password") return true;
+  if (method === "GET" && path === "/api/notifications") return true;
+  if (method === "PATCH" && /^\/api\/notifications\/(?:read-all|[^/]+\/read)$/.test(path)) return true;
   if (method === "GET" && ["/api/practice-missions", "/api/practice-missions/submissions"].includes(path)) return true;
   if (role === "participant" && method === "GET" && path === "/api/practice-missions/reminders") return true;
   if (role === "participant" && method === "POST" && /^\/api\/practice-missions\/[^/]+\/submissions$/.test(path)) return true;
@@ -587,6 +589,21 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Password saat ini tidak benar" });
       }
 
+      // The credential update has committed. Notify even if renewing this
+      // session fails; notification errors must never mask that committed update.
+      try {
+        await storage.createNotification({
+          userId: user.id,
+          type: "warning",
+          category: "system",
+          title: "Password akun Anda telah diubah",
+          message: "Password akun Anda berhasil diubah. Jika Anda tidak melakukan perubahan ini, segera hubungi admin untuk mengamankan akun Anda.",
+        });
+      } catch {
+        // Never log the error object: database errors can include bound values.
+        console.error("[auth] Password-change notification could not be saved.");
+      }
+
       // Preserve this session only, using the exact version committed with the
       // new hash. Reading the version again could adopt a later revocation.
       user.sessionVersion = result.sessionVersion;
@@ -599,8 +616,8 @@ export async function registerRoutes(
 
       try {
         await passwordChangeAttemptLimiter.recordSuccessfulChange(user.id, source);
-      } catch (error) {
-        console.error("[auth] Failed to clear successful password-change attempt:", error);
+      } catch {
+        console.error("[auth] Failed to clear successful password-change attempt.");
       }
       res.json({ message: "Password berhasil diubah" });
     } catch (error) {
@@ -1814,7 +1831,7 @@ export async function registerRoutes(
   // ---------- NOTIFICATIONS ----------
   app.get("/api/notifications", async (req, res) => {
     try {
-      const notifications = await storage.getNotifications();
+      const notifications = await storage.getNotifications((req.user as User).id);
       res.json(notifications);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch notifications" });
@@ -1823,7 +1840,7 @@ export async function registerRoutes(
 
   app.patch("/api/notifications/read-all", async (req, res) => {
     try {
-      await storage.markAllNotificationsRead();
+      await storage.markAllNotificationsRead((req.user as User).id);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to mark all notifications as read" });
@@ -1832,7 +1849,7 @@ export async function registerRoutes(
 
   app.patch("/api/notifications/:id/read", async (req, res) => {
     try {
-      const notif = await storage.markNotificationRead(req.params.id);
+      const notif = await storage.markNotificationRead(req.params.id, (req.user as User).id);
       if (!notif) return res.status(404).json({ message: "Notification not found" });
       res.json(notif);
     } catch (error) {

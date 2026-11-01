@@ -1422,12 +1422,12 @@ describe("Notifications", () => {
   });
 
   it("getNotifications — includes the test notification", async () => {
-    const all = await storage.getNotifications();
+    const all = await storage.getNotifications("test-user");
     expect(all.some(n => n.id === notifId)).toBe(true);
   });
 
   it("getNotifications — sorted newest-first", async () => {
-    const all = await storage.getNotifications();
+    const all = await storage.getNotifications("test-user");
     for (let i = 1; i < all.length; i++) {
       expect(new Date(all[i - 1].createdAt).getTime()).toBeGreaterThanOrEqual(
         new Date(all[i].createdAt).getTime()
@@ -1436,18 +1436,18 @@ describe("Notifications", () => {
   });
 
   it("markNotificationRead — marks single notification as read", async () => {
-    const updated = await storage.markNotificationRead(notifId);
+    const updated = await storage.markNotificationRead(notifId, "test-user");
     expect(updated).toBeDefined();
     expect(updated!.isRead).toBe(true);
   });
 
   it("markNotificationRead — returns undefined for nonexistent id", async () => {
-    const result = await storage.markNotificationRead("nonexistent-notif");
+    const result = await storage.markNotificationRead("nonexistent-notif", "test-user");
     expect(result).toBeUndefined();
   });
 
   it("markAllNotificationsRead — does not throw", async () => {
-    await expect(storage.markAllNotificationsRead()).resolves.toBeUndefined();
+    await expect(storage.markAllNotificationsRead("test-user")).resolves.toBeUndefined();
   });
 });
 
@@ -1458,7 +1458,7 @@ describe("MemStorage notifications", () => {
   it("getNotifications — returns notifications newest-first", async () => {
     const memory = new MemStorage();
 
-    const notifications = await memory.getNotifications();
+    const notifications = await memory.getNotifications("system");
 
     expect(notifications.map(notification => notification.id)).toEqual([
       "notif-001",
@@ -1473,18 +1473,18 @@ describe("MemStorage notifications", () => {
   it("markNotificationRead — marks only the requested notification as read", async () => {
     const memory = new MemStorage();
 
-    const updated = await memory.markNotificationRead("notif-001");
+    const updated = await memory.markNotificationRead("notif-001", "system");
 
     expect(updated).toBeDefined();
     expect(updated!.isRead).toBe(true);
-    expect((await memory.getNotifications()).find(notification => notification.id === "notif-001")!.isRead).toBe(true);
-    expect((await memory.getNotifications()).find(notification => notification.id === "notif-002")!.isRead).toBe(false);
+    expect((await memory.getNotifications("system")).find(notification => notification.id === "notif-001")!.isRead).toBe(true);
+    expect((await memory.getNotifications("system")).find(notification => notification.id === "notif-002")!.isRead).toBe(false);
   });
 
   it("markNotificationRead — returns undefined for a missing notification", async () => {
     const memory = new MemStorage();
 
-    const result = await memory.markNotificationRead("nonexistent-notif");
+    const result = await memory.markNotificationRead("nonexistent-notif", "system");
 
     expect(result).toBeUndefined();
   });
@@ -1492,11 +1492,11 @@ describe("MemStorage notifications", () => {
   it("markAllNotificationsRead — marks every notification as read", async () => {
     const memory = new MemStorage();
 
-    expect((await memory.getNotifications()).some(notification => !notification.isRead)).toBe(true);
+    expect((await memory.getNotifications("system")).some(notification => !notification.isRead)).toBe(true);
 
-    await expect(memory.markAllNotificationsRead()).resolves.toBeUndefined();
+    await expect(memory.markAllNotificationsRead("system")).resolves.toBeUndefined();
 
-    expect((await memory.getNotifications()).every(notification => notification.isRead)).toBe(true);
+    expect((await memory.getNotifications("system")).every(notification => notification.isRead)).toBe(true);
   });
 });
 

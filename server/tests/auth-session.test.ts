@@ -2,17 +2,17 @@ import express from "express";
 import { createServer, type Server } from "http";
 import { readFileSync } from "fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, pool } from "../db";
 import {
   setupAuth,
-  createUser,
+  createUser as createAuthUser,
   PASSWORD_CHANGE_MAX_ATTEMPTS,
   PASSWORD_CHANGE_WINDOW_MS,
   resetPasswordChangeAttemptLimiter,
 } from "../auth";
 import { registerRoutes } from "../routes";
-import { users } from "@shared/schema";
+import { notificationsTable, users } from "@shared/schema";
 import { acceptedPasswords, rejectedPasswords } from "./helpers/password-policy";
 
 const username = `session-password-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -20,6 +20,13 @@ const originalPassword = "original-password";
 const updatedPassword = "updated-password";
 const rateLimitUsername = `password-limit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const rateLimitPassword = "rate-limit-password";
+const fixtureIds: string[] = [];
+
+async function createUser(...args: Parameters<typeof createAuthUser>) {
+  const user = await createAuthUser(...args);
+  fixtureIds.push(user.id);
+  return user;
+}
 
 let server: Server;
 let baseUrl: string;
@@ -68,6 +75,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await db.delete(notificationsTable).where(inArray(notificationsTable.userId, fixtureIds));
   await db.delete(users).where(eq(users.id, userId));
   await db.delete(users).where(eq(users.id, rateLimitUserId));
   await resetPasswordChangeAttemptLimiter();

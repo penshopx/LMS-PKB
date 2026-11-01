@@ -759,6 +759,7 @@ export interface SKKNICriteria {
 // Notification
 export interface Notification {
   id: string;
+  // Account ID (users.id), not participantId: admins and PICs also receive alerts.
   userId: string;
   type: "info" | "warning" | "success" | "error";
   category: "course" | "assessment" | "certificate" | "schedule" | "system";
