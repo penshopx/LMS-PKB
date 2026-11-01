@@ -7,6 +7,17 @@ export const loginCredentialsSchema = z.object({
 }).strict();
 
 export const invitationTokenSchema = z.string().min(32).max(256);
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MAX_LENGTH = 128;
+export const LEGACY_DEFAULT_PASSWORD = "admin123";
+export const newPasswordSchema = z.string()
+  .refine(value => value.trim() !== LEGACY_DEFAULT_PASSWORD,
+    "Password baru tidak boleh menggunakan password bawaan lama.")
+  .refine(value => value.trim().length >= PASSWORD_MIN_LENGTH,
+    "Password baru minimal 12 karakter, tidak termasuk spasi di awal dan akhir.")
+  .refine(value => value.length <= PASSWORD_MAX_LENGTH,
+    "Password baru maksimal 128 karakter.");
+
 export const invitationPasswordSchema = z.string()
   .min(12, "Kata sandi minimal 12 karakter.")
   .max(128, "Kata sandi maksimal 128 karakter.")

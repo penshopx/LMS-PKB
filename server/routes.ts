@@ -37,7 +37,7 @@ import {
 } from "@shared/schema";
 import type { ApplicationRole, User } from "@shared/schema";
 import { z } from "zod";
-import { acceptInvitationSchema, invitationTokenSchema, loginCredentialsSchema } from "@shared/auth-validation";
+import { acceptInvitationSchema, invitationTokenSchema, loginCredentialsSchema, newPasswordSchema } from "@shared/auth-validation";
 import {
   evaluateCourseCompletion,
   gradeQuizSubmission,
@@ -546,8 +546,9 @@ export async function registerRoutes(
       ) {
         return res.status(400).json({ message: "currentPassword dan newPassword wajib diisi" });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ message: "Password baru minimal 6 karakter" });
+      const validation = newPasswordSchema.safeParse(newPassword);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.issues[0].message });
       }
 
       const source = req.ip || req.socket.remoteAddress || "unknown";
@@ -560,6 +561,9 @@ export async function registerRoutes(
       }
 
       const result = await changeUserPassword(user.id, currentPassword, newPassword);
+      if (result === "invalid_new_password") {
+        return res.status(400).json({ message: "Password baru tidak memenuhi kebijakan keamanan." });
+      }
       if (result === "user_not_found") {
         return res.status(404).json({ message: "User tidak ditemukan" });
       }

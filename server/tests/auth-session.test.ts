@@ -1,5 +1,6 @@
 import express from "express";
 import { createServer, type Server } from "http";
+import { readFileSync } from "fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db";
@@ -12,6 +13,7 @@ import {
 } from "../auth";
 import { registerRoutes } from "../routes";
 import { users } from "@shared/schema";
+import { acceptedPasswords, rejectedPasswords } from "./helpers/password-policy";
 
 const username = `session-password-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const originalPassword = "original-password";
@@ -41,6 +43,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 }
 
 beforeAll(async () => {
+  await pool.query(readFileSync(new URL("../migrations/014_login_attempts.sql", import.meta.url), "utf8"));
   const user = await createUser(username, originalPassword);
   userId = user.id;
   const rateLimitUser = await createUser(rateLimitUsername, rateLimitPassword);
@@ -74,6 +77,65 @@ afterAll(async () => {
 });
 
 describe("password change session continuity", () => {
+  it("enforces the shared policy and messages without changing legacy credentials on rejection", async () => {
+    await resetPasswordChangeAttemptLimiter();
+    const legacyUsername = `legacy-policy-${crypto.randomUUID()}`;
+    const user = await createUser(legacyUsername, "admin123");
+    try {
+      const login = await request("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ username: legacyUsername, password: "admin123" }),
+      });
+      expect(login.status).toBe(200);
+      const cookie = getSessionCookie(login);
+      const change = (newPassword: unknown, currentPassword: unknown = "admin123") =>
+        request("/api/me/password", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+
+      for (const [password, message] of rejectedPasswords) {
+        const response = await change(password);
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ message });
+        const [stored] = await db.select().from(users).where(eq(users.id, user.id));
+        expect(stored.password).toBe(user.password);
+      }
+      for (const [current, next] of [
+        [undefined, "abcdefghijkl"], ["", "abcdefghijkl"], [123, "abcdefghijkl"],
+        ["admin123", undefined], ["admin123", ""], ["admin123", 123],
+      ]) {
+        const response = await change(next, current ?? null);
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ message: "currentPassword dan newPassword wajib diisi" });
+      }
+      // Invalid input is rejected before consuming password-guessing capacity.
+      const attempts = await pool.query(
+        "SELECT * FROM password_change_attempts WHERE attempt_key = $1", [`account:${user.id}`],
+      );
+      expect(attempts.rows).toHaveLength(0);
+
+      let current = "admin123";
+      for (const password of acceptedPasswords) {
+        const response = await change(password, current);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ message: "Password berhasil diubah" });
+        current = password;
+        const session = await request("/api/me", { headers: { Cookie: cookie } });
+        expect(session.status).toBe(200);
+      }
+      const loginWithExactPassword = await request("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ username: legacyUsername, password: current }),
+      });
+      expect(loginWithExactPassword.status).toBe(200);
+    } finally {
+      await db.delete(users).where(eq(users.id, user.id));
+      await resetPasswordChangeAttemptLimiter();
+    }
+  });
+
   it("keeps the current session valid and accepts the new password after logout", async () => {
     const loginResponse = await request("/api/login", {
       method: "POST",

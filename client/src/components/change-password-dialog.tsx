@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { newPasswordSchema } from "@shared/auth-validation";
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -63,8 +64,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
       setValidationError("Semua field wajib diisi");
       return;
     }
-    if (newPassword.length < 6) {
-      setValidationError("Password baru minimal 6 karakter");
+    const validation = newPasswordSchema.safeParse(newPassword);
+    if (!validation.success) {
+      setValidationError(validation.error.issues[0].message);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -119,7 +121,12 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={mutation.isPending}
                 data-testid="input-new-password"
+                aria-describedby="new-password-help"
               />
+              <p id="new-password-help" className="text-xs text-muted-foreground">
+                Minimal 12 karakter, tidak termasuk spasi di awal dan akhir; maksimal 128 karakter.
+                Jangan gunakan password bawaan lama.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -137,7 +144,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
             </div>
 
             {(validationError || mutation.isError) && (
-              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <div role="alert" className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{validationError || (mutation.error as Error)?.message}</span>
               </div>

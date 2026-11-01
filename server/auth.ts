@@ -9,6 +9,7 @@ import { users } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Express, RequestHandler } from "express";
 import type { ApplicationRole, User } from "@shared/schema";
+import { LEGACY_DEFAULT_PASSWORD, newPasswordSchema, PASSWORD_MIN_LENGTH } from "@shared/auth-validation";
 
 const scryptAsync = promisify(scrypt);
 
@@ -66,6 +67,7 @@ export async function createUser(
 export type ChangePasswordResult =
   | "updated"
   | "user_not_found"
+  | "invalid_new_password"
   | "invalid_current_password";
 
 export const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
@@ -212,6 +214,7 @@ export async function changeUserPassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<ChangePasswordResult> {
+  if (!newPasswordSchema.safeParse(newPassword).success) return "invalid_new_password";
   const [storedUser] = await db.select().from(users).where(eq(users.id, userId));
   if (!storedUser) return "user_not_found";
 
@@ -252,9 +255,9 @@ export async function ensureAdminUser(): Promise<void> {
   });
 }
 
-const DEFAULT_PASSWORD = "admin123";
+const DEFAULT_PASSWORD = LEGACY_DEFAULT_PASSWORD;
 export const ADMIN_RECOVERY_PASSWORD_ENV = "ADMIN_RECOVERY_PASSWORD";
-export const ADMIN_RECOVERY_PASSWORD_MIN_LENGTH = 12;
+export const ADMIN_RECOVERY_PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
 
 export function getAdminRecoveryPassword(
   environment: NodeJS.ProcessEnv = process.env,

@@ -14,6 +14,7 @@ import {
   checkDefaultAdminPassword,
 } from "../auth";
 import { users } from "@shared/schema";
+import { acceptedPasswords, rejectedPasswords } from "./helpers/password-policy";
 
 const isolatedDatabase = vi.hoisted(() => ({
   schemaName: `admin_setup_${Math.random().toString(36).slice(2)}`,
@@ -57,6 +58,24 @@ afterAll(async () => {
 });
 
 describe("changeUserPassword", () => {
+  it.each(rejectedPasswords)("rejects unsafe replacement %j without modifying an existing weak password", async (password) => {
+    const user = await createUser(`weak-${crypto.randomUUID()}`, "admin123");
+    await expect(changeUserPassword(user.id, "admin123", password))
+      .resolves.toBe("invalid_new_password");
+    const [stored] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(stored.password).toBe(user.password);
+  });
+
+  it.each(acceptedPasswords)("accepts boundary password %j without trimming the stored value", async (password) => {
+    const user = await createUser(`boundary-${crypto.randomUUID()}`, "short");
+    await expect(changeUserPassword(user.id, "short", password)).resolves.toBe("updated");
+    const [stored] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(await comparePassword(password, stored.password)).toBe(true);
+    if (password !== password.trim()) {
+      expect(await comparePassword(password.trim(), stored.password)).toBe(false);
+    }
+  });
+
   it("updates the password while keeping the same user account", async () => {
     const username = `password-test-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const user = await createUser(username, "current-password");
