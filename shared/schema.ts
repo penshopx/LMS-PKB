@@ -844,6 +844,18 @@ export const passwordChangeAttempts = pgTable(
   (t) => [index("idx_password_change_attempts_window").on(t.windowStartedAt)],
 );
 
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    attemptKey: text("attempt_key").primaryKey(),
+    attemptCount: integer("attempt_count").notNull(),
+    windowStartedAt: timestamp("window_started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("idx_login_attempts_window").on(t.windowStartedAt)],
+);
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,

@@ -15,10 +15,10 @@ import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
 import { quizSubmissionFingerprint } from "./quiz-submission-identity";
 import { 
-  insertParticipantSchema, 
-  insertEvidenceSchema, 
-  insertCourseSchema, 
-  insertClusterSchema, 
+  insertParticipantSchema,
+  insertEvidenceSchema,
+  insertCourseSchema,
+  insertClusterSchema,
   insertUnitSchema,
   insertLearningPathSchema,
   insertQuizSchema,
@@ -44,6 +44,8 @@ import {
   quizForLearner,
   type SubmittedQuizAnswers,
 } from "@shared/lms-course-rules";
+
+import { loginAttemptLimiter } from "./login-attempt-limiter";
 
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
@@ -126,25 +128,49 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    const credentials = loginCredentialsSchema.safeParse(req.body);
-    if (!credentials.success) {
-      return res.status(400).json({ message: "Username dan kata sandi wajib diisi dengan benar." });
+  app.post("/api/login", async (req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    // Do not forward DB errors: query parameters may contain account identifiers.
+    const unavailable = () => res.status(503).json({
+      message: "Login sementara tidak tersedia. Silakan coba lagi nanti.",
+    });
+    const input = loginCredentialsSchema.safeParse(req.body);
+    if (!input.success) {
+      return res.status(400).json({ message: "Username dan password wajib diisi dengan benar." });
     }
-    req.body = credentials.data;
+    req.body = input.data;
+    let acquisition;
+    try {
+      acquisition = await loginAttemptLimiter.tryAcquire(
+        input.data.username, req.ip ?? req.socket.remoteAddress ?? "unknown",
+      );
+    } catch {
+      return unavailable();
+    }
+    if (!acquisition.allowed) {
+      res.setHeader("Retry-After", acquisition.retryAfterSeconds);
+      return res.status(429).json({
+        message: "Terlalu banyak percobaan login. Silakan coba lagi nanti.",
+        retryAfterSeconds: acquisition.retryAfterSeconds,
+      });
+    }
+    const { reservations } = acquisition;
     passport.authenticate("local", (err: any, user: any, info: any) => {
-      if (err) return next(err);
+      if (err) return unavailable();
       if (!user) {
         return res.status(401).json({ message: info?.message || "Login gagal" });
       }
       req.logIn(user, (loginErr) => {
-        if (loginErr) return next(loginErr);
-        res.json({
+        if (loginErr) return unavailable();
+        loginAttemptLimiter.recordSuccess(reservations).then(() => res.json({
           id: user.id,
           username: user.username,
           role: user.role,
           participantId: user.participantId,
           bujkId: user.bujkId,
+        })).catch(() => {
+          // Do not leave a successful session behind a failed response.
+          req.logout(() => unavailable());
         });
       });
     })(req, res, next);
@@ -287,7 +313,7 @@ export async function registerRoutes(
 
   registerPracticeMissionRoutes(app);
 
-  // ============ BUJK ACCESS & INVITATIONS ============
+  // BUJK ACCESS & INVITATIONS
   app.get("/api/access/bujks", async (req, res) => {
     try {
       const user = req.user as User;
