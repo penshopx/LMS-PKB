@@ -8,3 +8,9 @@ Do not depend on `pg_stat_activity` to detect blocked test transactions in this 
 **Why:** A concurrency test that polled session activity could not observe either blocked worker, even though an external row lock was active. Fixed sleeps were also too timing-dependent to prove overlap.
 
 **How to apply:** When testing concurrent storage operations, gate real transactions in the test harness, confirm every callback has initiated its first database operation, and only then release the lock that controls execution order.
+
+For paths that lock at different stages, coordinate on dispatch of the shared row-lock query rather than entry into a common progress calculation.
+
+**Why:** Lesson completion locks the enrollment before calculating progress; post-test processing reaches that lock later. Waiting for both paths to enter the calculation can deadlock the harness when the post-test transaction is held first.
+
+**How to apply:** Observe the real transaction client's query dispatch without replacing SQL results, hold the first transaction before commit, and release it only after the second dispatches its enrollment lock request. Bound barrier waits and drain requests before restoring observers or deleting fixtures.
