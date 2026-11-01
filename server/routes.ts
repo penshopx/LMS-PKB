@@ -13,6 +13,7 @@ import {
 import { db } from "./db";
 import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
+import { quizSubmissionFingerprint } from "./quiz-submission-identity";
 import { 
   insertParticipantSchema, 
   insertEvidenceSchema, 
@@ -1193,6 +1194,8 @@ export async function registerRoutes(
         participantId: z.string().min(1),
         answers: z.record(z.union([z.string(), z.array(z.string())])),
         timeSpent: z.number().int().min(0).max(86_400).optional(),
+        // Optional for older clients; the web app always supplies a stable UUID.
+        idempotencyKey: z.string().uuid().optional(),
       });
       const submission = submissionSchema.parse(req.body);
       const user = req.user as User;
@@ -1222,17 +1225,26 @@ export async function registerRoutes(
         startedAt: submittedAt,
         completedAt: submittedAt,
         timeSpent: submission.timeSpent,
-      });
+      }, submission.idempotencyKey ? {
+        key: submission.idempotencyKey,
+        fingerprint: quizSubmissionFingerprint(submission.answers, submission.timeSpent),
+      } : undefined);
       if ("rejection" in creation) {
+        if (creation.rejection === "idempotency_conflict") {
+          return res.status(409).json({
+            code: creation.rejection,
+            message: "Kunci pengiriman sudah digunakan dengan jawaban atau durasi berbeda. Jangan mengubah isi pengiriman saat mencoba ulang.",
+          });
+        }
         if (creation.rejection === "quiz_not_found") {
           return res.status(404).json({ message: "Kuis tidak ditemukan" });
         }
         if (creation.rejection === "awaiting_review") {
-          return res.status(409).json({ message: "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang." });
+          return res.status(409).json({ code: creation.rejection, message: "Post-test sedang menunggu penilaian. Tunggu hasil sebelum mencoba ulang." });
         }
-        return res.status(409).json({ message: "Batas percobaan kuis telah tercapai" });
+        return res.status(409).json({ code: creation.rejection, message: "Batas percobaan kuis telah tercapai" });
       }
-      res.status(201).json(creation.attempt);
+      res.status(creation.replayed ? 200 : 201).json(creation.attempt);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Jawaban kuis tidak valid", errors: error.errors });

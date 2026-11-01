@@ -378,6 +378,15 @@ export type NewQuizAttempt = Omit<QuizAttempt, "id" | "gradingStatus"> & {
   gradingStatus?: QuizAttempt["gradingStatus"];
 };
 
+export interface QuizSubmissionIdentity {
+  key: string;
+  fingerprint: string;
+}
+
+export type QuizAttemptCreationResult =
+  | { attempt: QuizAttempt; replayed?: boolean }
+  | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" | "idempotency_conflict" };
+
 export interface QuizAttemptGradeInput {
   score?: number;
   essayScores?: Record<string, number>;
@@ -914,7 +923,12 @@ export const quizAttemptsTable = pgTable("quiz_attempts", {
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
   timeSpent: integer("time_spent"),
-});
+  idempotencyKey: varchar("idempotency_key"),
+  submissionFingerprint: text("submission_fingerprint"),
+}, table => [
+  uniqueIndex("quiz_attempts_submission_unique").on(table.participantId, table.quizId, table.idempotencyKey),
+  check("quiz_attempts_submission_identity_pair", sql`(${table.idempotencyKey} IS NULL) = (${table.submissionFingerprint} IS NULL)`),
+]);
 
 export const certificatesTable = pgTable("certificates", {
   id: varchar("id").primaryKey(),

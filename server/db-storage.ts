@@ -46,6 +46,8 @@ import type {
   Quiz,
   QuizAttempt,
   NewQuizAttempt,
+  QuizSubmissionIdentity,
+  QuizAttemptCreationResult,
   QuizAttemptGradeInput,
   InsertQuiz,
   Question,
@@ -1091,6 +1093,8 @@ export class DrizzleStorage implements IStorage {
       startedAt: attempt.startedAt,
       completedAt: attempt.completedAt ?? null,
       timeSpent: attempt.timeSpent ?? null,
+      idempotencyKey: null,
+      submissionFingerprint: null,
     };
     await db.transaction(async tx => {
       await tx.insert(quizAttemptsTable).values(row);
@@ -1103,10 +1107,8 @@ export class DrizzleStorage implements IStorage {
 
   async createQuizAttemptWithinLimit(
     attempt: NewQuizAttempt,
-  ): Promise<
-    | { attempt: QuizAttempt }
-    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
-  > {
+    submission?: QuizSubmissionIdentity,
+  ): Promise<QuizAttemptCreationResult> {
     const id = `attempt-${randomUUID()}`;
     const result = await db.transaction(async tx => {
       const [quiz] = await tx.select().from(quizzesTable)
@@ -1114,6 +1116,22 @@ export class DrizzleStorage implements IStorage {
         .for("update")
         .limit(1);
       if (!quiz) return { rejected: true as const, rejection: "quiz_not_found" as const };
+
+      // Recheck under the existing quiz lock before quota/review checks.
+      // A successful retry must also work after the final slot or essay review.
+      if (submission) {
+        const [existing] = await tx.select().from(quizAttemptsTable).where(and(
+          eq(quizAttemptsTable.quizId, attempt.quizId),
+          eq(quizAttemptsTable.participantId, attempt.participantId),
+          eq(quizAttemptsTable.idempotencyKey, submission.key),
+        ));
+        if (existing) {
+          if (existing.submissionFingerprint !== submission.fingerprint) {
+            return { rejected: true as const, rejection: "idempotency_conflict" as const };
+          }
+          return { rejected: false as const, row: existing, replayed: true };
+        }
+      }
 
       const quizAttempts = await tx.select({
         participantId: quizAttemptsTable.participantId,
@@ -1145,14 +1163,16 @@ export class DrizzleStorage implements IStorage {
         startedAt: attempt.startedAt,
         completedAt: attempt.completedAt ?? null,
         timeSpent: attempt.timeSpent ?? null,
+        idempotencyKey: submission?.key ?? null,
+        submissionFingerprint: submission?.fingerprint ?? null,
       };
       await tx.insert(quizAttemptsTable).values(row);
       await this.refreshPostTestEnrollmentInTransaction(tx, quiz, attempt.participantId);
-      return { rejected: false as const, row };
+      return { rejected: false as const, row, replayed: false };
     });
 
     if (result.rejected) return { rejection: result.rejection };
-    return { attempt: toQuizAttempt(result.row) };
+    return { attempt: toQuizAttempt(result.row), replayed: result.replayed };
   }
 
   async gradeQuizAttempt(

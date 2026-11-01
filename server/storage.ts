@@ -23,6 +23,8 @@ import type {
   Quiz,
   QuizAttempt,
   NewQuizAttempt,
+  QuizSubmissionIdentity,
+  QuizAttemptCreationResult,
   QuizAttemptGradeInput,
   InsertQuiz,
   Question,
@@ -374,10 +376,7 @@ export interface IStorage {
   getQuizAttemptsByParticipant(participantId: string): Promise<QuizAttempt[]>;
   getQuizAttemptsAwaitingReview(): Promise<QuizAttempt[]>;
   createQuizAttempt(attempt: NewQuizAttempt): Promise<QuizAttempt>;
-  createQuizAttemptWithinLimit(attempt: NewQuizAttempt): Promise<
-    | { attempt: QuizAttempt }
-    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
-  >;
+  createQuizAttemptWithinLimit(attempt: NewQuizAttempt, submission?: QuizSubmissionIdentity): Promise<QuizAttemptCreationResult>;
   gradeQuizAttempt(id: string, grade: QuizAttemptGradeInput): Promise<QuizAttempt | undefined>;
 
   // LMS - Certificates
@@ -451,6 +450,7 @@ export class MemStorage implements IStorage {
   private enrollments: Map<string, Enrollment>;
   private quizzes: Map<string, Quiz>;
   private quizAttempts: Map<string, QuizAttempt>;
+  private quizSubmissionReceipts = new Map<string, { attemptId: string; fingerprint: string }>();
   private certificates: Map<string, Certificate>;
   private assessors: Map<string, Assessor>;
   private assessees: Map<string, Assessee>;
@@ -1162,15 +1162,23 @@ export class MemStorage implements IStorage {
 
   async createQuizAttemptWithinLimit(
     attempt: NewQuizAttempt,
-  ): Promise<
-    | { attempt: QuizAttempt }
-    | { rejection: "awaiting_review" | "max_attempts" | "quiz_not_found" }
-  > {
+    submission?: QuizSubmissionIdentity,
+  ): Promise<QuizAttemptCreationResult> {
     const quiz = this.quizzes.get(attempt.quizId);
     if (!quiz) return { rejection: "quiz_not_found" };
 
+    const receiptKey = JSON.stringify([attempt.participantId, attempt.quizId, submission?.key]);
+    const receipt = submission && this.quizSubmissionReceipts.get(receiptKey);
+    if (receipt) {
+      const existing = this.quizAttempts.get(receipt.attemptId);
+      if (existing) {
+        return receipt.fingerprint === submission!.fingerprint
+          ? { attempt: existing, replayed: true }
+          : { rejection: "idempotency_conflict" };
+      }
+    }
     const quizAttempts = Array.from(this.quizAttempts.values())
-      .filter(existing => existing.quizId === attempt.quizId);
+      .filter(existing => existing.quizId === attempt.quizId && existing.participantId === attempt.participantId);
     if (quizAttempts.some(existing => existing.gradingStatus === "awaiting_review")) {
       return { rejection: "awaiting_review" };
     }
@@ -1187,6 +1195,9 @@ export class MemStorage implements IStorage {
       id,
     };
     this.quizAttempts.set(id, newAttempt);
+    if (submission) {
+      this.quizSubmissionReceipts.set(receiptKey, { attemptId: id, fingerprint: submission.fingerprint });
+    }
     const course = this.courses.get(quiz.courseId);
     if (course?.postTestId === quiz.id) {
       const enrollment = Array.from(this.enrollments.values()).find(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,10 @@ import {
 import type { Quiz, ECourse, QuizAttempt } from "@shared/schema";
 import type { Participant } from "@shared/schema";
 import { EssayReviewQueue } from "@/components/essay-review-queue";
+import {
+  clearPendingQuizSubmission, prepareQuizSubmission, readPendingQuizSubmission,
+  postQuizSubmission, QuizSubmissionError, type PendingQuizSubmission,
+} from "@/lib/quiz-submission";
 
 type LocalQuestionType = "multiple_choice" | "true_false" | "essay";
 
@@ -71,6 +75,10 @@ export default function Quizzes() {
   const [isTakingQuiz, setIsTakingQuiz] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [pendingSubmission, setPendingSubmission] = useState<PendingQuizSubmission | null>(null);
+  const [submissionStorageError, setSubmissionStorageError] = useState("");
+  const submissionInFlight = useRef(false);
+  const openedRequestedQuiz = useRef("");
   const [participantId, setParticipantId] = useState(
     new URLSearchParams(window.location.search).get("participantId") ?? "",
   );
@@ -141,16 +149,33 @@ export default function Quizzes() {
   });
 
   useEffect(() => {
-    if (!requestedQuizId || quizzes.length === 0) return;
+    if (!requestedQuizId || quizzes.length === 0 || !user) return;
+    const requestKey = `${user.id}:${requestedQuizId}`;
+    if (openedRequestedQuiz.current === requestKey) return;
     const requestedQuiz = quizzes.find(quiz => quiz.id === requestedQuizId);
     if (!requestedQuiz) return;
+    openedRequestedQuiz.current = requestKey;
     setSelectedQuiz(requestedQuiz);
     setIsTakingQuiz(true);
-  }, [quizzes, requestedQuizId]);
+  }, [quizzes, requestedQuizId, user]);
 
   useEffect(() => {
     if (user?.role === "participant") setParticipantId(user.participantId ?? "");
   }, [user?.role, user?.participantId]);
+
+  useEffect(() => {
+    if (!selectedQuiz || !participantId || !user) return;
+    if (user.role === "participant" && participantId !== user.participantId) return;
+    try {
+      const pending = readPendingQuizSubmission(sessionStorage, user.id, participantId, selectedQuiz.id);
+      setPendingSubmission(pending);
+      setAnswers(pending?.answers ?? {});
+      setCurrentQuestionIndex(0);
+      setSubmissionStorageError("");
+    } catch (error) {
+      setSubmissionStorageError(error instanceof Error ? error.message : "Penyimpanan sesi browser tidak tersedia.");
+    }
+  }, [selectedQuiz?.id, participantId, user?.id, user?.role, user?.participantId]);
 
   const createQuizMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -165,18 +190,18 @@ export default function Quizzes() {
   });
 
   const submitAttemptMutation = useMutation({
-    mutationFn: async (data: { quizId: string; participantId: string; answers: Record<string, string> }) => {
-      const response = await apiRequest("POST", `/api/quizzes/${data.quizId}/attempts`, data);
-      return response.json() as Promise<{
-        score: number;
-        passed: boolean;
-        gradingStatus: QuizAttempt["gradingStatus"];
-      }>;
-    },
-    onSuccess: (attempt) => {
+    mutationFn: postQuizSubmission,
+    retry: false,
+    onSuccess: (attempt, submission) => {
+      try {
+        clearPendingQuizSubmission(sessionStorage, user!.id, submission);
+        setPendingSubmission(null);
+      } catch {
+        toast({ title: "Jawaban tersimpan di server", description: "Browser belum dapat menghapus data retry. Pengiriman berikutnya akan mengonfirmasi hasil yang sama terlebih dahulu.", variant: "destructive" });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
       queryClient.invalidateQueries({
-        queryKey: [`/api/participants/${participantId}/quiz-attempts`],
+        queryKey: [`/api/participants/${submission.participantId}/quiz-attempts`],
       });
       if (attempt.gradingStatus === "awaiting_review") {
         toast({
@@ -194,7 +219,19 @@ export default function Quizzes() {
       setAnswers({});
       setCurrentQuestionIndex(0);
     },
-    onError: (error: Error) => toast({ title: "Jawaban belum terkirim", description: error.message, variant: "destructive" }),
+    onError: (error: Error, submission) => {
+      if (error instanceof QuizSubmissionError && ["awaiting_review", "max_attempts"].includes(error.code ?? "")) {
+        // The locked server check confirms this key has not created an attempt.
+        try {
+          clearPendingQuizSubmission(sessionStorage, user!.id, submission);
+          setPendingSubmission(null);
+        } catch {
+          setSubmissionStorageError("Browser tidak dapat memperbarui data pengiriman. Jangan memulai percobaan baru sebelum penyimpanan sesi tersedia.");
+        }
+      }
+      toast({ title: "Pengiriman belum terkonfirmasi", description: error.message, variant: "destructive" });
+    },
+    onSettled: () => { submissionInFlight.current = false; },
   });
 
   const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -256,12 +293,16 @@ export default function Quizzes() {
   };
 
   const handleSubmitQuiz = () => {
-    if (!selectedQuiz || !participantId) return;
-    submitAttemptMutation.mutate({
-      quizId: selectedQuiz.id,
-      participantId,
-      answers,
-    });
+    if (!selectedQuiz || !participantId || !user || submissionInFlight.current || submissionStorageError) return;
+    try {
+      const submission = prepareQuizSubmission(sessionStorage, user.id, participantId, selectedQuiz.id, answers);
+      setPendingSubmission(submission);
+      setAnswers(submission.answers);
+      submissionInFlight.current = true;
+      submitAttemptMutation.mutate(submission);
+    } catch (error) {
+      toast({ title: "Jawaban belum dikirim", description: error instanceof Error ? error.message : "Penyimpanan sesi browser tidak tersedia. Aktifkan penyimpanan sebelum mengirim.", variant: "destructive" });
+    }
   };
 
   const openGradingDialog = (quiz: Quiz) => {
@@ -329,7 +370,7 @@ export default function Quizzes() {
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <div className="space-y-2 rounded-lg border p-4">
           <Label htmlFor="quiz-participant">Peserta</Label>
-          <Select value={participantId} onValueChange={setParticipantId} disabled={user?.role === "participant"}>
+          <Select value={participantId} onValueChange={setParticipantId} disabled={user?.role === "participant" || Boolean(pendingSubmission) || submitAttemptMutation.isPending}>
             <SelectTrigger id="quiz-participant" data-testid="select-quiz-participant">
               <SelectValue placeholder="Pilih peserta" />
             </SelectTrigger>
@@ -342,6 +383,15 @@ export default function Quizzes() {
             </SelectContent>
           </Select>
         </div>
+        {submissionStorageError && <p role="alert" className="rounded-lg border border-destructive p-4 text-sm text-destructive">{submissionStorageError}</p>}
+        {pendingSubmission && (
+          <div role="status" className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+            <p>Jawaban dikunci sampai pengiriman terkonfirmasi. Jika koneksi terputus atau halaman dimuat ulang, kirim ulang jawaban yang sama tanpa memakai jatah tambahan.</p>
+            <Button variant="outline" onClick={handleSubmitQuiz} disabled={submitAttemptMutation.isPending || Boolean(submissionStorageError)}>
+              {submitAttemptMutation.isPending ? "Mengonfirmasi pengiriman..." : "Kirim Ulang Jawaban"}
+            </Button>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">{selectedQuiz.title}</h1>
@@ -370,6 +420,7 @@ export default function Quizzes() {
             <CardTitle className="text-lg mt-2">{currentQ.text}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <fieldset disabled={Boolean(pendingSubmission) || submitAttemptMutation.isPending || Boolean(submissionStorageError)} className="space-y-4">
             {currentQ.type === "multiple_choice" && currentQ.options && (
               <RadioGroup 
                 value={answers[currentQ.id] || ""}
@@ -409,6 +460,7 @@ export default function Quizzes() {
                 data-testid="input-essay-answer"
               />
             )}
+            </fieldset>
           </CardContent>
           <CardFooter className="flex justify-between">
             <Button 
@@ -426,10 +478,10 @@ export default function Quizzes() {
             ) : (
               <Button
                 onClick={handleSubmitQuiz}
-                disabled={submitAttemptMutation.isPending || !participantId}
+                disabled={submitAttemptMutation.isPending || !participantId || Boolean(submissionStorageError)}
                 data-testid="button-submit-quiz"
               >
-                {submitAttemptMutation.isPending ? "Mengirim..." : "Kirim Jawaban"}
+                {submitAttemptMutation.isPending ? "Mengirim..." : pendingSubmission ? "Kirim Ulang Jawaban" : "Kirim Jawaban"}
               </Button>
             )}
           </CardFooter>
