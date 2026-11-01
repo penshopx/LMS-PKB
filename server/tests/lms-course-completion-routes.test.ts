@@ -253,6 +253,200 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
+  it.each(["perhitungan", "pembaruan progres"] as const)(
+    "mengisolasi kegagalan %s dari peserta lain pada kursus yang sama",
+    async mode => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus isolasi progres ${mode} ${Date.now()}`,
+        description: "Rollback satu enrollment tidak mengganggu enrollment peserta lain",
+        duration: "1 jam",
+      });
+      let otherParticipantId = "";
+      const signal = () => {
+        let resolve!: () => void;
+        const promise = new Promise<void>(done => { resolve = done; });
+        return { promise, resolve };
+      };
+      const firstMarked = signal();
+      const releaseFailure = signal();
+      const waitFor = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`Transaksi tidak mencapai ${label}`)), 5000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+      const transactional = storage as unknown as {
+        refreshCourseEnrollmentProgressInTransaction: (
+          tx: Transaction, id: string,
+        ) => ReturnType<typeof storage.refreshCourseEnrollmentProgress>;
+      };
+      const refresh = transactional.refreshCourseEnrollmentProgressInTransaction.bind(storage);
+      let refreshSpy: ReturnType<typeof vi.spyOn> | undefined;
+      const requests: Promise<Response>[] = [];
+      try {
+        const tag = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const otherParticipant = await storage.createParticipant({
+          nip: `ISO${tag}`.slice(0, 18),
+          name: "Peserta uji isolasi progres",
+          position: "Staf",
+          unit: "Uji",
+          email: `lms-isolation-${tag}@test.go.id`,
+        });
+        otherParticipantId = otherParticipant.id;
+        const first = await storage.createEnrollment(participantId, course.id);
+        const second = await storage.createEnrollment(otherParticipantId, course.id);
+        expect(first.id).not.toBe(second.id);
+        expect(course.lessons.length).toBeGreaterThan(1);
+        const lessonIds = course.lessons.map(lesson => lesson.id);
+        const lessonId = lessonIds.at(-1)!;
+        for (const enrollment of [first, second]) {
+          for (const previousId of lessonIds.slice(0, -1)) {
+            await storage.markEnrollmentLessonCompleted(enrollment.id, previousId);
+          }
+        }
+        const readEnrollment = async (id: string) => (await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, id)))[0];
+        const beforeFirst = await readEnrollment(first.id);
+        const beforeSecond = await readEnrollment(second.id);
+        for (const before of [beforeFirst, beforeSecond]) {
+          expect(before).toMatchObject({
+            completedLessonIds: lessonIds.slice(0, -1),
+            progress: Math.round((lessonIds.length - 1) / lessonIds.length * 100),
+            status: "in_progress",
+            completedAt: null,
+          });
+          expect(before.startedAt).toEqual(expect.any(String));
+        }
+        const complete = (id: string) => request(
+          `/api/enrollments/${id}/lessons/${lessonId}/complete`,
+          { method: "POST", body: "{}" },
+        );
+        let injectedFailures = 0;
+        let secondRefreshes = 0;
+        let firstReleased = false;
+        refreshSpy = vi.spyOn(transactional, "refreshCourseEnrollmentProgressInTransaction")
+          .mockImplementation(async (tx, id) => {
+            if (id !== first.id) {
+              expect(id).toBe(second.id);
+              expect(firstReleased).toBe(false);
+              secondRefreshes++;
+              return refresh(tx, id);
+            }
+            // Inspect the real uncommitted lesson write on this transaction's
+            // connection. Do not fail a global "next call": target enrollment.
+            const [marked] = await tx.select().from(enrollmentsTable)
+              .where(eq(enrollmentsTable.id, id));
+            expect(marked).toEqual({ ...beforeFirst, completedLessonIds: lessonIds });
+            if (mode === "pembaruan progres") {
+              // Execute the real progress UPDATE as well, then roll it back.
+              const updated = await refresh(tx, id);
+              expect(updated).toMatchObject({
+                completedLessonIds: lessonIds,
+                progress: 100,
+                status: "completed",
+                completedAt: expect.any(String),
+              });
+            }
+            firstMarked.resolve();
+            await releaseFailure.promise;
+            injectedFailures++;
+            throw new Error(`Simulasi kegagalan ${mode} khusus peserta pertama`);
+          });
+
+        const started = Date.now();
+        requests.push(complete(first.id));
+        await waitFor(firstMarked.promise, "penandaan materi peserta pertama");
+        requests.push(complete(second.id));
+        // The second transaction must COMMIT while the first is still open.
+        // A shared/course-wide lock would time out here instead of passing.
+        const secondResponse = await waitFor(requests[1], "commit peserta kedua");
+        expect(secondResponse.status).toBe(200);
+        expect(firstReleased).toBe(false);
+        expect(injectedFailures).toBe(0);
+        expect(secondRefreshes).toBe(1);
+        const storedSecond = await readEnrollment(second.id);
+        expect(storedSecond).toMatchObject({
+          participantId: otherParticipantId,
+          courseId: course.id,
+          completedLessonIds: lessonIds,
+          progress: 100,
+          status: "completed",
+          startedAt: beforeSecond.startedAt,
+          completedAt: expect.any(String),
+          lastAccessedAt: expect.any(String),
+        });
+        const completedTime = Date.parse(storedSecond.completedAt!);
+        expect(completedTime).toBeGreaterThanOrEqual(started);
+        expect(completedTime).toBeLessThanOrEqual(Date.now());
+        expect(storedSecond.lastAccessedAt).toBe(storedSecond.completedAt);
+        expect(await secondResponse.json()).toMatchObject({
+          id: second.id,
+          participantId: otherParticipantId,
+          completedLessonIds: storedSecond.completedLessonIds,
+          progress: storedSecond.progress,
+          status: storedSecond.status,
+          startedAt: storedSecond.startedAt,
+          completedAt: storedSecond.completedAt,
+          lastAccessedAt: storedSecond.lastAccessedAt,
+        });
+        expect(await readEnrollment(first.id)).toEqual(beforeFirst);
+
+        firstReleased = true;
+        releaseFailure.resolve();
+        expect((await waitFor(requests[0], "rollback peserta pertama")).status).toBe(500);
+        expect(injectedFailures).toBe(1);
+        refreshSpy.mockRestore();
+        // Raw reads cannot silently refresh stale progress or conceal rollback.
+        expect(await readEnrollment(first.id)).toEqual(beforeFirst);
+        expect(await readEnrollment(second.id)).toEqual(storedSecond);
+
+        const retryStarted = Date.now();
+        const retry = await complete(first.id);
+        expect(retry.status).toBe(200);
+        const afterRetry = await readEnrollment(first.id);
+        expect(afterRetry).toMatchObject({
+          completedLessonIds: lessonIds,
+          progress: 100,
+          status: "completed",
+          startedAt: beforeFirst.startedAt,
+          completedAt: expect.any(String),
+        });
+        expect(Date.parse(afterRetry.completedAt!)).toBeGreaterThanOrEqual(retryStarted);
+        expect(Date.parse(afterRetry.completedAt!)).toBeLessThanOrEqual(Date.now());
+        expect(afterRetry.lastAccessedAt).toBe(afterRetry.completedAt);
+        expect(await retry.json()).toMatchObject({
+          id: first.id,
+          participantId,
+          completedLessonIds: afterRetry.completedLessonIds,
+          progress: afterRetry.progress,
+          status: afterRetry.status,
+          startedAt: afterRetry.startedAt,
+          completedAt: afterRetry.completedAt,
+          lastAccessedAt: afterRetry.lastAccessedAt,
+        });
+        expect(await readEnrollment(second.id)).toEqual(storedSecond);
+      } finally {
+        releaseFailure.resolve();
+        // Drain open requests before restoring instrumentation/deleting fixtures,
+        // including assertion failures and barrier timeouts.
+        await Promise.allSettled(requests);
+        refreshSpy?.mockRestore();
+        await storage.deleteCourse(course.id);
+        if (otherParticipantId) await storage.deleteParticipant(otherParticipantId);
+      }
+    },
+  );
+
   it.each(["materi berbeda", "materi yang sama"] as const)(
     "menjaga progres dan penandaan idempoten untuk penyelesaian paralel: %s",
     async mode => {
