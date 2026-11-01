@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,14 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [validationError, setValidationError] = useState("");
+  const [newPasswordTouched, setNewPasswordTouched] = useState(false);
+  const [confirmationTouched, setConfirmationTouched] = useState(false);
+  const passwordValidation = newPasswordSchema.safeParse(newPassword);
+  const passwordError = !passwordValidation.success
+    ? passwordValidation.error.issues[0].message
+    : currentPassword && newPassword === currentPassword ? PASSWORD_UNCHANGED_MESSAGE : "";
+  const confirmationError = confirmPassword !== newPassword ? "Konfirmasi password tidak cocok" : "";
+  const canSubmit = !!currentPassword && !passwordError && !!confirmPassword && !confirmationError;
 
   const mutation = useMutation({
     mutationFn: async (body: { currentPassword: string; newPassword: string }) => {
@@ -39,19 +47,22 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
       }
       return res.json();
     },
-    onSuccess: () => {
-      // Reset and close after a brief moment so user sees success
-      setTimeout(() => {
-        handleClose();
-      }, 1500);
-    },
   });
 
+  useEffect(() => {
+    if (!open || !mutation.isSuccess) return;
+    const timer = setTimeout(() => handleClose(), 1500);
+    return () => clearTimeout(timer);
+  }, [open, mutation.isSuccess]);
+
   function handleClose() {
+    if (mutation.isPending) return;
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setValidationError("");
+    setNewPasswordTouched(false);
+    setConfirmationTouched(false);
     mutation.reset();
     onOpenChange(false);
   }
@@ -65,19 +76,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
       setValidationError("Semua field wajib diisi");
       return;
     }
-    const validation = newPasswordSchema.safeParse(newPassword);
-    if (!validation.success) {
-      setValidationError(validation.error.issues[0].message);
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setValidationError("Konfirmasi password tidak cocok");
-      return;
-    }
-    if (newPassword === currentPassword) {
-      setValidationError(PASSWORD_UNCHANGED_MESSAGE);
-      return;
-    }
+    setNewPasswordTouched(true);
+    setConfirmationTouched(true);
+    if (!canSubmit) return;
 
     mutation.mutate({ currentPassword, newPassword });
   }
@@ -85,8 +86,8 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
   const isSuccess = mutation.isSuccess;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md" data-testid="dialog-change-password">
+    <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) handleClose(); }}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md" data-testid="dialog-change-password">
         <DialogHeader>
           <DialogTitle>Ganti Password</DialogTitle>
           <DialogDescription>
@@ -100,7 +101,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
             <p className="text-sm font-medium text-foreground">Password berhasil diubah!</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <form noValidate onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="current-password">Password Saat Ini</Label>
               <Input
@@ -110,7 +111,11 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 autoComplete="current-password"
                 required
                 value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
+                onChange={e => {
+                  setCurrentPassword(e.target.value);
+                  setValidationError("");
+                  mutation.reset();
+                }}
                 disabled={mutation.isPending}
                 data-testid="input-current-password"
               />
@@ -127,11 +132,21 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={e => {
+                  setNewPassword(e.target.value);
+                  setNewPasswordTouched(true);
+                  setValidationError("");
+                  mutation.reset();
+                }}
+                onBlur={() => setNewPasswordTouched(true)}
                 disabled={mutation.isPending}
                 data-testid="input-new-password"
-                aria-describedby="new-password-help"
+                aria-invalid={newPasswordTouched && !!passwordError}
+                aria-describedby={`new-password-help${newPasswordTouched && passwordError ? " new-password-error" : ""}`}
               />
+              {newPasswordTouched && passwordError && (
+                <p id="new-password-error" role="alert" className="text-sm text-destructive">{passwordError}</p>
+              )}
               <p id="new-password-help" className="text-xs text-muted-foreground">
                 {`Minimal ${PASSWORD_MIN_LENGTH} karakter, tidak termasuk spasi di awal dan akhir; maksimal ${PASSWORD_MAX_LENGTH} karakter. Jangan gunakan kata sandi bawaan lama atau kata sandi yang mudah ditebak.`}
               </p>
@@ -148,10 +163,21 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={e => {
+                  setConfirmPassword(e.target.value);
+                  setConfirmationTouched(true);
+                  setValidationError("");
+                  mutation.reset();
+                }}
+                onBlur={() => setConfirmationTouched(true)}
+                aria-invalid={confirmationTouched && !!confirmationError}
+                aria-describedby={confirmationTouched && confirmationError ? "confirm-password-error" : undefined}
                 disabled={mutation.isPending}
                 data-testid="input-confirm-password"
               />
+              {confirmationTouched && confirmationError && (
+                <p id="confirm-password-error" role="alert" className="text-sm text-destructive">{confirmationError}</p>
+              )}
             </div>
 
             {(validationError || mutation.isError) && (
@@ -172,7 +198,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
               </Button>
               <Button
                 type="submit"
-                disabled={mutation.isPending}
+                disabled={mutation.isPending || !canSubmit}
                 className="bg-sky-500 hover:bg-sky-600 text-white"
                 data-testid="button-submit-change-password"
               >

@@ -12,7 +12,7 @@ export const PASSWORD_MAX_LENGTH = 128;
 export const LEGACY_DEFAULT_PASSWORD = "admin123";
 export const PASSWORD_POLICY_MESSAGE = "Kata sandi tidak memenuhi kebijakan keamanan.";
 export const PASSWORD_UNCHANGED_MESSAGE = "Kata sandi baru harus berbeda dari kata sandi saat ini.";
-const disallowedPasswords = new Set([LEGACY_DEFAULT_PASSWORD, "password123", "admin12345678"]);
+const disallowedPasswords = new Set([LEGACY_DEFAULT_PASSWORD, "password123", "password123456", "admin12345678"]);
 export const newPasswordSchema = z.string()
   .refine(value => !disallowedPasswords.has(value.trim().toLowerCase()),
     PASSWORD_POLICY_MESSAGE)

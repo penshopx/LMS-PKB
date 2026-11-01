@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "YCs1yutw8RMReoU0GOhuD"
+uri = "file://generated-artifacts/password-dialog/desktop-length-error.png"
+type = "image"
+title = "Validasi sandi — desktop"
+description = "Pesan minimum 12 karakter terlihat di bawah kolom sandi baru; tombol Simpan tidak aktif."
+logical_id = "abb06b9b-f64c-409c-8f85-68c74b3b4c19"
+content_hash = "sha256:1dc0b851b3870a070c5304d664de797a6f0fc49c1568322d5efe326194b02865"
+size = 125419
+mtime_ms = 1793508034527
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:14804978-6b7c-4712-9595-18909e65f938/abb06b9b-f64c-409c-8f85-68c74b3b4c19/c0c2b06b-4eb2-4e28-b0f2-3cb810035159"
+storage_version_token = "1793508270773459"
+content_type = "image/png"
+
+[[outputs]]
+id = "hvPKUxiGacopjj6XtT-gq"
+uri = "file://generated-artifacts/password-dialog/mobile-identical-error.png"
+type = "image"
+title = "Validasi sandi — ponsel"
+description = "Pesan penolakan sandi yang sama terlihat pada layar 402 × 874, tanpa luapan horizontal."
+logical_id = "b9621931-ad3d-41e0-951f-5eec2fc955ee"
+content_hash = "sha256:d778238b39b9312b5aaa2801afd4ebdd9476f8ca7f99aa698e5b870e81ac718b"
+size = 51617
+mtime_ms = 1793508035755
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:14804978-6b7c-4712-9595-18909e65f938/b9621931-ad3d-41e0-951f-5eec2fc955ee/6a37bdfd-e3fe-484a-bc1b-5504cc6d72f9"
+storage_version_token = "1793508272080150"
+content_type = "image/png"

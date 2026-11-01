@@ -8,6 +8,8 @@ export const rejectedPasswords = [
   ["admin123", "Kata sandi tidak memenuhi kebijakan keamanan."],
   ["  admin123  ", "Kata sandi tidak memenuhi kebijakan keamanan."],
   ["password123", "Kata sandi tidak memenuhi kebijakan keamanan."],
+  ["password123456", "Kata sandi tidak memenuhi kebijakan keamanan."],
+  ["  PASSWORD123456  ", "Kata sandi tidak memenuhi kebijakan keamanan."],
   ["admin12345678", "Kata sandi tidak memenuhi kebijakan keamanan."],
   ["  ADMIN12345678  ", "Kata sandi tidak memenuhi kebijakan keamanan."],
 ] as const;
