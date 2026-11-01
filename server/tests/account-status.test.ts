@@ -1,11 +1,12 @@
 import express from "express";
 import { createServer, type Server } from "http";
 import { randomUUID } from "crypto";
+import pg from "pg";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { users, certificatesTable, accountStatusHistory } from "@shared/schema";
 import { createUser, setupAuth } from "../auth";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { storage } from "../storage";
 import { registerRoutes } from "../routes";
 
@@ -51,6 +52,107 @@ async function learningData() {
     attempts: await storage.getQuizAttemptsByParticipant(participantId),
     certificates: await storage.getCertificatesByParticipant(participantId),
   };
+}
+
+function signal() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function createTestAccount(label: string) {
+  const actor = `${label}-${randomUUID()}`;
+  const account = await createUser(`${actor}-${tag}`, password, { role: "participant" });
+  ids.push(account.id);
+  return { actor, account };
+}
+
+// Hold the real username lookup's result, not a fabricated account snapshot.
+// This puts status changes between the login read and Passport serialization.
+function pauseAccountRead(id: string) {
+  const read = signal();
+  const release = signal();
+  const realSelect = db.select.bind(db);
+  let paused = false;
+  const spy = vi.spyOn(db, "select").mockImplementation((...args) => {
+    const selection = realSelect(...args);
+    const realFrom = selection.from.bind(selection);
+    vi.spyOn(selection, "from").mockImplementation((...fromArgs) => {
+      const query = realFrom(...fromArgs);
+      if (fromArgs[0] !== users) return query;
+      const realWhere = query.where.bind(query);
+      vi.spyOn(query, "where").mockImplementation((...whereArgs) => {
+        const result = realWhere(...whereArgs);
+        const realThen = result.then.bind(result);
+        vi.spyOn(result, "then").mockImplementation((onFulfilled, onRejected) =>
+          realThen(async rows => {
+            if (!paused && rows.length === 1 && rows[0].id === id) {
+              paused = true;
+              read.resolve();
+              await release.promise;
+            }
+            return rows;
+          }).then(onFulfilled, onRejected),
+        );
+        return result;
+      });
+      return query;
+    });
+    return selection;
+  });
+  return {
+    read: read.promise,
+    resume: release.resolve,
+    restore() {
+      release.resolve();
+      spy.mockRestore();
+    },
+  };
+}
+
+// Both real transactions enter their callbacks while an independent row lock
+// holds them back. Dispatch both before releasing it, without timing guesses or
+// depending on pg_stat_activity (disabled on the managed test database).
+async function parallelStatusChanges(id: string, first: boolean, second: boolean) {
+  const blocker = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  const realTransaction = db.transaction.bind(db);
+  const ready = [signal(), signal()];
+  const gates = [signal(), signal()];
+  const dispatched = [signal(), signal()];
+  const requests: Promise<Response>[] = [];
+  let count = 0;
+  await blocker.connect();
+  await blocker.query("BEGIN");
+  await blocker.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [id]);
+  const spy = vi.spyOn(db, "transaction").mockImplementation((callback, config) => {
+    const index = count++;
+    if (index > 1) throw new Error("Unexpected transaction in status race");
+    return realTransaction(async tx => {
+      ready[index].resolve();
+      await gates[index].promise;
+      const result = callback(tx);
+      dispatched[index].resolve();
+      return result;
+    }, config);
+  });
+  try {
+    requests.push(setStatus(id, first));
+    await ready[0].promise;
+    requests.push(setStatus(id, second));
+    await ready[1].promise;
+    gates[0].resolve();
+    await dispatched[0].promise;
+    gates[1].resolve();
+    await dispatched[1].promise;
+    await blocker.query("COMMIT");
+    return await Promise.all(requests);
+  } finally {
+    gates.forEach(gate => gate.resolve());
+    await blocker.query("ROLLBACK").catch(() => undefined);
+    await Promise.allSettled(requests);
+    spy.mockRestore();
+    await blocker.end();
+  }
 }
 
 beforeAll(async () => {
@@ -256,12 +358,119 @@ describe("account status management", () => {
     expect((await request("learner", "/api/me")).status).toBe(200);
   });
 
-  it("serializes duplicate concurrent changes and records only one real transition", async () => {
-    const before = (await history()).length;
-    const responses = await Promise.all([setStatus(learnerId, false), setStatus(learnerId, false)]);
+  it.each([false, true])("rejects an overlapping login's stale session (reactivated: %s)", async reactivate => {
+    const { actor, account } = await createTestAccount("stale-login");
+    expect((await login(actor)).status).toBe(200);
+    const oldCookie = cookies[actor];
+    const pause = pauseAccountRead(account.id);
+    const pendingLogin = login(actor);
+    try {
+      await pause.read;
+      expect((await setStatus(account.id, false)).status).toBe(200);
+      if (reactivate) expect((await setStatus(account.id, true)).status).toBe(200);
+      pause.resume();
+      // Credentials read while active may finish successfully; the session
+      // they issue must retain the OLD version and cannot grant access.
+      expect((await pendingLogin).status).toBe(200);
+      const racedCookie = cookies[actor];
+      for (const cookie of [oldCookie, racedCookie]) {
+        cookies[actor] = cookie;
+        expect((await request(actor, "/api/me")).status).toBe(401);
+        expect((await request(actor, "/api/courses")).status).toBe(401);
+      }
+      if (!reactivate) expect((await setStatus(account.id, true)).status).toBe(200);
+      // The cookie issued by the overlapping login was never refreshed.
+      cookies[actor] = racedCookie;
+      expect((await request(actor, "/api/me")).status).toBe(401);
+      expect((await login(actor)).status).toBe(200);
+      expect((await request(actor, "/api/me")).status).toBe(200);
+    } finally {
+      pause.restore();
+      await pendingLogin;
+    }
+  });
+
+  it("does not turn an inactive login snapshot into a valid login during reactivation", async () => {
+    const { actor, account } = await createTestAccount("inactive-login");
+    expect((await setStatus(account.id, false)).status).toBe(200);
+    const pause = pauseAccountRead(account.id);
+    const pendingLogin = login(actor);
+    try {
+      await pause.read;
+      expect((await setStatus(account.id, true)).status).toBe(200);
+      pause.resume();
+      const response = await pendingLogin;
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({ message: expect.stringContaining("dinonaktifkan") });
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect((await request(actor, "/api/me")).status).toBe(401);
+      expect((await login(actor)).status).toBe(200);
+      expect((await request(actor, "/api/me")).status).toBe(200);
+    } finally {
+      pause.restore();
+      await pendingLogin;
+    }
+  });
+
+  it.each([
+    { first: false, second: false },
+    { first: false, second: true },
+  ])("serializes parallel status requests $first / $second without losing revocation or audit", async ({
+    first, second,
+  }) => {
+    const { actor, account } = await createTestAccount("parallel-status");
+    expect((await login(actor)).status).toBe(200);
+    const oldCookie = cookies[actor];
+    const responses = await parallelStatusChanges(account.id, first, second);
     expect(responses.map(response => response.status)).toEqual([200, 200]);
-    expect(await history()).toHaveLength(before + 1);
-    expect((await setStatus(learnerId, true)).status).toBe(200);
+    const [stored] = await db.select().from(users).where(eq(users.id, account.id));
+    // Opposing requests may acquire the lock in either order. Both valid
+    // serial outcomes must have an unbroken audit chain and matching version.
+    if (!second) expect(stored.isActive).toBe(false);
+    const transitions = stored.isActive ? 2 : 1;
+    expect(stored.sessionVersion).toBe(transitions);
+    const events = (await history()).filter(event => event.targetUserId === account.id);
+    expect(events).toHaveLength(transitions);
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ previousIsActive: true, newIsActive: false }),
+      ...(stored.isActive ? [expect.objectContaining({ previousIsActive: false, newIsActive: true })] : []),
+    ]));
+    if (!stored.isActive) expect((await setStatus(account.id, true)).status).toBe(200);
+    cookies[actor] = oldCookie;
+    expect((await request(actor, "/api/me")).status).toBe(401);
+    expect((await login(actor)).status).toBe(200);
+    expect((await request(actor, "/api/me")).status).toBe(200);
+  });
+
+  it("accepts legacy string-ID sessions only until the account's first status change", async () => {
+    const { actor, account } = await createTestAccount("legacy-session");
+    const legacyCookies: string[] = [];
+    for (let index = 0; index < 2; index++) {
+      expect((await login(actor)).status).toBe(200);
+      const cookie = cookies[actor];
+      const signed = decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1));
+      const sid = signed.slice(2, signed.lastIndexOf("."));
+      const result = await pool.query(
+        `UPDATE session SET sess = jsonb_set(sess::jsonb, '{passport,user}', to_jsonb($1::text))
+         WHERE sid = $2 RETURNING sess`,
+        [account.id, sid],
+      );
+      expect(result.rowCount).toBe(1);
+      expect(result.rows[0].sess.passport.user).toBe(account.id);
+      legacyCookies.push(cookie);
+      expect((await request(actor, "/api/me")).status).toBe(200);
+    }
+    expect((await setStatus(account.id, false)).status).toBe(200);
+    cookies[actor] = legacyCookies[0];
+    expect((await request(actor, "/api/me")).status).toBe(401);
+    expect((await setStatus(account.id, true)).status).toBe(200);
+    // One was rejected while inactive, the other was untouched since active.
+    for (const cookie of legacyCookies) {
+      cookies[actor] = cookie;
+      expect((await request(actor, "/api/me")).status).toBe(401);
+    }
+    expect((await login(actor)).status).toBe(200);
+    expect((await request(actor, "/api/me")).status).toBe(200);
   });
 
   it("serves paginated, newest-first admin history with only audit fields", async () => {
