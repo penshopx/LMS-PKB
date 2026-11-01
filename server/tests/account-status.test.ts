@@ -2,8 +2,8 @@ import express from "express";
 import { createServer, type Server } from "http";
 import { randomUUID } from "crypto";
 import { eq, inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { users, certificatesTable } from "@shared/schema";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { users, certificatesTable, accountStatusHistory } from "@shared/schema";
 import { createUser, setupAuth } from "../auth";
 import { db } from "../db";
 import { storage } from "../storage";
@@ -102,6 +102,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (adminId) await db.delete(accountStatusHistory).where(eq(accountStatusHistory.actorId, adminId));
   if (ids.length) await db.delete(users).where(inArray(users.id, ids));
   if (certificateId) await db.delete(certificatesTable).where(eq(certificatesTable.id, certificateId));
   if (courseId) await storage.deleteCourse(courseId);
@@ -110,6 +111,10 @@ afterAll(async () => {
 });
 
 describe("account status management", () => {
+  async function history() {
+    return db.select().from(accountStatusHistory).where(eq(accountStatusHistory.actorId, adminId));
+  }
+
   it("lists status without exposing password or session credentials", async () => {
     const response = await request("admin", "/api/access/users");
     expect(response.status).toBe(200);
@@ -122,10 +127,13 @@ describe("account status management", () => {
   });
 
   it("rejects unauthenticated and non-admin changes, invalid input, absent accounts, and admin targets", async () => {
+    const before = await history();
+    expect((await request("", "/api/access/status-history")).status).toBe(401);
     expect((await setStatus(learnerId, false, "")).status).toBe(401);
     for (const actor of ["learner", "pic"]) {
       expect((await setStatus(learnerId, false, actor)).status).toBe(403);
       expect((await request(actor, "/api/access/users")).status).toBe(403);
+      expect((await request(actor, "/api/access/status-history")).status).toBe(403);
     }
     for (const body of [{}, { isActive: "false" }, { isActive: false, role: "admin" }]) {
       expect((await request("admin", `/api/access/users/${learnerId}/status`, "PATCH", body)).status).toBe(400);
@@ -134,6 +142,7 @@ describe("account status management", () => {
     expect((await setStatus(adminId, false)).status).toBe(403);
     expect((await setStatus(adminId, true)).status).toBe(403);
     expect((await request("admin", "/api/me")).status).toBe(200);
+    expect(await history()).toEqual(before);
   });
 
   it("blocks login and every old session for participants and PICs, retaining learning history", async () => {
@@ -143,8 +152,20 @@ describe("account status management", () => {
       expect((await login(actor)).status).toBe(200);
       const untouchedSession = cookies[actor];
       cookies[actor] = oldSession;
+      const before = (await history()).length;
+      const startedAt = Date.now();
       expect((await setStatus(id, false)).status).toBe(200);
       expect((await setStatus(id, false)).status).toBe(200);
+      const deactivations = await history();
+      expect(deactivations).toHaveLength(before + 1);
+      const event = deactivations.find(entry => entry.targetUserId === id && !entry.newIsActive)!;
+      expect(event).toMatchObject({
+        actorId: adminId, actorUsername: `admin-${tag}`,
+        targetUserId: id, targetUsername: `${actor}-${tag}`,
+        previousIsActive: true, newIsActive: false,
+      });
+      expect(event.changedAt.getTime()).toBeGreaterThanOrEqual(startedAt - 1000);
+      expect(event.changedAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
       const listed = await (await request("admin", "/api/access/users")).json();
       expect(listed.find((a: { id: string }) => a.id === id).isActive).toBe(false);
       expect((await request(actor, "/api/me")).status).toBe(401);
@@ -163,8 +184,77 @@ describe("account status management", () => {
       // An idempotent activation must not revoke the new session.
       expect((await setStatus(id, true)).status).toBe(200);
       expect((await request(actor, "/api/me")).status).toBe(200);
+      const events = (await history()).filter(entry => entry.targetUserId === id);
+      expect(events).toHaveLength(2);
+      expect(events.find(entry => entry.newIsActive)).toMatchObject({
+        previousIsActive: false, newIsActive: true, actorId: adminId,
+      });
     }
     expect(await learningData()).toEqual(retainedData);
     expect((await storage.getQuizAttemptsByParticipant(participantId)).some(a => a.id === attemptId)).toBe(true);
+  });
+
+  it("rolls back status and session revocation when the audit insert fails", async () => {
+    const [before] = await db.select().from(users).where(eq(users.id, learnerId));
+    const events = await history();
+    const realTransaction = db.transaction.bind(db);
+    const spy = vi.spyOn(db, "transaction").mockImplementationOnce(callback =>
+      realTransaction(tx => callback(new Proxy(tx, {
+        get(target, property, receiver) {
+          if (property === "insert") return () => { throw new Error("Audit unavailable"); };
+          return Reflect.get(target, property, receiver);
+        },
+      }))),
+    );
+    try {
+      expect((await setStatus(learnerId, false)).status).toBe(500);
+    } finally {
+      spy.mockRestore();
+    }
+    const [after] = await db.select().from(users).where(eq(users.id, learnerId));
+    expect(after).toEqual(before);
+    expect(await history()).toEqual(events);
+    expect((await request("learner", "/api/me")).status).toBe(200);
+  });
+
+  it("serializes duplicate concurrent changes and records only one real transition", async () => {
+    const before = (await history()).length;
+    const responses = await Promise.all([setStatus(learnerId, false), setStatus(learnerId, false)]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect(await history()).toHaveLength(before + 1);
+    expect((await setStatus(learnerId, true)).status).toBe(200);
+  });
+
+  it("serves paginated, newest-first admin history with only audit fields", async () => {
+    // Enough rows to exercise pagination even on an otherwise empty installation.
+    await db.insert(accountStatusHistory).values(Array.from({ length: 51 }, (_, index) => ({
+      actorId: adminId, actorUsername: `admin-${tag}`,
+      targetUserId: learnerId, targetUsername: `learner-${tag}`,
+      previousIsActive: true, newIsActive: false,
+      changedAt: new Date(Date.now() - (index + 1) * 1000),
+    })));
+    const response = await request("admin", "/api/access/status-history");
+    expect(response.status).toBe(200);
+    const page = await response.json();
+    expect(page.entries).toHaveLength(50);
+    expect(page.hasMore).toBe(true);
+    expect(page.entries.map((entry: { changedAt: string }) => entry.changedAt))
+      .toEqual(page.entries.map((entry: { changedAt: string }) => entry.changedAt).sort().reverse());
+    for (const entry of page.entries) {
+      expect(Object.keys(entry).sort()).toEqual([
+        "id", "actorId", "actorUsername", "targetUserId", "targetUsername",
+        "previousIsActive", "newIsActive", "changedAt",
+      ].sort());
+      expect(Number.isNaN(Date.parse(entry.changedAt))).toBe(false);
+    }
+    const next = await (await request("admin", "/api/access/status-history?offset=50")).json();
+    expect(next.entries.length).toBeGreaterThan(0);
+    const firstIds = page.entries.map((entry: { id: string }) => entry.id);
+    expect(next.entries.every((entry: { id: string }) => !firstIds.includes(entry.id))).toBe(true);
+    for (const query of ["offset=-1", "offset=1.5", "offset=oops", "offset=2147483648", "password=x"]) {
+      expect((await request("admin", `/api/access/status-history?${query}`)).status).toBe(400);
+    }
+    const empty = await (await request("admin", "/api/access/status-history?offset=2147483647")).json();
+    expect(empty).toEqual({ entries: [], hasMore: false });
   });
 });

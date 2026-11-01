@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { BujkInvitation, BujkOrganization } from "@shared/schema";
+import type { AccountStatusHistoryEntry, BujkInvitation, BujkOrganization } from "@shared/schema";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,11 +29,19 @@ interface AccountSummary {
   isActive: boolean;
 }
 
+interface AccountStatusHistoryResponse {
+  entries: AccountStatusHistoryEntry[];
+  hasMore: boolean;
+}
+
+const STATUS_HISTORY_PAGE_SIZE = 50;
+
 export default function AccessManagement() {
   const { data: user } = useCurrentUser();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
   const [inviteLink, setInviteLink] = useState("");
+  const [historyOffset, setHistoryOffset] = useState(0);
   const { data: organizations = [], isError: organizationError } = useQuery<BujkOrganization[]>({
     queryKey: ["/api/access/bujks"],
   });
@@ -50,6 +58,20 @@ export default function AccessManagement() {
     enabled: isAdmin,
   });
   const [accountToUpdate, setAccountToUpdate] = useState<AccountSummary | null>(null);
+  const historyQueryKey = ["/api/access/status-history", user?.id, historyOffset] as const;
+  const {
+    data: statusHistory,
+    isLoading: historyLoading,
+    isError: historyError,
+    refetch: refetchHistory,
+  } = useQuery<AccountStatusHistoryResponse>({
+    queryKey: historyQueryKey,
+    enabled: isAdmin && !!user?.id,
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/access/status-history?offset=${historyOffset}`);
+      return response.json() as Promise<AccountStatusHistoryResponse>;
+    },
+  });
 
   const createOrganization = useMutation({
     mutationFn: async (name: string) => apiRequest("POST", "/api/access/bujks", { name }),
@@ -86,6 +108,8 @@ export default function AccessManagement() {
     },
     onSuccess: result => {
       queryClient.invalidateQueries({ queryKey: ["/api/access/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/access/status-history", user?.id] });
+      setHistoryOffset(0);
       toast({
         title: result.isActive ? "Akun diaktifkan" : "Akun dinonaktifkan",
         description: result.isActive
@@ -254,6 +278,83 @@ export default function AccessManagement() {
                 </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Riwayat perubahan status akun</CardTitle>
+            <CardDescription>Perubahan terbaru ditampilkan lebih dahulu. Waktu dicatat dalam WIB.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {historyLoading ? (
+              <div className="space-y-3 py-2" aria-label="Memuat riwayat perubahan status" aria-busy="true">
+                {[1, 2, 3].map(item => <div key={item} className="h-16 animate-pulse rounded-md bg-muted" />)}
+              </div>
+            ) : historyError ? (
+              <div className="space-y-3 py-2" role="alert">
+                <p className="text-sm text-destructive">Riwayat perubahan status gagal dimuat.</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => refetchHistory()}>Coba lagi</Button>
+              </div>
+            ) : (statusHistory?.entries.length ?? 0) === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">Belum ada riwayat perubahan status akun.</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {statusHistory?.entries.map(entry => (
+                    <div key={entry.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {entry.actorUsername} <span className="font-normal text-muted-foreground">mengubah status</span> {entry.targetUsername}
+                          </p>
+                          <p className="break-all text-xs text-muted-foreground">
+                            Pelaku: {entry.actorUsername} (ID: {entry.actorId}) · Target: {entry.targetUsername} (ID: {entry.targetUserId})
+                          </p>
+                        </div>
+                        <time className="shrink-0 text-xs text-muted-foreground" dateTime={entry.changedAt}>
+                          {new Intl.DateTimeFormat("id-ID", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                            timeZone: "Asia/Jakarta",
+                          }).format(new Date(entry.changedAt))} WIB
+                        </time>
+                      </div>
+                      <p className="mt-2 text-sm">
+                        {entry.previousIsActive ? "Aktif" : "Nonaktif"} <span className="text-muted-foreground">→</span> {entry.newIsActive ? "Aktif" : "Nonaktif"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Menampilkan {historyOffset + 1}–{historyOffset + (statusHistory?.entries.length ?? 0)} dari riwayat
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={historyOffset === 0 || historyLoading}
+                      onClick={() => setHistoryOffset(offset => Math.max(0, offset - STATUS_HISTORY_PAGE_SIZE))}
+                    >
+                      Sebelumnya
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!statusHistory?.hasMore || historyLoading}
+                      onClick={() => setHistoryOffset(offset => offset + STATUS_HISTORY_PAGE_SIZE)}
+                    >
+                      Berikutnya
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

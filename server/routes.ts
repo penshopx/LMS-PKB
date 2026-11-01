@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import passport from "passport";
 import {
   requireAuth,
@@ -29,6 +29,7 @@ import {
   insertScheduleSchema,
   insertPortfolioSchema,
   users,
+  accountStatusHistory,
   bujksTable,
   bujkInvitationsTable,
   participantsTable,
@@ -291,6 +292,23 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/access/status-history", requireRole("admin"), async (req, res) => {
+    const input = z.object({
+      offset: z.coerce.number().int().min(0).max(2147483647).default(0),
+    }).strict().safeParse(req.query);
+    if (!input.success) {
+      return res.status(400).json({ message: "Posisi halaman riwayat tidak valid." });
+    }
+    try {
+      const entries = await db.select().from(accountStatusHistory)
+        .orderBy(desc(accountStatusHistory.changedAt), desc(accountStatusHistory.id))
+        .limit(51).offset(input.data.offset);
+      res.json({ entries: entries.slice(0, 50), hasMore: entries.length > 50 });
+    } catch {
+      res.status(500).json({ message: "Riwayat perubahan akses tidak dapat dimuat." });
+    }
+  });
+
   app.patch("/api/access/users/:id/status", requireRole("admin"), async (req, res) => {
     const input = z.object({ isActive: z.boolean() }).strict().safeParse(req.body);
     if (!input.success) {
@@ -312,6 +330,15 @@ export async function registerRoutes(
             // Never restore sessions issued before a deactivation, even after reactivation.
             sessionVersion: account.sessionVersion + 1,
           }).where(eq(users.id, account.id));
+          const actor = req.user as User;
+          await tx.insert(accountStatusHistory).values({
+            actorId: actor.id,
+            actorUsername: actor.username,
+            targetUserId: account.id,
+            targetUsername: account.username,
+            previousIsActive: account.isActive,
+            newIsActive: input.data.isActive,
+          });
         }
         return { status: 200, body: { id: account.id, isActive: input.data.isActive } };
       });

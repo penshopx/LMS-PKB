@@ -786,6 +786,25 @@ export const users = pgTable("users", {
   bujkId: varchar("bujk_id").references(() => bujksTable.id, { onDelete: "set null" }),
 });
 
+// Identity snapshots deliberately survive account deletion; never store auth data.
+export const accountStatusHistory = pgTable("account_status_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  actorId: varchar("actor_id").notNull(),
+  actorUsername: text("actor_username").notNull(),
+  targetUserId: varchar("target_user_id").notNull(),
+  targetUsername: text("target_username").notNull(),
+  previousIsActive: boolean("previous_is_active").notNull(),
+  newIsActive: boolean("new_is_active").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index("account_status_history_chronology_idx").on(table.changedAt, table.id),
+  check("account_status_history_actual_change", sql`${table.previousIsActive} <> ${table.newIsActive}`),
+]);
+
+export type AccountStatusHistoryEntry = Omit<typeof accountStatusHistory.$inferSelect, "changedAt"> & {
+  changedAt: string;
+};
+
 export const bujkInvitationsTable = pgTable("bujk_invitations", {
   id: varchar("id").primaryKey(),
   tokenHash: text("token_hash").notNull().unique(),
