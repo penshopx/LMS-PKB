@@ -1635,6 +1635,236 @@ describe("aturan progres kursus melalui API", () => {
     },
   );
 
+  it.each(
+    ["pilihan ganda", "POST nilai akhir", "PATCH nilai esai"].flatMap(mode =>
+      ["materi dahulu", "post-test dahulu"].map(order => ({ mode, order })),
+    ),
+  )(
+    "menolak sertifikat sampai kedua transaksi kelulusan commit: $mode, $order",
+    async ({ mode, order }) => {
+      const course = await storage.createCourse({
+        unitId: "tender-01",
+        targetLevel: "L2",
+        title: `Kursus sertifikat sebelum commit ${mode} ${order} ${Date.now()}`,
+        description: "Sertifikat hanya membaca syarat kelulusan yang sudah tersimpan",
+        duration: "1 jam",
+      });
+      const signal = () => {
+        let resolve!: () => void;
+        const promise = new Promise<void>(done => { resolve = done; });
+        return { promise, resolve };
+      };
+      const prepared = [signal(), signal()];
+      const releases = [signal(), signal()];
+      const secondLockRequested = signal();
+      const waitFor = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`Transaksi tidak mencapai ${label}`)), 5000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const requests: Promise<Response>[] = [];
+      let transactionSpy: ReturnType<typeof vi.spyOn> | undefined;
+      const refreshSpy = vi.spyOn(storage, "refreshCourseEnrollmentProgress");
+      try {
+        expect(course.lessons.length).toBeGreaterThan(1);
+        const isEssay = mode !== "pilihan ganda";
+        const quiz = await storage.createQuiz({
+          courseId: course.id,
+          title: "Post-test sertifikat sebelum commit",
+          description: "Transaksi kelulusan ditahan secara terkontrol",
+          passingScore: 80,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          showResults: true,
+          questions: [{
+            id: "question-1",
+            type: isEssay ? "essay" : "multiple_choice",
+            text: "Jelaskan atau pilih jawaban yang tepat",
+            points: 10,
+            order: 1,
+            ...(isEssay ? {} : {
+              options: [{ id: "a", text: "Tepat", isCorrect: true }],
+              correctAnswer: "Tepat",
+            }),
+          }],
+        });
+        await db.update(coursesTable).set({ postTestId: quiz.id })
+          .where(eq(coursesTable.id, course.id));
+        const enrollment = await storage.createEnrollment(participantId, course.id);
+        const previousIds = course.lessons.slice(0, -1).map(lesson => lesson.id);
+        for (const id of previousIds) {
+          await storage.markEnrollmentLessonCompleted(enrollment.id, id);
+        }
+        let attemptId = "";
+        if (isEssay) {
+          const submission = await submitQuiz(quiz.id, "Jawaban untuk dinilai");
+          expect(submission.status).toBe(201);
+          const attempt = await submission.json();
+          expect(attempt).toMatchObject({ passed: false, gradingStatus: "awaiting_review" });
+          attemptId = attempt.id;
+        }
+        const readEnrollment = async () => (await db.select().from(enrollmentsTable)
+          .where(eq(enrollmentsTable.id, enrollment.id)))[0];
+        const before = await readEnrollment();
+        expect(before).toMatchObject({
+          completedLessonIds: previousIds,
+          progress: Math.round(previousIds.length / course.lessons.length * 100),
+          status: "in_progress",
+          completedAt: null,
+        });
+        const completeLesson = () => request(
+          `/api/enrollments/${enrollment.id}/lessons/${course.lessons.at(-1)!.id}/complete`,
+          { method: "POST", body: "{}" },
+        );
+        const finishPostTest = () => !isEssay
+          ? submitQuiz(quiz.id, "Tepat")
+          : mode === "POST nilai akhir"
+            ? request(`/api/quiz-attempts/${attemptId}/grade`, {
+                method: "POST",
+                body: JSON.stringify({ score: 90, feedback: "Jawaban sudah tepat." }),
+              })
+            : request(`/api/quizzes/${quiz.id}/attempts/${attemptId}/grade`, {
+                method: "PATCH",
+                body: JSON.stringify({ essayScores: { "question-1": 9 } }),
+              });
+        const operations = order === "materi dahulu"
+          ? [completeLesson, finishPostTest] : [finishPostTest, completeLesson];
+        const transaction = db.transaction.bind(db);
+        const commits: number[] = [];
+        let transactionCount = 0;
+        transactionSpy = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+          const number = ++transactionCount;
+          const result = await transaction(async tx => {
+            const { client } = (tx as unknown as {
+              session: { client: {
+                query: (query: string | { text: string }, values?: unknown[]) => Promise<unknown>;
+              } };
+            }).session;
+            const query = client.query.bind(client);
+            const querySpy = vi.spyOn(client, "query").mockImplementation((sql, values) => {
+              const text = typeof sql === "string" ? sql : sql.text;
+              const pending = query(sql, values);
+              if (number === 2 && text.includes('from "enrollments"') && text.includes("for update")) {
+                expect(values).toContain(enrollment.id);
+                secondLockRequested.resolve();
+              }
+              return pending;
+            });
+            try {
+              const updated = await callback(tx);
+              // Prove the real writes have happened on this connection while
+              // keeping the transaction callback open, strictly before COMMIT.
+              const [local] = await tx.select().from(enrollmentsTable)
+                .where(eq(enrollmentsTable.id, enrollment.id));
+              expect(local).toMatchObject(number === 2 ? {
+                status: "completed", progress: 100, completedAt: expect.any(String),
+                completedLessonIds: course.lessons.map(lesson => lesson.id),
+              } : {
+                status: "in_progress", completedAt: null,
+                completedLessonIds: order === "materi dahulu"
+                  ? course.lessons.map(lesson => lesson.id) : previousIds,
+              });
+              if (number === 2 || order === "post-test dahulu") {
+                const [attempt] = await tx.select().from(quizAttemptsTable)
+                  .where(eq(quizAttemptsTable.quizId, quiz.id));
+                expect(attempt).toMatchObject({ passed: 1, gradingStatus: "graded" });
+              }
+              prepared[number - 1]?.resolve();
+              if (releases[number - 1]) await releases[number - 1].promise;
+              return updated;
+            } finally {
+              querySpy.mockRestore();
+            }
+          }, config);
+          commits.push(number);
+          return result;
+        });
+
+        const issueCertificate = () => request("/api/certificates", {
+          method: "POST",
+          body: JSON.stringify({
+            participantId, courseId: course.id,
+            title: "Sertifikat Penyelesaian Kursus",
+            description: "Uji batas commit transaksi kelulusan",
+          }),
+        });
+        const assertRejectedWithoutWrites = async (lessonsCompleted: boolean, postTestPassed: boolean) => {
+          const snapshot = await readEnrollment();
+          const response = await waitFor(issueCertificate(), "penolakan sertifikat tanpa menunggu commit");
+          expect(response.status).toBe(409);
+          expect(await response.json()).toMatchObject({
+            completion: { lessonsCompleted, postTestPassed, isComplete: false },
+          });
+          expect(await db.select().from(certificatesTable)
+            .where(eq(certificatesTable.courseId, course.id))).toEqual([]);
+          // Compare every raw field, including timestamps; do not visit
+          // learning-state or explicitly refresh progress to repair stale data.
+          expect(await readEnrollment()).toEqual(snapshot);
+          expect(refreshSpy).not.toHaveBeenCalled();
+          expect(transactionCount).toBe(2);
+        };
+
+        requests.push(operations[0]());
+        await waitFor(prepared[0].promise, "transaksi pertama sebelum commit");
+        requests.push(operations[1]());
+        await waitFor(secondLockRequested.promise, "penguncian transaksi kedua");
+        expect(commits).toEqual([]);
+        expect(await readEnrollment()).toEqual(before);
+        await assertRejectedWithoutWrites(false, false);
+
+        releases[0].resolve();
+        expect((await waitFor(requests[0], "commit pertama")).status)
+          .toBe(order === "materi dahulu" || isEssay ? 200 : 201);
+        await waitFor(prepared[1].promise, "transaksi kedua sebelum commit");
+        expect(commits).toEqual([1]);
+        const intermediate = await readEnrollment();
+        expect(intermediate).toMatchObject({
+          status: "in_progress", completedAt: null,
+          progress: order === "materi dahulu" ? 100 : before.progress,
+          completedLessonIds: order === "materi dahulu"
+            ? course.lessons.map(lesson => lesson.id) : previousIds,
+        });
+        await assertRejectedWithoutWrites(order === "materi dahulu", order === "post-test dahulu");
+
+        releases[1].resolve();
+        expect((await waitFor(requests[1], "commit kedua")).status)
+          .toBe(order === "post-test dahulu" || isEssay ? 200 : 201);
+        expect(commits).toEqual([1, 2]);
+        const completed = await readEnrollment();
+        expect(completed).toMatchObject({
+          status: "completed", progress: 100, completedAt: expect.any(String),
+          completedLessonIds: course.lessons.map(lesson => lesson.id),
+        });
+        const certificate = await waitFor(issueCertificate(), "penerbitan sertifikat setelah commit");
+        expect(certificate.status).toBe(201);
+        const body = await certificate.json();
+        expect(body).toMatchObject({ participantId, courseId: course.id });
+        const certificates = await db.select().from(certificatesTable)
+          .where(eq(certificatesTable.courseId, course.id));
+        expect(certificates).toHaveLength(1);
+        expect(certificates[0].id).toBe(body.id);
+        expect(await readEnrollment()).toEqual(completed);
+        expect(refreshSpy).not.toHaveBeenCalled();
+        expect(transactionCount).toBe(2);
+      } finally {
+        for (const release of releases) release.resolve();
+        await Promise.allSettled(requests);
+        transactionSpy?.mockRestore();
+        refreshSpy.mockRestore();
+        await db.delete(certificatesTable).where(eq(certificatesTable.courseId, course.id));
+        await storage.deleteCourse(course.id);
+      }
+    },
+  );
+
   it.each(["API pilihan ganda", "API esai", "storage langsung"])(
     "membatalkan percobaan dan menjaga jatah ketika pembaruan progres gagal: %s",
     async mode => {
