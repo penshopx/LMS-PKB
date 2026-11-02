@@ -7,7 +7,7 @@ if (!process.env.REPLIT_DEV_DOMAIN || process.env.NODE_ENV === "production") {
 
 export default defineConfig({
   testDir: "./browser-tests",
-  testMatch: ["practice-reminders.spec.ts", "practice-reminder-account-switch.spec.ts", "practice-reminder-cross-tab.spec.ts"],
+  testMatch: ["practice-reminders.spec.ts", "practice-reminder-account-switch.spec.ts", "practice-reminder-cross-tab.spec.ts", "practice-reminder-late-response.spec.ts"],
   workers: 1,
   retries: 0,
   timeout: 60_000,

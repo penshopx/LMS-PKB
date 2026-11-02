@@ -48,6 +48,16 @@ Coverage:
 - The same tab then signs in as PIC: neither page requests participant reminders,
   and real, nonempty team submission responses omit private reflections even when
   the PIC opens A's evidence history. No query cache or auth response is mocked.
+- Separate late-response checks hold A's authentic reminder body on both pages,
+  or A's personal submission-history body on missions, after native fetch and JSON
+  parsing complete. A logs out and B or PIC logs in without reloading; the new
+  account's reminder/history data settles before A's body is released. This
+  exercises both the custom reminder request and the default, abortable history
+  query even when cancellation comes after the body download. DOM mutations and
+  the actual QueryClient's cache events are monitored for transient leaks, then
+  both pages and the final cache are checked. PIC may retain legitimate team
+  evidence but never A's reflection or participant reminder cache. No response
+  data, authentication, cache implementation or production code is replaced.
 - Two tabs in one browser context exercise real shared cookies and `storage`
   events. The old tab stays on `/app` or `/app/practice-missions` while the second
   tab logs A out and B in, then B out and PIC in, for the same and different
