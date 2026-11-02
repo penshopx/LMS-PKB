@@ -3,6 +3,7 @@ import { Link, Redirect, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, ApiRequestError } from "@/lib/queryClient";
 import { formatLoginWait } from "@/lib/retry-after";
+import { clearLoginCooldown, loginCooldownSeconds, readLoginCooldown, startLoginCooldown } from "@/lib/login-cooldown";
 import { replaceSessionUser } from "@/lib/auth-session";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { currentUserSchema, loginCredentialsSchema } from "@shared/auth-validation";
@@ -22,20 +23,23 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [retryUntil, setRetryUntil] = useState<number | null>(null);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [retryUntil, setRetryUntil] = useState<number | null>(() => readLoginCooldown());
+  const [remainingSeconds, setRemainingSeconds] = useState(() => loginCooldownSeconds(retryUntil));
 
   useEffect(() => {
     if (retryUntil === null) return;
-    const update = () => setRemainingSeconds(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000)));
+    const update = () => {
+      const remaining = loginCooldownSeconds(retryUntil);
+      setRemainingSeconds(remaining);
+      if (remaining === 0) {
+        clearLoginCooldown();
+        setRetryUntil(null);
+      }
+    };
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [retryUntil]);
-
-  useEffect(() => {
-    if (retryUntil !== null && remainingSeconds === 0) setRetryUntil(null);
-  }, [retryUntil, remainingSeconds]);
 
   const loginMutation = useMutation({
     mutationFn: async (creds: { username: string; password: string }) => {
@@ -45,13 +49,15 @@ export default function Login() {
       return current;
     },
     onSuccess: (data) => {
+      clearLoginCooldown();
       setPassword("");
       navigate(courseEntryDestination());
     },
     onError: (err: Error) => {
       if (err instanceof ApiRequestError && err.status === 429 && err.retryAfterSeconds) {
-        setRemainingSeconds(err.retryAfterSeconds);
-        setRetryUntil(Date.now() + err.retryAfterSeconds * 1000);
+        const until = startLoginCooldown(err.retryAfterSeconds);
+        setRemainingSeconds(loginCooldownSeconds(until));
+        setRetryUntil(until);
         setErrorMsg("");
         return;
       }
@@ -63,6 +69,7 @@ export default function Login() {
     e.preventDefault();
     if (loginMutation.isPending || (retryUntil !== null && Date.now() < retryUntil)) return;
     setErrorMsg("");
+    clearLoginCooldown();
     setRetryUntil(null);
     const input = loginCredentialsSchema.safeParse({ username, password });
     if (!input.success) {
