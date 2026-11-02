@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+// Do not retain request bodies or screenshots containing even synthetic credentials.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/me", route => route.fulfill({ status: 401, json: {} }));
   const now = new Date("2026-11-02T00:00:00Z");
@@ -12,6 +15,114 @@ async function openLogin(page: import("@playwright/test").Page) {
   await page.getByLabel("Email atau username").fill("login-timer@example.test");
   await page.getByLabel("Password", { exact: true }).fill("test-password-only");
 }
+
+test.describe("login transport recovery", () => {
+  for (const failure of ["disconnected", "slow response"] as const) {
+    test(`${failure}: pending blocks duplicates and failure permits manual retry`, async ({ page }) => {
+      let submissions = 0;
+      const releases: Array<() => void> = [];
+      const gates = [0, 1].map(() => new Promise<void>(resolve => releases.push(resolve)));
+      await page.route("**/api/login", async route => {
+        expect(route.request().method()).toBe("POST");
+        const attempt = submissions++;
+        // Never forward credentials to the server, including unexpected duplicates.
+        if (attempt > 1) {
+          await route.abort("failed");
+          return;
+        }
+        await gates[attempt];
+        if (attempt === 0 && failure === "disconnected") {
+          await route.abort("internetdisconnected");
+        } else {
+          await route.fulfill({
+            status: attempt === 0 ? 503 : 401,
+            json: { message: attempt === 0
+              ? "Login sementara tidak tersedia. Silakan coba lagi nanti."
+              : "Username atau password salah" },
+          });
+        }
+      });
+      try {
+        await openLogin(page);
+        const submit = page.locator('button[type="submit"]');
+        const username = page.getByLabel("Email atau username");
+        const password = page.getByLabel("Password", { exact: true });
+        const spinner = submit.locator(".animate-spin");
+        const assertNoStoredCredentials = async () => {
+          const stored = await page.evaluate(() => JSON.stringify({
+            local: { ...localStorage }, session: { ...sessionStorage },
+          }));
+          expect(stored).not.toContain("login-timer@example.test");
+          expect(stored).not.toContain("test-password-only");
+        };
+        const assertPendingGuard = async (expectedSubmissions: number) => {
+          await expect(submit).toHaveText("Masuk...");
+          await expect(spinner).toBeVisible();
+          await expect(submit).toBeDisabled();
+          await expect(username).toBeDisabled();
+          await expect(password).toBeDisabled();
+          await expect.poll(() => submissions).toBe(expectedSubmissions);
+          // Real pointer/keyboard input must not queue a second request. Normal
+          // locator.click would wait for the disabled button to become enabled.
+          const bounds = await submit.boundingBox();
+          if (!bounds) throw new Error("Login submit button is not visible");
+          await page.mouse.dblclick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+          await page.keyboard.press("Enter");
+          await page.keyboard.press("Enter");
+          // Exercise the handler guard independently of native disabled controls.
+          await page.locator("form").evaluate(form => {
+            form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+          });
+          await page.clock.fastForward(30_000);
+          await expect(submit).toHaveText("Masuk...");
+          await expect(spinner).toBeVisible();
+          expect(submissions).toBe(expectedSubmissions);
+          await assertNoStoredCredentials();
+        };
+
+        await submit.click();
+        await assertPendingGuard(1);
+        releases[0]();
+        const alert = page.getByRole("alert");
+        await expect(alert).toBeVisible();
+        if (failure === "slow response") {
+          await expect(alert).toHaveText("Login sementara tidak tersedia. Silakan coba lagi nanti.");
+        } else {
+          await expect(alert).not.toBeEmpty();
+        }
+        await expect(submit).toHaveText("Masuk");
+        await expect(spinner).toHaveCount(0);
+        await expect(submit).toBeEnabled();
+        await expect(username).toBeEnabled();
+        await expect(password).toBeEnabled();
+        await expect(page.getByRole("status")).toHaveCount(0);
+        await page.clock.fastForward(60_000);
+        expect(submissions).toBe(1); // Failure must not automatically resend credentials.
+        await assertNoStoredCredentials();
+
+        // Retry by Enter as well as by clicking: both paths use the same guard.
+        await password.press("Enter");
+        await assertPendingGuard(2);
+        await expect(alert).toHaveCount(0);
+        releases[1]();
+        await expect(alert).toHaveText("Username atau password salah");
+        await expect(submit).toHaveText("Masuk");
+        await expect(submit).toBeEnabled();
+        await expect(spinner).toHaveCount(0);
+        await page.clock.fastForward(60_000);
+        expect(submissions).toBe(2);
+        await assertNoStoredCredentials();
+        await page.reload();
+        await expect(username).toHaveValue("");
+        await expect(password).toHaveValue("");
+        await expect(submit).toBeEnabled();
+        expect(submissions).toBe(2);
+      } finally {
+        releases.forEach(release => release());
+      }
+    });
+  }
+});
 
 for (const source of ["json", "header", "date"] as const) {
   test(`429 ${source}: countdown, submit guard, expiry and password privacy`, async ({ page }) => {
