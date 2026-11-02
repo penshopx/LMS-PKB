@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
+import { courseEntryDestination } from "@/lib/course-entry";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -45,7 +46,7 @@ export default function Login() {
     },
     onSuccess: (data) => {
       setPassword("");
-      navigate("/app");
+      navigate(courseEntryDestination());
     },
     onError: (err: Error) => {
       if (err instanceof ApiRequestError && err.status === 429 && err.retryAfterSeconds) {
@@ -71,7 +72,7 @@ export default function Login() {
     loginMutation.mutate(input.data);
   };
 
-  if (user) return <Redirect to="/app" />;
+  if (user) return <Redirect to={courseEntryDestination()} />;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
@@ -93,7 +94,7 @@ export default function Login() {
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold">Masuk</CardTitle>
             <CardDescription>
-              Gunakan email undangan atau username dan kata sandi Anda.
+              Gunakan email terdaftar atau username dan kata sandi Anda.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -103,7 +104,7 @@ export default function Login() {
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Email undangan atau username"
+                  placeholder="Email atau username"
                   name="username"
                   required
                   maxLength={254}
@@ -168,6 +169,12 @@ export default function Login() {
                 )}
               </Button>
             </form>
+            <p className="mt-5 text-center text-sm text-muted-foreground">
+              Belum punya akun?{" "}
+              <Link className="font-medium text-primary underline" href={`/register?next=${encodeURIComponent(courseEntryDestination())}`}>
+                Daftar sekarang
+              </Link>
+            </p>
             <p className="mt-5 text-sm text-muted-foreground">
               Belum punya akun? Buka tautan undangan dari PIC BUJK untuk mendaftar.
               Jika lupa kata sandi atau undangan kedaluwarsa, hubungi PIC BUJK atau admin.

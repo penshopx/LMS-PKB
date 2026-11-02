@@ -921,6 +921,15 @@ export const coursesTable = pgTable("courses", {
   createdAt: text("created_at").notNull(),
 });
 
+export const coursePublicationsTable = pgTable("course_publications", {
+  courseId: varchar("course_id").primaryKey().references(() => coursesTable.id, { onDelete: "cascade" }),
+  published: boolean("published").notNull().default(true),
+  format: text("format").$type<"self_paced" | "upcoming" | "recording">().notNull().default("self_paced"),
+  startsAt: text("starts_at"),
+  instructor: text("instructor").notNull().default(""),
+  recordingUrl: text("recording_url").notNull().default(""),
+});
+
 export const participantsTable = pgTable("participants", {
   id: varchar("id").primaryKey(),
   nip: text("nip").notNull(),

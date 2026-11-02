@@ -73,6 +73,11 @@ const mainMenu = [
 
 const managementMenu = [
   {
+    title: "Katalog publik",
+    url: "/app/catalog-settings",
+    icon: BookOpen,
+  },
+  {
     title: "Akun & Akses",
     url: "/app/access",
     icon: Settings,

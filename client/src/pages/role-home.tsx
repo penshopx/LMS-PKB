@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Certificate, ECourse, Enrollment, Participant, Quiz, QuizAttempt } from "@shared/schema";
@@ -72,6 +72,17 @@ export function ParticipantHome() {
     queryKey: [`/api/participants/${user?.participantId}/quiz-attempts`],
     enabled: Boolean(user?.participantId),
   });
+
+  useEffect(() => {
+    const courseId = new URLSearchParams(window.location.search).get("course");
+    if (!courseId || !enrollments.some(item => item.courseId === courseId)) return;
+    const course = courses.find(item => item.id === courseId);
+    if (!course) return;
+    setActiveCourse(course);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("course");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [courses, enrollments]);
 
   if (!user?.participantId) return <p role="alert" className="p-6">Akun belum terhubung dengan data peserta. Hubungi admin.</p>;
 

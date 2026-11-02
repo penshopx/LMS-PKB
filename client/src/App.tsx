@@ -24,6 +24,9 @@ import { Button } from "@/components/ui/button";
 import { UserCircle, KeyRound, LogOut } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import PublicCoursePage from "@/pages/public-course";
+import Register from "@/pages/register";
+import CatalogSettingsPage from "@/pages/catalog-settings";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Competencies from "@/pages/competencies";
@@ -54,6 +57,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/analytics": "Analitik & Laporan",
   "/app/access": "Akun & Undangan BUJK",
   "/app/practice-missions": "Misi praktik",
+  "/app/catalog-settings": "Katalog publik",
 };
 
 function AppRouter() {
@@ -72,6 +76,7 @@ function AppRouter() {
       <Route path="/app" component={Dashboard} />
       <Route path="/app/competencies" component={Competencies} />
       <Route path="/app/courses" component={Courses} />
+      <Route path="/app/catalog-settings" component={CatalogSettingsPage} />
       <Route path="/app/learning-paths" component={LearningPaths} />
       <Route path="/app/quizzes" component={Quizzes} />
       <Route path="/app/practice-missions" component={PracticeMissions} />
@@ -211,6 +216,8 @@ function App() {
   const [location] = useLocation();
   const isLanding = location === "/";
   const isLogin = location === "/login";
+  const isRegister = location === "/register";
+  const isPublicCourse = /^\/courses\/[^/]+$/.test(location);
   const isApp = location.startsWith("/app");
   const isInvitation = location.startsWith("/invite/");
 
@@ -220,9 +227,11 @@ function App() {
       <TooltipProvider>
         {isLanding && <Landing />}
         {isLogin && <Login />}
+        {isRegister && <Register />}
+        {isPublicCourse && <Route path="/courses/:id" component={PublicCoursePage} />}
         {isApp && <ProtectedApp />}
         {isInvitation && <AcceptInvitation key={location} token={location.split("/")[2] ?? ""} />}
-        {!isLanding && !isLogin && !isApp && !isInvitation && (
+        {!isLanding && !isLogin && !isRegister && !isPublicCourse && !isApp && !isInvitation && (
           <Switch>
             <Route component={NotFound} />
           </Switch>

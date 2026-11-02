@@ -4,7 +4,8 @@ description: Product decisions for the PUB ASPEKINDO Udemy-style LMS discussion.
 ---
 
 - Initial learners are association members and construction companies (BUJK).
-- BUJK PICs invite participants.
+- BUJK PICs invite organization participants. Public visitors may also self-register as independent participants, without automatic BUJK association.
+- The landing page must expose upcoming courses and existing recordings without login; registration/login is the entry point for following a course.
 - Learning combines company-assigned required paths with learner-selected elective courses.
 - PICs assign required learning paths to job-role groups and can make individual exceptions.
 - SIAP Tender is the chosen pilot domain; improve the existing Level 2 course rather than duplicate it.
@@ -14,6 +15,6 @@ description: Product decisions for the PUB ASPEKINDO Udemy-style LMS discussion.
 - PICs may view detailed quiz answers and submitted evidence for learners in their own BUJK. Access is read-only and scoped to that BUJK; private reflection notes remain excluded unless separately approved.
 - Essay assessment uses a 0–100 score with a passing score of 60. The user corrected the previous 80% minimum to 60%. Participants who need to improve must repeat the entire post-test, not revise an individual essay.
 
-**Why:** The product should support organization-led construction-business learning while clearly separating course completion from formal competency certification. The essay scoring and full-post-test retake policy were explicitly selected by the user.
+**Why:** The product should support organization-led construction-business learning while clearly separating course completion from formal competency certification. The essay scoring and full-post-test retake policy were explicitly selected by the user. The user subsequently opened independent registration and requested a publicly browsable course catalog alongside organization invitations.
 
 **How to apply:** Use these decisions when proposing LMS roles, enrollment flows, course-player behavior, group assignments, progress rules, assessments, and certificate wording. Enforce company data boundaries server-side. Keep open-marketplace, payments, and instructor commissions out of scope unless the user reopens them.

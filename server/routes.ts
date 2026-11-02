@@ -13,6 +13,7 @@ import {
 import { db } from "./db";
 import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
+import { registerPublicCatalogRoutes, registerPrivateCatalogRoutes } from "./public-catalog-routes";
 import { quizSubmissionFingerprint } from "./quiz-submission-identity";
 import { 
   insertParticipantSchema,
@@ -74,6 +75,8 @@ function roleAllowsPath(role: ApplicationRole, method: string, path: string): bo
 
   if (role === "participant") {
     return (
+      (method === "POST" && /^\/api\/catalog\/[^/]+\/enroll$/.test(path)) ||
+      (method === "GET" && /^\/api\/catalog\/[^/]+\/recording$/.test(path)) ||
       (method === "POST" && path === "/api/enrollments") ||
       (method === "POST" && /^\/api\/quizzes\/[^/]+\/attempts$/.test(path)) ||
       (method === "POST" && /^\/api\/enrollments\/[^/]+\/lessons\/[^/]+\/complete$/.test(path)) ||
@@ -116,6 +119,7 @@ export async function registerRoutes(
     res.setHeader("Cache-Control", "no-store");
     next();
   });
+  registerPublicCatalogRoutes(app);
   app.get("/api/me", (req, res) => {
     if (req.isAuthenticated()) {
       const user = req.user as User;
@@ -316,6 +320,7 @@ export async function registerRoutes(
   });
 
   registerPracticeMissionRoutes(app);
+  registerPrivateCatalogRoutes(app);
 
   // BUJK ACCESS & INVITATIONS
   app.get("/api/access/bujks", async (req, res) => {
