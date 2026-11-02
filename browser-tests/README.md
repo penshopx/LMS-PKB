@@ -1,5 +1,34 @@
 # Practice reminder browser checks
 
+## Access history browser checks
+
+With **Start application** running, use:
+
+```sh
+npx tsc --project browser-tests/tsconfig.json
+npm run test:access-history
+```
+
+This separate suite uses the real `/app/access` UI, API and development database.
+It creates uniquely named disposable admin/target accounts and 56 audit snapshots,
+then signs in as admin through the normal login form (no authentication bypass,
+hook mocks or API response replacement). Snapshots include 52 matching records in
+one WIB day, both midnight boundaries, adjacent-day records, and actor/target
+distractors. The device timezone is Los Angeles.
+
+Checks cover actor/target/date input, request parameters, exact ordered API-to-DOM
+results, next/previous pages, returning to page one on **each** filter change,
+inclusive WIB dates, invalid date range suppression and correction, empty results,
+and reset from both page two and an empty result. Revisited queries may use the
+application's real cache. Cleanup runs in fixture `finally` even after assertions
+fail: logout, removal of remaining fixture sessions, audit rows and accounts, and
+verification that fixture rows are gone. Do not forcibly kill cleanup.
+
+The configuration refuses production and writes reports, failure traces and
+screenshots only under ignored `generated-artifacts/access-history/`.
+
+## Practice reminder suite
+
 Run `npm run dev` in the **Start application** workflow, then:
 
 ```sh
