@@ -15,3 +15,4 @@
 - [Ingress verification boundaries](ingress-verification.md) — different tools are not proof of distinct networks; verify source separation at the application boundary.
 - [Password session renewal](password-session-renewal.md) — retain only the version issued by the password change, never a newer version from a later account lookup.
 - [Unconfirmed password changes](unconfirmed-password-changes.md) — transport failures and server errors can follow a committed change; never imply rollback or automatically resend credentials.
+- [Audit substring search performance](audit-search-performance.md) — measure broad and short terms too; indexed LIKE without useful trigrams can be slower than chronological search.

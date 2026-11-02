@@ -830,6 +830,10 @@ export const accountStatusHistory = pgTable("account_status_history", {
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
   index("account_status_history_chronology_idx").on(table.changedAt, table.id),
+  index("account_status_history_actor_name_trgm_idx").using("gin", sql`lower(${table.actorUsername}) gin_trgm_ops`),
+  index("account_status_history_target_name_trgm_idx").using("gin", sql`lower(${table.targetUsername}) gin_trgm_ops`),
+  index("account_status_history_actor_id_time_idx").on(table.actorId, table.changedAt, table.id),
+  index("account_status_history_target_id_time_idx").on(table.targetUserId, table.changedAt, table.id),
   check("account_status_history_actual_change", sql`${table.previousIsActive} <> ${table.newIsActive}`),
   check("account_status_history_reason_valid", sql`${table.reason} IS NULL OR (${table.reason} ~ '[^[:space:]]' AND char_length(${table.reason}) <= 1000)`),
 ]);

@@ -15,6 +15,7 @@ import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
 import { registerPublicCatalogRoutes, registerPrivateCatalogRoutes } from "./public-catalog-routes";
 import { quizSubmissionFingerprint } from "./quiz-submission-identity";
+import { buildHistoryQuery } from "./account-status-history-query";
 import { 
   insertParticipantSchema,
   insertEvidenceSchema,
@@ -387,22 +388,8 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Filter atau posisi halaman riwayat tidak valid. Periksa tanggal dan batas halaman." });
     }
     try {
-      const { actor, target, from, to, offset, limit } = input.data;
-      // Search immutable snapshots, not live users (which may be renamed/deleted).
-      // strpos treats SQL wildcard characters literally; all values remain bound.
-      const entriesFilter = and(
-        actor ? or(eq(accountStatusHistory.actorId, actor),
-          sql`strpos(lower(${accountStatusHistory.actorUsername}), lower(${actor})) > 0`) : undefined,
-        target ? or(eq(accountStatusHistory.targetUserId, target),
-          sql`strpos(lower(${accountStatusHistory.targetUsername}), lower(${target})) > 0`) : undefined,
-        from ? gte(accountStatusHistory.changedAt, new Date(`${from}T00:00:00+07:00`)) : undefined,
-        // Inclusive WIB end date, expressed as an exclusive next-midnight bound.
-        to ? lt(accountStatusHistory.changedAt, new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400000)) : undefined,
-      );
-      const entries = await db.select().from(accountStatusHistory)
-        .where(entriesFilter)
-        .orderBy(desc(accountStatusHistory.changedAt), desc(accountStatusHistory.id))
-        .limit(limit + 1).offset(offset);
+      const { limit } = input.data;
+      const entries = await buildHistoryQuery(db, input.data);
       res.json({ entries: entries.slice(0, limit), hasMore: entries.length > limit });
     } catch {
       res.status(500).json({ message: "Riwayat perubahan akses tidak dapat dimuat." });
