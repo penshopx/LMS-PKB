@@ -48,6 +48,15 @@ Coverage:
 - The same tab then signs in as PIC: neither page requests participant reminders,
   and real, nonempty team submission responses omit private reflections even when
   the PIC opens A's evidence history. No query cache or auth response is mocked.
+- Two tabs in one browser context exercise real shared cookies and `storage`
+  events. The old tab stays on `/app` or `/app/practice-missions` while the second
+  tab logs A out and B in, then B out and PIC in, for the same and different
+  BUJK. Real `/api/me` responses (401 after logout, the new identity after login)
+  are held in the old tab: reminders and open private reflections must already
+  be hidden, with no participant reminder requests until verification finishes.
+  A DOM observer checks transient leaks, a runtime marker and navigation monitor
+  rule out reloads, and the settled PIC view opens real, nonempty team evidence
+  without private reflections. These events are not simulated focus signals.
 
 The browser clock is controlled by Playwright. Tiny clock ticks flush React Query's
 zero-delay batched notifications while real HTTP requests finish; no test sleeps

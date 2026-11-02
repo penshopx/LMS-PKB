@@ -13,3 +13,9 @@ Browser account-switch checks must preserve the JavaScript runtime through logou
 **Why:** Reloading the document discards the query cache independently of the application's logout logic. Checking only the final settled page can miss previous-account data briefly appearing during loading.
 
 **How to apply:** Use the real login/logout controls and SPA links after initial navigation. Gate delivery of an authentic response rather than replacing its data, and check both the loading state and transient DOM changes.
+
+A cross-tab authentication notification makes the old identity unverified immediately; conceal its private UI while checking the shared session, rather than waiting for the new identity to arrive.
+
+**Why:** Another tab can change shared cookies before a slow session check completes. Keeping the previous account visible during that check exposes reminders and open reflections even if the final account view is correct.
+
+**How to apply:** Preserve the old tab's route and runtime, hold authentic session-check responses across real logout/login in a second tab, and assert privacy both before and after verification. Do not use an unrelated focus or polling refresh to make the test pass.

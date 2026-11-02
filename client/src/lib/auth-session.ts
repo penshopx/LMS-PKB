@@ -28,7 +28,14 @@ export function subscribeToAuthChanges() {
   const onStorage = (event: StorageEvent) => {
     if (event.key === AUTH_CHANGE_EVENT) {
       advanceSessionEpoch();
-      void queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      // Shared cookies may already belong to another account. Do not keep the
+      // old identity (and its mounted private UI) visible while /api/me is slow.
+      // Cancellation is synchronous; resetting preserves the active observer
+      // and puts protected routes back into their session-loading state.
+      void queryClient.cancelQueries();
+      queryClient.removeQueries({ predicate: query => query.queryKey[0] !== "/api/me" });
+      queryClient.getMutationCache().clear();
+      void queryClient.resetQueries({ queryKey: ["/api/me"], exact: true });
     }
   };
   const onPageShow = (event: PageTransitionEvent) => {

@@ -140,13 +140,23 @@ describe("authentication client state", () => {
 
   it("refreshes authentication on a cross-tab change and cleans up its event listener", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const reset = vi.spyOn(queryClient, "resetQueries");
+    queryClient.setQueryData(["/api/me"], firstUser);
+    const observedSession = queryClient.getQueryCache().find({ queryKey: ["/api/me"] });
+    queryClient.setQueryData(["/api/practice-missions/reminders", firstUser.id], ["private reminder"]);
+    queryClient.setQueryData(["/api/practice-missions/submissions"], ["private reflection"]);
     const unsubscribe = subscribeToAuthChanges();
     const callback = addListener.mock.calls[0][1];
     callback({ key: "unrelated-setting" });
     expect(invalidate).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(["/api/me"])).toEqual(firstUser);
     callback({ key: "lms-auth-change" });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["/api/me"] });
-    invalidate.mockClear();
+    expect(reset).toHaveBeenCalledWith({ queryKey: ["/api/me"], exact: true });
+    expect(queryClient.getQueryCache().find({ queryKey: ["/api/me"] })).toBe(observedSession);
+    expect(queryClient.getQueryState(["/api/me"])).toMatchObject({ status: "pending", data: undefined });
+    expect(queryClient.getQueryData(["/api/practice-missions/reminders", firstUser.id])).toBeUndefined();
+    expect(queryClient.getQueryData(["/api/practice-missions/submissions"])).toBeUndefined();
     const onPageShow = addListener.mock.calls.find(call => call[0] === "pageshow")![1];
     onPageShow({ persisted: false });
     expect(invalidate).not.toHaveBeenCalled();
