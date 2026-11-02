@@ -20,6 +20,13 @@ As with other database-backed checks, do not kill the process during cleanup.
 
 Coverage:
 
+- Repeated SPA navigation between home, missions and the quiz page keeps
+  exactly one reminder display timer mounted. Real reminder requests occur once
+  per 60-second polling interval (separate from stale-cache mount refetches).
+  On the quiz page, three former polling intervals pass with no reminder requests
+  or display callbacks. A pass-through timer probe distinguishes the component's
+  30-second display effect from unrelated notification timers and checks cleanup;
+  no document reload is allowed to mask leaks.
 - Both `/app` and `/app/practice-missions` stay mounted across midnight WIB:
   today's reminder becomes overdue and tomorrow's becomes due, before any poll.
   The emulated device timezone is Los Angeles to catch device-local date mistakes.

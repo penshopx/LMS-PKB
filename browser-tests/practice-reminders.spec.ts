@@ -4,6 +4,125 @@ import {
   freezeClock, watchReminders, spaNavigate, visibleWithClock,
 } from "./practice-reminders.fixture";
 
+type DisplayTimerProbe = {
+  active: Set<number>;
+  created: number;
+  cleared: number;
+  ticks: number;
+};
+type ProbedWindow = Window & { __reminderDisplayTimers: DisplayTimerProbe };
+
+test("navigasi SPA berulang menghentikan polling dan membersihkan timer tampilan", async ({ page, learner }) => {
+  const mission = await learner.mission("lifecycle navigasi");
+  await learner.review(mission);
+  await learner.signIn(page);
+  await freezeClock(page);
+  // Install the probe on a page without PracticeReminders so it observes every
+  // subsequent mount. Keep Playwright's clock and the real callbacks intact.
+  await page.goto("/app/quizzes");
+  await visibleWithClock(page, page.getByTestId("button-user-menu"));
+  await page.evaluate(() => {
+    const probe: DisplayTimerProbe = { active: new Set(), created: 0, cleared: 0, ticks: 0 };
+    (window as unknown as ProbedWindow).__reminderDisplayTimers = probe;
+    const setInterval = window.setInterval.bind(window);
+    const clearInterval = window.clearInterval.bind(window);
+    window.setInterval = ((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+      // NotificationCenter also has a 30-second timer. Identify the display
+      // effect by its caller, not just its duration, to avoid counting that timer.
+      const displayTimer = delay === 30_000
+        && new Error().stack?.includes("/components/missions/practice-reminders.tsx");
+      if (!displayTimer || typeof callback !== "function") {
+        return setInterval(callback, delay, ...args);
+      }
+      const id = setInterval(() => {
+        probe.ticks++;
+        callback(...args);
+      }, delay);
+      probe.active.add(id);
+      probe.created++;
+      return id;
+    }) as typeof window.setInterval;
+    window.clearInterval = ((id?: number) => {
+      if (id !== undefined && probe.active.delete(id)) probe.cleared++;
+      clearInterval(id);
+    }) as typeof window.clearInterval;
+  });
+  const timers = () => page.evaluate(() => {
+    const probe = (window as unknown as ProbedWindow).__reminderDisplayTimers;
+    return { active: probe.active.size, created: probe.created, cleared: probe.cleared, ticks: probe.ticks };
+  });
+  const documents: string[] = [];
+  page.on("request", request => {
+    if (request.isNavigationRequest()) documents.push(request.url());
+  });
+  const requests = watchReminders(page);
+  const reminderResponse = () => page.waitForResponse(response =>
+    new URL(response.url()).pathname === remindersPath
+    && response.request().method() === "GET" && response.status() === 200);
+  const showReminder = async () => {
+    await visibleWithClock(page, reminderCard(page).getByText(mission.title, { exact: true }));
+    await expect(reminderCard(page)).toHaveCount(1);
+    expect((await timers()).active).toBe(1);
+  };
+  const navigateToReminder = async (href: string) => {
+    const count = requests.length;
+    const response = reminderResponse();
+    await spaNavigate(page, href);
+    await response; // A stale cache refetch on mount is not a polling request.
+    await showReminder();
+    expect(requests).toHaveLength(count + 1);
+  };
+  const onePollingInterval = async () => {
+    const count = requests.length;
+    const before = await timers();
+    // Leave a margin for the tiny notification ticks in visibleWithClock,
+    // while still checking that no premature polling request is made.
+    await page.clock.runFor(58_000);
+    expect(requests).toHaveLength(count);
+    const response = reminderResponse();
+    await page.clock.runFor(2_500);
+    await response;
+    await showReminder();
+    expect(requests).toHaveLength(count + 1);
+    const after = await timers();
+    expect(after.ticks - before.ticks).toBe(2);
+    expect(after.created).toBe(before.created);
+    expect(after.cleared).toBe(before.cleared);
+  };
+
+  for (let cycle = 0; cycle < 3; cycle++) {
+    // Repeatedly replace one observer with another, then remove it entirely.
+    await navigateToReminder("/app");
+    await onePollingInterval();
+    await onePollingInterval();
+    await navigateToReminder("/app/practice-missions");
+    await onePollingInterval();
+    await onePollingInterval();
+
+    // The participant sidebar has no quiz link. Wouter subscribes to the
+    // History API, so this uses the real SPA router without injecting a link
+    // or reloading the document.
+    await page.evaluate(() => window.history.pushState(null, "", "/app/quizzes"));
+    await expect(page).toHaveURL(/\/app\/quizzes$/);
+    await expect(reminderCard(page)).toHaveCount(0);
+    const unmounted = await timers();
+    expect(unmounted.active).toBe(0);
+    expect(unmounted.cleared).toBe(unmounted.created);
+    const count = requests.length;
+    await page.clock.runFor(180_000);
+    // The cached query may remain, but an unmounted observer must not poll or
+    // execute the display callback, even across several former intervals.
+    expect(requests).toHaveLength(count);
+    expect(await timers()).toEqual(unmounted);
+  }
+  // Check the final remount as well, not only the time spent unmounted.
+  await navigateToReminder("/app");
+  await onePollingInterval();
+  const finalTimers = await timers();
+  expect(finalTimers.created - finalTimers.cleared).toBe(1);
+  expect(documents).toEqual([]); // A document reload could hide a timer leak.
+});
+
 for (const route of ["/app", "/app/practice-missions"]) {
   test.describe(route, () => {
     for (const recovery of ["Coba lagi", "polling", "fokus kembali"] as const) {
