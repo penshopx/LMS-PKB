@@ -13,3 +13,9 @@ For focus-return checks, headless Chromium here continued reporting background p
 **Why:** Browser automation visibility behavior can prevent a real tab switch from reaching the application's listener, independently of whether the application works.
 
 **How to apply:** Clearly distinguish a simulated visibility event from an actual window-focus test. Keep authentication, HTTP requests, query cache, and component effects real; do not weaken the app to accommodate the browser harness.
+
+Browser clock installation starts time advancing before a subsequent pause command arrives. Installing and pausing at the identical instant can intermittently fail because the pause target is already in the past.
+
+**Why:** Separate browser commands incur scheduling latency even when the test expects time to be frozen.
+
+**How to apply:** Install the clock slightly before the desired pause instant, then pause at that instant before exercising timed behavior. Preserve the intended calendar boundary rather than retrying a flaky setup.

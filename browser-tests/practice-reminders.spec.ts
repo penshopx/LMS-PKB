@@ -6,6 +6,100 @@ import {
 
 for (const route of ["/app", "/app/practice-missions"]) {
   test.describe(route, () => {
+    for (const recovery of ["Coba lagi", "polling", "fokus kembali"] as const) {
+      test(`pengingat pulih melalui ${recovery} setelah gangguan sementara tanpa reload`, async ({ page, learner }) => {
+        const previous = await learner.mission("sebelum koneksi terputus");
+        const latest = await learner.mission("feedback terbaru selama gangguan");
+        await learner.review(previous, "2026-11-01");
+        await learner.signIn(page);
+        await freezeClock(page);
+        // Retry covers initial-load failure; automatic recovery also covers a
+        // failed background refresh when reminders already exist in the cache.
+        let unavailable = recovery === "Coba lagi";
+        let failures = 0;
+        await page.route(`**${remindersPath}`, async handler => {
+          if (handler.request().method() !== "GET" || !unavailable) {
+            await handler.continue();
+          } else {
+            failures++;
+            if (recovery === "polling") {
+              await handler.abort("internetdisconnected");
+            } else {
+              await handler.fulfill({
+                status: 503, contentType: "application/json",
+                body: JSON.stringify({ message: "Layanan pengingat sementara tidak tersedia." }),
+              });
+            }
+          }
+        });
+        await page.goto(route);
+        const card = reminderCard(page);
+        const alert = card.getByRole("alert");
+        const triggerAutomaticRefresh = async () => {
+          if (recovery === "polling") {
+            await page.clock.runFor(60_000);
+          } else {
+            // Simulate the visibility signal only, as in the existing focus
+            // test: headless tab switching does not reliably hide the page.
+            await page.evaluate(() => {
+              Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+              document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+              Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+              document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+            });
+          }
+        };
+        if (recovery !== "Coba lagi") {
+          await visibleWithClock(page, card.getByText(previous.title, { exact: true }));
+          unavailable = true;
+          await triggerAutomaticRefresh();
+        }
+        await visibleWithClock(page, alert);
+        await expect(alert).toContainText("Pengingat gagal dimuat.");
+        await expect(alert.getByRole("button", { name: "Coba lagi", exact: true })).toBeVisible();
+        await expect(card.getByText(emptyMessage, { exact: true })).toHaveCount(0);
+        expect(failures).toBeGreaterThan(0);
+
+        const runtimeMarker = await page.evaluate(() => {
+          const marker = crypto.randomUUID();
+          (window as any).__reminderRecoveryRuntime = marker;
+          return marker;
+        });
+        const documents: string[] = [];
+        page.on("request", request => {
+          if (request.isNavigationRequest()) documents.push(request.url());
+        });
+        const requests = watchReminders(page);
+        // Feedback arrives while the browser cannot fetch reminders. Recovery
+        // must retrieve this new record, not merely redisplay the cached one.
+        await learner.review(latest, "2026-11-03");
+        await expect(card.getByText(latest.title, { exact: true })).toHaveCount(0);
+        unavailable = false;
+        const recovered = page.waitForResponse(response =>
+          new URL(response.url()).pathname === remindersPath
+          && response.request().method() === "GET" && response.status() === 200);
+        if (recovery === "Coba lagi") {
+          await alert.getByRole("button", { name: "Coba lagi", exact: true }).click();
+        } else {
+          await triggerAutomaticRefresh();
+        }
+        const response = await recovered;
+        expect(await response.json()).toEqual(expect.arrayContaining([
+          expect.objectContaining({ missionTitle: latest.title, nextPracticeAt: "2026-11-03" }),
+        ]));
+        await visibleWithClock(page, card.getByText(latest.title, { exact: true }));
+        await expect(card.getByText(previous.title, { exact: true })).toBeVisible();
+        await expect(card.getByText("Tindak lanjut putaran 1 · 3 November 2026 WIB", { exact: true })).toBeVisible();
+        await expect(alert).toHaveCount(0);
+        await expect(card.getByRole("button", { name: "Coba lagi", exact: true })).toHaveCount(0);
+        await expect(card.getByText(emptyMessage, { exact: true })).toHaveCount(0);
+        expect(requests).toHaveLength(1);
+        expect(documents).toEqual([]);
+        expect(await page.evaluate(() => (window as any).__reminderRecoveryRuntime)).toBe(runtimeMarker);
+        await expect(page).toHaveURL(new RegExp(`${route}$`));
+      });
+    }
+
     test("halaman terbuka melewati tengah malam WIB memperbarui kedua status tanpa fetch", async ({ page, learner }) => {
       const today = await learner.mission("jatuh tempo hari ini");
       const tomorrow = await learner.mission("jatuh tempo besok");

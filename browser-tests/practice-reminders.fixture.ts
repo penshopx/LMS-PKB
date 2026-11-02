@@ -111,7 +111,9 @@ export const test = base.extend<{ learner: Fixture }, { databasePool: void }>({
 });
 
 export async function freezeClock(page: Page) {
-  await page.clock.install({ time: beforeMidnight });
+  // install() starts a running clock. Leave room for the next browser round
+  // trip so pauseAt() cannot target a time that has already elapsed.
+  await page.clock.install({ time: new Date(beforeMidnight.getTime() - 1_000) });
   await page.clock.pauseAt(beforeMidnight);
 }
 
