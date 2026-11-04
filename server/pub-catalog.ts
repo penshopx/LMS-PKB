@@ -8,6 +8,7 @@ import type {
   UnitCompetency,
 } from "@shared/schema";
 import { SIAP_TENDER_COURSE_MATERIALS } from "../shared/siap-tender-course";
+import { baselineLessonReferences } from "../shared/course-references";
 
 function progressionIndicators(
   subject: string,
@@ -77,6 +78,7 @@ function courseLessons(
       title: "Regulasi dan Praktik Utama",
       description: reference,
       content: "Ringkasan regulasi, checklist penerapan, dan contoh evidensi yang relevan.",
+      references: baselineLessonReferences(key.replace(/(\D)(\d)/, "$1-$2")),
     },
     {
       id: `${key}-practice`,

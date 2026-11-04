@@ -100,6 +100,7 @@ export interface Lesson {
   description: string;
   content: string;
   activities?: Activity[];
+  references?: import("./course-references").LessonReference[];
 }
 
 export interface Activity {

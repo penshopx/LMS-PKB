@@ -27,6 +27,7 @@ import {
   PUB_UNITS,
 } from "./pub-catalog";
 import { PUB_QUIZZES } from "../shared/siap-tender-course";
+import { catalogLessonsPreservingReferences } from "./catalog-reference-sync";
 
 const LEGACY_FIXTURE_EMAILS: Record<string, string[]> = {
   "p-001": ["andi.pratama@org.go.id"],
@@ -88,7 +89,7 @@ async function synchronizePubCatalog() {
     } = row;
     await db.insert(coursesTable).values(row).onConflictDoUpdate({
       target: coursesTable.id,
-      set: updates,
+      set: { ...updates, lessons: catalogLessonsPreservingReferences(course.lessons) },
     });
   }
 

@@ -1,4 +1,5 @@
 import type { ECourse, Lesson, Quiz, Question, QuizOption } from "./schema";
+import { baselineLessonReferences } from "./course-references";
 
 export const SIAP_TENDER_COURSE_ID = "course-tender01-l2";
 export const SIAP_TENDER_PRETEST_ID = "quiz-tender01-pretest";
@@ -106,6 +107,7 @@ ${regulatoryReferenceNote("Orientasi ruang lingkup dan pemisahan fakta simulasi 
     type: "context",
     title: "Telaah Peluang dan Keputusan Go/No-Go",
     description: "Menilai kecocokan peluang dengan kapasitas, waktu, bukti, dan risiko BUJK.",
+    references: baselineLessonReferences("tender-01"),
     content: `Tujuan belajar
 Peserta dapat mengumpulkan informasi dari brief, menilai kesesuaian peluang dengan kondisi BUJK, dan mencatat rekomendasi beserta tindak lanjut.
 

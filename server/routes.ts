@@ -13,6 +13,8 @@ import {
 import { db } from "./db";
 import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
+import { registerCourseReferenceRoutes } from "./course-reference-routes";
+import { updateCourseLessonReferences } from "./course-reference-store";
 import { registerPublicCatalogRoutes, registerPrivateCatalogRoutes } from "./public-catalog-routes";
 import { quizSubmissionFingerprint } from "./quiz-submission-identity";
 import { buildHistoryQuery } from "./account-status-history-query";
@@ -741,6 +743,8 @@ export async function registerRoutes(
   });
 
   // ---------- COURSES ----------
+  registerCourseReferenceRoutes(app, updateCourseLessonReferences);
+
   app.get("/api/courses", async (req, res) => {
     try {
       const unitId = req.query.unitId as string | undefined;

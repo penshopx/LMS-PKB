@@ -12,6 +12,7 @@ import {
 import type { Activity, ECourse, Participant } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { LessonReferences } from "@/components/lesson-references";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -317,6 +318,8 @@ export function CoursePlayerDialog({
                     {activeLesson.content || "Materi lesson ini belum tersedia."}
                   </div>
                 </section>
+
+                <LessonReferences courseId={course.id} lesson={activeLesson} />
 
                 {activeLesson.activities && activeLesson.activities.length > 0 && (
                   <section className="space-y-3">

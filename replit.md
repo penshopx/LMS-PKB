@@ -13,6 +13,30 @@ Ruang lingkup katalog:
 
 LKUT hanya menjadi konteks pemetaan kebutuhan belajar. Aplikasi tidak menyediakan fitur penyusunan, pengisian, penilaian, atau pelaporan LKUT.
 
+## Knowledge base referensi fitur
+
+Sebelum mengusulkan atau mengubah fitur terkait regulasi, baca
+[`docs/knowledge-base/README.md`](docs/knowledge-base/README.md).
+Folder tersebut mengindeks dua PDF unggahan pengguna, catatan relevansi fitur,
+rujukan halaman, dan ekstraksi teks yang dapat dicari.
+Pemetaan terhadap kode, batas peran, dan celah prioritas tersedia di
+[`docs/knowledge-base/pemetaan-fitur.md`](docs/knowledge-base/pemetaan-fitur.md).
+Player kursus menampilkan rujukan per lesson; admin dapat mengelolanya, peserta
+dan PIC hanya membaca. Rujukan menyimpan ID dokumen, halaman, bagian opsional,
+dan interpretasi relevansi, bukan pengesahan hukum. Penyimpanan memakai JSONB
+lesson yang sudah ada, tanpa tabel atau migrasi baru. Sinkronisasi katalog wajib
+mempertahankan pilihan admin, termasuk daftar rujukan yang sengaja dikosongkan.
+
+- Materi diskusi **Implementasi Permen PU No. 6 Tahun 2025** menjadi referensi
+  konteks perizinan, PUB, SBU, pengawasan, dan kepatuhan; bukan naskah hukum
+  primer atau izin menerapkan seluruh ketentuan slide secara otomatis.
+- **Permendagri No. 7 Tahun 2024** membahas Barang Milik Daerah, **bukan Permen
+  PUPR No. 7 Tahun 2024 tentang PUB**. Jangan menyamakan keduanya.
+- Kutip sumber dan halaman; periksa gambar/tabel pada PDF asli serta naskah
+  resmi terbaru sebelum menjadikannya aturan aplikasi. Pertahankan batas LMS
+  dan sertifikat penyelesaian kursus; jangan menambahkan layanan LKUT/SBU/SKK
+  hanya karena topik itu disebut dalam sumber.
+
 Key features:
 - **PUB-ASPEKINDO Competency Framework**: Domain SIAP dan Kepatuhan dengan cluster/unit yang tetap dapat dikelola
 - **Pembelajaran 6 langkah**: Orientation, Context, Microlearning, Practice, Assessment, Reflection
