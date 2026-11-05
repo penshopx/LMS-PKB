@@ -28,3 +28,25 @@ mtime_ms = 1793508035755
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:14804978-6b7c-4712-9595-18909e65f938/b9621931-ad3d-41e0-951f-5eec2fc955ee/6a37bdfd-e3fe-484a-bc1b-5504cc6d72f9"
 storage_version_token = "1793508272080150"
 content_type = "image/png"
+
+[[outputs]]
+id = "_5DWui1-AKnXSEmYiRkle"
+uri = "file://generated-artifacts/pkb-video/music.mp3"
+type = "audio"
+title = "PKB professional learning music"
+description = "Generated music: Original 30-second instrumental background music for a refined construction engineering continuing education explainer. Optimistic, confident, professional, modern and warm. Clean ge…"
+logical_id = "99cc6587-2033-420d-a255-a9ea65c51872"
+
+[[outputs]]
+id = "ZlzlVrmtgjBuiOtpV5vI-"
+uri = "file://generated-artifacts/pkb-video/PKB-ASDAMKINDO-30-detik-720p.mp4"
+type = "video"
+title = "Video Animasi PKB ASDAMKINDO"
+description = "Video 30 detik • 720p • horizontal 16:9. Animasi pembelajaran, dokumentasi bukti, dan pemantauan progres dengan teks Bahasa Indonesia serta musik instrumental orisinal."
+logical_id = "c09a4930-7bce-495a-9954-d2715ab126b2"
+content_hash = "sha256:0f4a5e65c04b441ccd0ce491c09bdafadc78e0d173b6283dd63bf84b32ee66a5"
+size = 3875996
+mtime_ms = 1793848643893
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:1dc4b0f9-04fc-4c9d-8649-623e167b4754/c09a4930-7bce-495a-9954-d2715ab126b2/072feddf-5b13-4720-833e-9f4acffbdd2f"
+storage_version_token = "1793848690056028"
+content_type = "video/mp4"
