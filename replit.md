@@ -73,6 +73,8 @@ Key features:
 - `/app/courses` - Katalog dan builder pembelajaran dengan template 6 langkah
 - `/app/learning-paths` - Learning paths with enrollment and progress tracking
 - `/app/learning-programs` - Rencana Belajar PKB: target kursus pribadi, penugasan kelompok bertenggat, pengingat dalam aplikasi, dan pemantauan tindak lanjut
+- `/app/discussions/:courseId` - Diskusi teknis dari pemutar kursus dan notifikasi. Peserta dengan enrollment aktif/selesai bertanya dan membalas dalam kelompok sendiri; koordinator baca-saja; admin memfasilitasi, menandai balasan membantu, menyembunyikan/memulihkan dengan alasan. Pertanyaan independen tetap privat pengirim/admin, termasuk setelah bergabung dengan kelompok. Konten tersembunyi hanya terbaca admin; balasan ditutup saat pertanyaan disembunyikan. Notifikasi generik tanpa isi/identitas diskusi, akses diperiksa kembali saat dibuka. Tidak menyalin refleksi, kuis, atau mengubah progres/kelulusan. Migrasi SQL dijalankan saat startup; `npm run test:discussions` memeriksa login normal dan tampilan ponsel menggunakan akun sementara yang dibersihkan setelah tes.
+  Penghapusan kursus melalui API admin menghapus diskusi, balasan, dan notifikasi terkait dalam transaksi penghapusan kursus yang sama. Jika rencana belajar atau acuan lain masih menahan kursus, seluruh transaksi dibatalkan termasuk penghapusan diskusi. Arsip kurikulum bukan penghapusan; arsip tetap mempertahankan riwayat.
 - `/app/quizzes` - Quiz Engine with multiple question types (pilihan ganda, benar/salah, esai)
 - `/app/participants` - Participant management
 - `/app/passport` - Competency Passport

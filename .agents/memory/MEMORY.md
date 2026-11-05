@@ -18,3 +18,4 @@
 - [Audit substring search performance](audit-search-performance.md) — measure broad and short terms too; indexed LIKE without useful trigrams can be slower than chronological search.
 - [Login wait persistence](login-wait-persistence.md) — keep cooldown hints per tab and account-agnostic; never persist credentials or treat the hint as server authorization.
 - [Portfolio export decisions](portfolio-export-decisions.md) — favor portable preparation documents; missing references must not imply active PKB participation.
+- [Course discussion privacy](course-discussion-privacy.md) — independent questions never become group-shared automatically; notices omit content and links recheck access.

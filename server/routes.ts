@@ -13,6 +13,7 @@ import {
 import { db } from "./db";
 import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
+import { registerDiscussionRoutes } from "./discussion-routes";
 import { ensureLearningProgramReminders, registerLearningProgramRoutes } from "./learning-program-routes";
 import { registerCourseReferenceRoutes } from "./course-reference-routes";
 import { updateCourseLessonReferences } from "./course-reference-store";
@@ -57,6 +58,11 @@ import { renderParticipantPortfolio } from "./participant-portfolio";
 
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
+  if (method === "GET" && /^\/api\/courses\/[^/]+\/discussions$/.test(path)) return true;
+  if (role === "participant" && method === "POST" && (
+    /^\/api\/courses\/[^/]+\/discussions$/.test(path) ||
+    /^\/api\/discussions\/[^/]+\/replies$/.test(path)
+  )) return true;
   if (method === "GET" && path === "/api/learning-programs") return true;
   if (role === "participant" && (
     (method === "POST" && path === "/api/learning-programs") ||
@@ -334,6 +340,7 @@ export async function registerRoutes(
 
   registerPracticeMissionRoutes(app);
   registerLearningProgramRoutes(app);
+  registerDiscussionRoutes(app);
   registerPrivateCatalogRoutes(app);
 
   // BUJK ACCESS & INVITATIONS

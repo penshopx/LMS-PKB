@@ -1168,6 +1168,33 @@ export const notificationsTable = pgTable("notifications", {
   createdAt: text("created_at").notNull(),
 });
 
+export const discussionThreadsTable = pgTable("discussion_threads", {
+  id: varchar("id").primaryKey(),
+  courseId: varchar("course_id").notNull().references(() => coursesTable.id, { onDelete: "restrict" }),
+  groupId: varchar("group_id").references(() => bujksTable.id, { onDelete: "restrict" }),
+  authorId: varchar("author_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  hidden: boolean("hidden").notNull().default(false),
+  moderationReason: text("moderation_reason"),
+  moderatedBy: varchar("moderated_by").references(() => users.id, { onDelete: "set null" }),
+  moderatedAt: text("moderated_at"),
+  createdAt: text("created_at").notNull(),
+}, table => [index("discussion_threads_course_idx").on(table.courseId, table.groupId)]);
+
+export const discussionRepliesTable = pgTable("discussion_replies", {
+  id: varchar("id").primaryKey(),
+  threadId: varchar("thread_id").notNull().references(() => discussionThreadsTable.id, { onDelete: "cascade" }),
+  authorId: varchar("author_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  body: text("body").notNull(),
+  hidden: boolean("hidden").notNull().default(false),
+  moderationReason: text("moderation_reason"),
+  moderatedBy: varchar("moderated_by").references(() => users.id, { onDelete: "set null" }),
+  moderatedAt: text("moderated_at"),
+  helpful: boolean("helpful").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+}, table => [index("discussion_replies_thread_idx").on(table.threadId)]);
+
 export const learningProgramsTable = pgTable("learning_programs", {
   id: varchar("id").primaryKey(),
   title: text("title").notNull(),

@@ -38,6 +38,10 @@ args = "test"
 task = "workflow.run"
 args = "practice-reminders"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "discussions"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -65,6 +69,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npx tsc --project browser-tests/tsconfig.json && npm run test:practice-reminders"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "discussions"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run check && npx tsc --project browser-tests/tsconfig.json --noEmit && npm run test:discussions"
 
 [workflows.workflow.metadata]
 isValidation = true

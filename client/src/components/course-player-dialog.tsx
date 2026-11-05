@@ -8,11 +8,13 @@ import {
   FileText,
   PlayCircle,
   CheckCircle2,
+  MessageSquareText,
 } from "lucide-react";
 import type { Activity, ECourse, Participant } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { LessonReferences } from "@/components/lesson-references";
+import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -147,6 +149,12 @@ export function CoursePlayerDialog({
           </div>
           <DialogTitle className="text-xl">{course.title}</DialogTitle>
           <DialogDescription>{course.description}</DialogDescription>
+          <Button asChild variant="outline" size="sm" className="mt-2 w-fit">
+            <Link href={`/app/discussions/${encodeURIComponent(course.id)}`}>
+              <MessageSquareText className="mr-2 h-4 w-4" />
+              Diskusi teknis kursus
+            </Link>
+          </Button>
         </DialogHeader>
 
         <section className="shrink-0 space-y-3 border-b px-5 py-4 md:flex md:items-end md:justify-between md:gap-4 md:space-y-0 md:px-6">

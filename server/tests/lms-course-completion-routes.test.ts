@@ -2073,7 +2073,10 @@ describe("aturan progres kursus melalui API", () => {
         });
         expect(learningStateAfterRejection).toEqual(learningStateBeforeRejection);
       }
-      expect(await storage.getQuizAttempts(quiz.id)).toEqual(attempts);
+      // PostgreSQL does not guarantee row order without ORDER BY. This checks
+      // that rejection preserves every attempt, not an incidental scan order.
+      const byId = (left: { id: string }, right: { id: string }) => left.id.localeCompare(right.id);
+      expect((await storage.getQuizAttempts(quiz.id)).sort(byId)).toEqual([...attempts].sort(byId));
       } finally {
         if (raceCourseId) await storage.deleteCourse(raceCourseId);
         await storage.deleteParticipant(otherParticipant.id);

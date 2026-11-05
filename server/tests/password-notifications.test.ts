@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { randomUUID } from "crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { notificationsTable, users, type ApplicationRole } from "@shared/schema";
+import { notificationsTable, users, type ApplicationRole, type Notification } from "@shared/schema";
 import { db } from "../db";
 import { storage, MemStorage } from "../storage";
 import { DrizzleStorage } from "../db-storage";
@@ -35,6 +35,12 @@ async function login(account: typeof accounts[number], password = original) {
 
 function change(cookie: string, currentPassword: unknown = original, newPassword: unknown = replacement) {
   return request("/api/me/password", cookie, "POST", { currentPassword, newPassword });
+}
+
+// Other concurrent integration suites legitimately notify every active admin.
+// Assert password alerts without assuming this account has no learning activity.
+function securityAlerts(notices: Notification[]) {
+  return notices.filter(notice => notice.category === "system");
 }
 
 beforeAll(async () => {
@@ -85,7 +91,7 @@ describe("private password-change security notifications", () => {
     });
     expect((await change(cookie)).status).toBe(429);
     expect(create).not.toHaveBeenCalled();
-    expect(await storage.getNotifications(account.id)).toEqual([]);
+    expect(securityAlerts(await storage.getNotifications(account.id))).toEqual([]);
   });
 
   it.each(["admin", "bujk_pic", "participant"] as const)(
@@ -106,7 +112,9 @@ describe("private password-change security notifications", () => {
       expect(create).toHaveBeenCalledTimes(1);
       const list = await request("/api/notifications", cookie);
       expect(list.status).toBe(200);
-      const [alert] = await list.json();
+      const alerts = securityAlerts(await list.json());
+      expect(alerts).toHaveLength(1);
+      const [alert] = alerts;
       expect(alert).toMatchObject({
         userId: account.id, type: "warning", category: "system", isRead: false,
         title: "Password akun Anda telah diubah",
@@ -123,8 +131,8 @@ describe("private password-change security notifications", () => {
 
       // Re-login and a new storage instance see the persisted alert.
       const freshCookie = await login(account, replacement);
-      expect(await new DrizzleStorage().getNotifications(account.id)).toEqual([alert]);
-      expect(await (await request("/api/notifications", freshCookie)).json()).toEqual([alert]);
+      expect(securityAlerts(await new DrizzleStorage().getNotifications(account.id))).toEqual([alert]);
+      expect(securityAlerts(await (await request("/api/notifications", freshCookie)).json())).toEqual([alert]);
       const read = await request(`/api/notifications/${alert.id}/read`, freshCookie, "PATCH");
       expect(read.status).toBe(200);
       expect((await read.json()).isRead).toBe(true);
@@ -156,7 +164,7 @@ describe("private password-change security notifications", () => {
   it("keeps the successful password result and session when alert storage fails, without logging the error", async () => {
     const account = accounts[0];
     const cookie = await login(account, replacement);
-    const before = await storage.getNotifications(account.id);
+    const before = securityAlerts(await storage.getNotifications(account.id));
     const sensitiveError = "simulated-query-with-credential-or-session-values";
     vi.spyOn(storage, "createNotification").mockRejectedValueOnce(new Error(sensitiveError));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -165,7 +173,7 @@ describe("private password-change security notifications", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ message: "Password berhasil diubah" });
     expect((await request("/api/me", cookie)).status).toBe(200);
-    expect(await storage.getNotifications(account.id)).toEqual(before);
+    expect(securityAlerts(await storage.getNotifications(account.id))).toEqual(before);
     expect(log).toHaveBeenCalledWith("[auth] Password-change notification could not be saved.");
     expect(JSON.stringify(log.mock.calls)).not.toContain(sensitiveError);
     const [stored] = await db.select().from(users).where(eq(users.id, account.id));

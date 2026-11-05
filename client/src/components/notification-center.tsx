@@ -11,7 +11,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import type { Notification } from "@shared/schema";
 
 function timeAgo(dateString: string): string {
@@ -35,6 +35,7 @@ function NotifIcon({ type }: { type: Notification["type"] }) {
 
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const { data: notifications } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
@@ -107,7 +108,19 @@ export function NotificationCenter() {
                 className={`w-full text-left px-4 py-3 hover:bg-accent/50 transition-colors group ${!notif.isRead ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}`}
                 onClick={() => {
                   if (!notif.isRead) markReadMutation.mutate(notif.id);
-                  if (notif.link) setOpen(false);
+                  if (notif.link) {
+                    const discussion = /^\/app\/discussions\/([^/?]+)(?:\?|$)/.exec(notif.link);
+                    if (discussion) {
+                      // Also runs when the same thread URL is opened again.
+                      // Reset removes old content and cancels an older permission
+                      // request before this navigation authorizes the viewer anew.
+                      void queryClient.resetQueries({
+                        queryKey: [`/api/courses/${discussion[1]}/discussions`],
+                      });
+                    }
+                    setOpen(false);
+                    setLocation(notif.link);
+                  }
                 }}
                 data-testid={`notification-item-${notif.id}`}
               >

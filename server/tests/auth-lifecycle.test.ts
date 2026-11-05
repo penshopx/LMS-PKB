@@ -148,11 +148,15 @@ describe("registration, login and logout lifecycle", () => {
       const response = await login();
       expect(response.status).toBe(200);
       const session = cookie(response);
+      // Headers can arrive before express-session completes its final save.
+      // Finish the login response before fault-injecting its persisted identity.
+      await response.arrayBuffer();
       await db.execute(sql`UPDATE session SET sess = jsonb_set(sess::jsonb, '{passport,user}', ${JSON.stringify(identity)}::jsonb)::json WHERE sid = ${sessionId(session)}`);
       expect((await request("/api/me", "GET", undefined, { Cookie: session })).status).toBe(401);
     }
     const response = await login();
     const legacyCookie = cookie(response);
+    await response.arrayBuffer();
     await db.execute(sql`UPDATE session SET sess = jsonb_set(sess::jsonb, '{passport,user}', ${JSON.stringify(emailUserId)}::jsonb)::json WHERE sid = ${sessionId(legacyCookie)}`);
     expect((await request("/api/me", "GET", undefined, { Cookie: legacyCookie })).status).toBe(200);
   });

@@ -171,12 +171,22 @@ export function PicHome() {
             <Card>
               <CardHeader><CardTitle className="text-lg">Progres pembelajaran</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {enrollments.filter(item => item.participantId === participant.id).map(enrollment => (
-                  <div key={enrollment.id} className="flex flex-wrap justify-between gap-2 rounded-lg border p-3">
-                    <p>{courses.find(course => course.id === enrollment.courseId)?.title ?? "Jalur pembelajaran"}</p>
-                    <span className="text-sm font-medium">{enrollment.progress}% · {enrollment.status === "completed" ? "Selesai" : "Berjalan"}</span>
-                  </div>
-                ))}
+                {enrollments.filter(item => item.participantId === participant.id).map(enrollment => {
+                  const course = courses.find(item => item.id === enrollment.courseId);
+                  return (
+                    <div key={enrollment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                      <p>{course?.title ?? "Jalur pembelajaran"}</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-medium">{enrollment.progress}% · {enrollment.status === "completed" ? "Selesai" : "Berjalan"}</span>
+                        {course && (
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/app/discussions/${encodeURIComponent(course.id)}`}>Diskusi teknis</Link>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {!enrollments.some(item => item.participantId === participant.id) && <p className="text-sm text-muted-foreground">Belum mengikuti pembelajaran.</p>}
               </CardContent>
             </Card>

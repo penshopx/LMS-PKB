@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": { "target": "ES2020" },
-  "include": ["./*.ts", "../playwright.practice-reminders.config.ts", "../playwright.login.config.ts", "../playwright.password-dialog.config.ts", "../playwright.access-history.config.ts", "../playwright.learning-programs.config.ts"]
+  "include": ["./*.ts", "../playwright.practice-reminders.config.ts", "../playwright.login.config.ts", "../playwright.password-dialog.config.ts", "../playwright.access-history.config.ts", "../playwright.learning-programs.config.ts", "../playwright.discussions.config.ts"]
 }

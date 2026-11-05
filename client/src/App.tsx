@@ -39,6 +39,7 @@ import Certificates from "@/pages/certificates";
 import Quizzes from "@/pages/quizzes";
 import PracticeMissions from "@/pages/practice-missions";
 import LearningProgramsPage from "@/pages/learning-programs";
+import CourseDiscussions from "@/pages/course-discussions";
 import Analytics from "@/pages/analytics";
 import AccessManagement from "@/pages/access";
 import AcceptInvitation from "@/pages/accept-invitation";
@@ -65,6 +66,11 @@ const PAGE_TITLES: Record<string, string> = {
 function AppRouter() {
   const { data: user } = useCurrentUser();
   const [location] = useLocation();
+  const discussionMatch = location.match(/^\/app\/discussions\/([^/?#]+)/);
+  if (discussionMatch) {
+    const courseId = decodeURIComponent(discussionMatch[1]);
+    return <CourseDiscussions key={`${courseId}:${user?.id ?? "unknown"}:${user?.role ?? "unknown"}:${user?.bujkId ?? ""}:${user?.participantId ?? ""}`} courseId={courseId} />;
+  }
   if (location === "/app/learning-programs") return <LearningProgramsPage key={user?.id ?? "unknown"} />;
   if (location === "/app/assessment") return <Assessment />;
   if (user?.role === "participant") {

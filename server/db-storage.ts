@@ -26,6 +26,7 @@ import {
   learningRecordsTable,
   missionSubmissionsTable,
   practiceMissionsTable,
+  discussionThreadsTable,
 } from "@shared/schema";
 import type {
   CompetencyCluster,
@@ -550,6 +551,12 @@ export class DrizzleStorage implements IStorage {
     if (!existing) return false;
 
     await db.transaction(async (tx) => {
+      // Discussions are course-owned content. Delete them (and cascading replies)
+      // in this transaction so an unrelated retained reference rolls back everything.
+      await tx.delete(discussionThreadsTable).where(eq(discussionThreadsTable.courseId, id));
+      await tx.delete(notificationsTable).where(
+        drizzleSql`split_part(${notificationsTable.link}, '?', 1) = ${`/app/discussions/${encodeURIComponent(id)}`}`,
+      );
       const quizRows = await tx
         .select({ id: quizzesTable.id })
         .from(quizzesTable)
