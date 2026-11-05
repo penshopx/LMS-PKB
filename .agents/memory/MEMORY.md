@@ -1,7 +1,7 @@
 - [PostgreSQL concurrency test coordination](postgres-concurrency-tests.md) — managed DB hides session activity; coordinate overlapping transactions inside the test harness.
 - [Foreign-key delete-policy normalization](foreign-key-delete-policy.md) — replace FK behavior by catalog-discovering every constraint on the column, not one assumed name.
 - [Production runtime environment](production-runtime-environment.md) — production run commands must set NODE_ENV at runtime; build-time defines do not cover injected environment objects.
-- [LMS product direction](lms-product-direction.md) — members and BUJK learn through PIC invitations, assigned and elective courses, with course-completion certificates only.
+- [LMS history and result policies](lms-product-direction.md) — preserve legacy histories when moving to PKB; keep group privacy and course results separate from official credit.
 - [PostgreSQL JSONB parameter typing](postgres-jsonb-parameter-typing.md) — explicitly cast bound text values used with JSONB operators.
 - [Supplemental workplace practice](practice-missions-scope.md) — adapted microlearning missions support practice without altering graduation or formal-certification rules.
 - [Account reactivation policy](account-reactivation-policy.md) — restoring account access must never restore sessions issued before deactivation.

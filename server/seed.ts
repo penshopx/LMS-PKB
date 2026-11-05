@@ -1,6 +1,6 @@
 /**
  * Seeds the database with initial data if it's empty.
- * Only runs inserts when tables are empty to avoid duplicates.
+ * Synchronizes the current PKB curriculum without rewriting the archived catalog.
  */
 import { db } from "./db";
 import {
@@ -15,6 +15,7 @@ import {
   notificationsTable,
   quizzesTable,
 } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import {
   PKB_CLUSTERS,
   PKB_COURSES,
@@ -45,9 +46,11 @@ const LEARNING_RECORD_SEED_ROWS = PKB_PARTICIPANTS.flatMap(participant =>
 );
 
 async function synchronizePkbCatalog() {
+  await db.transaction(async tx => {
+  const existingCourseIds = new Set((await tx.select({ id: coursesTable.id }).from(coursesTable)).map(row => row.id));
   for (const cluster of PKB_CLUSTERS) {
     const { id: _id, ...updates } = cluster;
-    await db.insert(clustersTable).values(cluster).onConflictDoUpdate({
+    await tx.insert(clustersTable).values(cluster).onConflictDoUpdate({
       target: clustersTable.id,
       set: updates,
     });
@@ -55,7 +58,7 @@ async function synchronizePkbCatalog() {
 
   for (const unit of PKB_UNITS) {
     const { id: _id, ...updates } = unit;
-    await db.insert(unitsTable).values(unit).onConflictDoUpdate({
+    await tx.insert(unitsTable).values(unit).onConflictDoUpdate({
       target: unitsTable.id,
       set: updates,
     });
@@ -64,8 +67,10 @@ async function synchronizePkbCatalog() {
   for (const course of PKB_COURSES) {
     const row = {
       ...course,
-      preTestId: course.preTestId ?? null,
-      postTestId: course.postTestId ?? null,
+      // Courses and quizzes have cyclic foreign keys: bind new defaults only
+      // after both sides exist, and preserve existing admin-selected bindings.
+      preTestId: null,
+      postTestId: null,
     };
     const {
       id: _id,
@@ -73,7 +78,7 @@ async function synchronizePkbCatalog() {
       postTestId: _postTestId,
       ...updates
     } = row;
-    await db.insert(coursesTable).values(row).onConflictDoUpdate({
+    await tx.insert(coursesTable).values(row).onConflictDoUpdate({
       target: coursesTable.id,
       set: { ...updates, lessons: catalogLessonsPreservingReferences(course.lessons) },
     });
@@ -88,21 +93,30 @@ async function synchronizePkbCatalog() {
       showResults: quiz.showResults ? 1 : 0,
     };
     const { id: _id, ...updates } = row;
-    await db.insert(quizzesTable).values(row).onConflictDoUpdate({
+    await tx.insert(quizzesTable).values(row).onConflictDoUpdate({
       target: quizzesTable.id,
       set: updates,
     });
   }
 
+  for (const course of PKB_COURSES) {
+    if (!existingCourseIds.has(course.id)) {
+      await tx.update(coursesTable).set({
+        preTestId: course.preTestId ?? null,
+        postTestId: course.postTestId ?? null,
+      }).where(eq(coursesTable.id, course.id));
+    }
+  }
+
   for (const path of PKB_LEARNING_PATHS) {
     const row = { ...path, isPublished: path.isPublished ? 1 : 0 };
     const { id: _id, ...updates } = row;
-    await db.insert(learningPathsTable).values(row).onConflictDoUpdate({
+    await tx.insert(learningPathsTable).values(row).onConflictDoUpdate({
       target: learningPathsTable.id,
       set: updates,
     });
   }
-
+  });
 }
 
 async function synchronizeParticipantRelations(participantIds: Set<string>) {
@@ -148,20 +162,7 @@ export async function seedDatabase() {
 
   console.log("[seed] Seeding database with initial data...");
 
-  await db.insert(clustersTable).values(PKB_CLUSTERS);
-  await db.insert(unitsTable).values(PKB_UNITS);
-  await db.insert(coursesTable).values(PKB_COURSES.map(course => ({
-    ...course,
-    preTestId: course.preTestId ?? null,
-    postTestId: course.postTestId ?? null,
-  })));
-  await db.insert(quizzesTable).values(PKB_QUIZZES.map(quiz => ({
-    ...quiz,
-    lessonId: quiz.lessonId ?? null,
-    timeLimit: quiz.timeLimit ?? null,
-    shuffleQuestions: quiz.shuffleQuestions ? 1 : 0,
-    showResults: quiz.showResults ? 1 : 0,
-  })));
+  await synchronizePkbCatalog();
 
   // Participants
   await db.insert(participantsTable).values(PKB_PARTICIPANTS.map(({ competencies: _competencies, learningHistory: _learningHistory, evidences: _evidences, ...participant }) => participant));
@@ -174,14 +175,6 @@ export async function seedDatabase() {
 
   // Learning records (relational)
   await db.insert(learningRecordsTable).values(LEARNING_RECORD_SEED_ROWS);
-
-  // Learning Paths
-  await db.insert(learningPathsTable).values(
-    PKB_LEARNING_PATHS.map(path => ({
-      ...path,
-      isPublished: path.isPublished ? 1 : 0,
-    })),
-  );
 
   // Notifications
   const now = Date.now();

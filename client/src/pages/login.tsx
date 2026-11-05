@@ -183,8 +183,8 @@ export default function Login() {
               </Link>
             </p>
             <p className="mt-5 text-sm text-muted-foreground">
-              Belum punya akun? Buka tautan undangan dari PIC BUJK untuk mendaftar.
-              Jika lupa kata sandi atau undangan kedaluwarsa, hubungi PIC BUJK atau admin.
+              Belum punya akun? Daftar mandiri atau gunakan tautan undangan koordinator PKB.
+              Jika lupa kata sandi atau undangan kedaluwarsa, hubungi koordinator PKB atau admin.
             </p>
             <Link href="/" className="mt-3 inline-block text-sm text-sky-700 underline dark:text-sky-300">Kembali ke beranda</Link>
           </CardContent>

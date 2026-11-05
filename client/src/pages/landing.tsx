@@ -134,10 +134,10 @@ export default function Landing() {
                 </div>
                 <div className="mt-6 space-y-3">
                   {[
-                    ["01", "Legalitas & perizinan BUJK"],
-                    ["02", "Sertifikasi & kompetensi kerja"],
-                    ["03", "Tender & dokumen penawaran"],
-                    ["04", "Administrasi dan kendali proyek"],
+                    ["01", "Pendidikan & pelatihan profesional"],
+                    ["02", "Pembelajaran mandiri & penugasan"],
+                    ["03", "Pertemuan & kontribusi profesi"],
+                    ["04", "Bukti kegiatan & rencana PKB"],
                   ].map(([number, title]) => <div key={number} className="flex items-center gap-4 rounded-xl bg-[#0d2a45]/65 p-4"><span className="font-mono text-sm text-sky-300">{number}</span><span className="text-sm font-medium text-slate-100">{title}</span><span className="ml-auto h-1.5 w-1.5 rounded-full bg-sky-300" /></div>)}
                 </div>
                 <p className="mt-6 text-xs leading-5 text-slate-300">Belajar sesuai kebutuhan kerja, bukan sekadar mengumpulkan materi.</p>
@@ -191,7 +191,7 @@ export default function Landing() {
 
         <section className="border-y border-slate-200 bg-[#e7f2fb] dark:border-slate-700 dark:bg-[#10283c]">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-7 md:grid-cols-[1fr_auto] md:items-center">
-            <div><div className="flex items-center gap-2 text-sky-900 dark:text-sky-200"><UsersRound className="h-5 w-5" /><p className="text-xs font-bold uppercase tracking-[0.16em]">Untuk ekosistem konstruksi</p></div><h2 className="mt-3 max-w-2xl text-2xl font-bold sm:text-3xl">Anggota asosiasi, tim BUJK, dan pembelajar mandiri punya ruang belajar yang sama.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Akun peserta mandiri dapat dibuat dari sini. Peserta organisasi tetap mengikuti akses dan tata kelola yang diberikan melalui undangan.</p></div>
+            <div><div className="flex items-center gap-2 text-sky-900 dark:text-sky-200"><UsersRound className="h-5 w-5" /><p className="text-xs font-bold uppercase tracking-[0.16em]">Untuk tenaga teknik konstruksi</p></div><h2 className="mt-3 max-w-2xl text-2xl font-bold sm:text-3xl">Kembangkan keahlian melalui pembelajaran profesional yang berkelanjutan.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Belajar mandiri atau melalui undangan koordinator PKB. Acuan kegiatan adalah Permen PUPR No. 12 Tahun 2021 untuk tenaga kerja konstruksi kualifikasi jabatan ahli. Sertifikat kursus bukan SKK atau penetapan Angka Kredit resmi.</p></div>
             <Link href="/register" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#123b63] px-5 py-3.5 font-semibold text-white hover:bg-[#1a527f]">Daftar sebagai pembelajar <ArrowRight className="h-4 w-4" /></Link>
           </div>
         </section>

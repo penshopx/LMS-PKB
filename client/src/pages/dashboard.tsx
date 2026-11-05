@@ -24,7 +24,6 @@ import {
   CompetencyLevelNames
 } from "@/lib/data";
 import type { DashboardStats, HeatmapData, CompetencyCluster, CompetencyLevelType, LearningPath, Quiz, Certificate } from "@shared/schema";
-import { GustaftaEcosystem } from "@/components/gustafta-ecosystem";
 
 function StatCard({ 
   title, 
@@ -410,11 +409,11 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">LSP</div>
-            <p className="text-sm text-muted-foreground">Sertifikasi Profesi</p>
+            <div className="text-2xl font-bold">PKB</div>
+            <p className="text-sm text-muted-foreground">Panduan kegiatan dan bukti</p>
             <Link href="/app/assessment">
               <Button variant="ghost" className="p-0 h-auto mt-2" data-testid="link-assessment">
-                Kelola Asesmen <ArrowRight className="h-4 w-4 ml-1" />
+                Baca Panduan PKB <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </Link>
           </CardContent>
@@ -442,7 +441,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <GustaftaEcosystem compact location="dashboard" />
     </div>
   );
 }

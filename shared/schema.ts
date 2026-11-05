@@ -81,6 +81,7 @@ export interface BehaviorIndicator {
 // E-Course structure
 export interface ECourse {
   id: string;
+  archived?: boolean;
   unitId: string;
   targetLevel: CompetencyLevelType;
   title: string;

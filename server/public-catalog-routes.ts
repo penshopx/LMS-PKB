@@ -8,14 +8,16 @@ import { loginAttemptLimiter } from "./login-attempt-limiter";
 import { normalizeClientSource } from "./client-source";
 import { coursesTable, coursePublicationsTable, participantsTable, users, enrollmentsTable, type User } from "@shared/schema";
 import { catalogSettingsSchema, publicRegistrationSchema, type PublicCourse } from "@shared/public-catalog";
+import { LEGACY_BUJK_COURSE_IDS } from "./pkb-catalog";
 
 const defaults = { published: true, format: "self_paced" as const, startsAt: null, instructor: "", recordingUrl: "" };
 
 async function catalogRows() {
-  return db.select({ course: coursesTable, publication: coursePublicationsTable })
+  const rows = await db.select({ course: coursesTable, publication: coursePublicationsTable })
     .from(coursesTable)
     .leftJoin(coursePublicationsTable, eq(coursePublicationsTable.courseId, coursesTable.id))
     .orderBy(coursesTable.title);
+  return rows.filter(row => !LEGACY_BUJK_COURSE_IDS.has(row.course.id));
 }
 
 function publicSummary(row: Awaited<ReturnType<typeof catalogRows>>[number]): PublicCourse {
@@ -103,6 +105,7 @@ export function registerPrivateCatalogRoutes(app: Express) {
     if (!input.success) return res.status(400).json({ message: input.error.issues[0].message });
     try {
       const courseId = String(req.params.id);
+      if (LEGACY_BUJK_COURSE_IDS.has(courseId)) return res.status(409).json({ message: "Kursus ini diarsipkan dan tidak menerima publikasi baru." });
       if (!await storage.getCourse(courseId)) return res.status(404).json({ message: "Kursus tidak ditemukan." });
       const [row] = await db.insert(coursePublicationsTable).values({ courseId, ...input.data })
         .onConflictDoUpdate({ target: coursePublicationsTable.courseId, set: input.data }).returning();
@@ -116,6 +119,7 @@ export function registerPrivateCatalogRoutes(app: Express) {
     if (!participantId) return res.status(403).json({ message: "Profil peserta belum tersedia." });
     try {
       const courseId = String(req.params.id);
+      if (LEGACY_BUJK_COURSE_IDS.has(courseId)) return res.status(409).json({ message: "Kursus ini diarsipkan dan tidak menerima pendaftaran baru." });
       const enrollment = await db.transaction(async tx => {
         // Serialize public enrollments for the same participant/course only.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`catalog:${participantId}:${courseId}`}, 0))`);

@@ -5,19 +5,21 @@
 PKB ASDAMKINDO adalah platform Pengembangan Keprofesian Berkelanjutan untuk memperkuat kompetensi teknik tenaga kerja konstruksi. Acuan regulasi utama adalah Permen PUPR Nomor 12 Tahun 2021 tentang Pelaksanaan Pengembangan Keprofesian Berkelanjutan.
 
 Ruang lingkup katalog:
-- **SIAP Legalitas dan Perizinan**
-- **SIAP Sertifikasi**
-- **SIAP Tender**
-- **SIAP Proyek**
-- **Kepatuhan** melalui materi SMAP (Sistem Manajemen Anti Penyuapan) dan PANCEK
+- Pendidikan/pelatihan formal serta pembelajaran nonformal.
+- Pertemuan profesi, karya, pengajaran, paparan dan apresiasi karya.
+- Kegiatan utama lainnya serta unsur penunjang sesuai peraturan.
+- Katalog awal merupakan panduan pengenalan kegiatan dan dokumentasi PKB, bukan program pendidikan formal atau akreditasi kegiatan.
 
-LKUT hanya menjadi konteks pemetaan kebutuhan belajar. Aplikasi tidak menyediakan fitur penyusunan, pengisian, penilaian, atau pelaporan LKUT.
+Orientasi aktif adalah individu tenaga teknik konstruksi. Ketentuan PKB pada peraturan ini berlaku untuk tenaga kerja konstruksi kualifikasi jabatan ahli. Koordinator mengelola akses kelompok, bukan kesiapan usaha BUJK. Katalog BUJK lama diarsipkan dengan ID dan riwayat asli; jangan mengubahnya menjadi kursus PKB baru.
+
+Aplikasi tidak menghitung/menetapkan Angka Kredit atau menerbitkan SKK. Sertifikat aplikasi hanya bukti penyelesaian kursus. L1–L4 adalah tahapan belajar internal, bukan jenjang jabatan ahli 7–9. Penilaian dan penetapan resmi mengikuti pihak berwenang.
 
 ## Knowledge base referensi fitur
 
 Sebelum mengusulkan atau mengubah fitur terkait regulasi, baca
 [`docs/knowledge-base/README.md`](docs/knowledge-base/README.md).
-Folder tersebut mengindeks dua PDF unggahan pengguna, catatan relevansi fitur,
+Sumber utama saat ini: `attached_assets/Permen_PUPR_12_2021_(1)_1793845827824.pdf` (42 halaman), terdaftar sebagai `PKB-12-2021`. Ringkasan belum memverifikasi status perubahan terbaru secara daring.
+Folder tersebut juga mengindeks dua PDF lama untuk konteks arsip, catatan relevansi fitur,
 rujukan halaman, dan ekstraksi teks yang dapat dicari.
 Pemetaan terhadap kode, batas peran, dan celah prioritas tersedia di
 [`docs/knowledge-base/pemetaan-fitur.md`](docs/knowledge-base/pemetaan-fitur.md).
@@ -44,7 +46,7 @@ Key features:
 - **Evidence-based Assessment**: Track and document competency evidence
 - **Competency Passport**: Generate competency documentation for talent decisions
 - **Dashboard Analytics**: Heatmap visualization of participant progress with quick access cards
-- **Landing Page**: Public landing page at `/` with LMS and LSP feature showcase
+- **Landing Page**: Public course catalog for individual technical construction professionals
 
 **Power Features (Latest):**
 - **Global Search**: Real-time search across participants, courses, and competency units (Ctrl+K shortcut) — `GET /api/search?q=...`
@@ -58,17 +60,14 @@ Key features:
 - **Quiz Engine**: Multiple question types (pilihan ganda, benar/salah, esai) with scoring
 - **Certificates**: Digital certificate issuance with verification codes
 
-**LSP Certification Features (New):**
-- **Assessor Management**: Register assessors with NRA (Nomor Registrasi Asesor) and BNSP certification
-- **Assessee Management**: Track assessee registration and assessment status
-- **Assessment Methods**: 6 methods - APL, Observasi, Wawancara, Tes Tertulis, Portfolio, Simulasi
-- **Competency Schemes**: SKK certification schemes with fees and durations
-- **SKKNI Mapping**: Map competencies to Indonesian national standards
-- **Assessment Scheduling**: Schedule and track assessment sessions
+**PKB Guidance:**
+- Activity categories, evidence, credit composition, and minimum values are explained from the supplied regulation.
+- Official credit assessment and SKK issuance are outside the application.
+- Historical LSP tables and APIs are retained for data preservation, but the old LSP management page is not part of the current UI.
 
 ## Routes
 
-- `/` - Landing page (public) with LMS and LSP feature showcase
+- `/` - Public PKB course catalog and independent registration
 - `/app` - Dashboard with competency analytics and quick access cards
 - `/app/competencies` - Competency cluster and unit management
 - `/app/courses` - Katalog dan builder pembelajaran dengan template 6 langkah
@@ -76,10 +75,12 @@ Key features:
 - `/app/quizzes` - Quiz Engine with multiple question types (pilihan ganda, benar/salah, esai)
 - `/app/participants` - Participant management
 - `/app/passport` - Competency Passport
-- `/app/assessment` - LSP Assessment with Assessor, Assessee, Schedule, and Scheme management
+- `/app/assessment` - PKB regulatory guidance, available to every signed-in role
 - `/app/certificates` - Certificate issuance and verification with unique codes
 
-## Analytics Gustafta
+## Integrasi historis Gustafta
+
+Tautan promosi kesiapan usaha tidak ditampilkan pada navigasi atau dashboard PKB. Implementasi pencatatan historis tetap disimpan.
 
 Klik tautan Gustafta dicatat sebagai event anonim `gustafta_link_click` dengan dimensi
 `domain`, `destination`, dan `location`. Event hanya memakai nilai tujuan yang sudah

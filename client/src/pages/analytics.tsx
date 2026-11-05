@@ -142,7 +142,7 @@ export default function Analytics() {
               <BarChart3 className="h-5 w-5 text-purple-500" />
               Distribusi Level per Klaster
             </CardTitle>
-            <CardDescription>Perbandingan level kompetensi antar klaster SIAP dan Kepatuhan</CardDescription>
+            <CardDescription>Perbandingan tahap belajar internal pada kategori PKB, bukan perolehan SKPK atau jenjang jabatan</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton /> : (

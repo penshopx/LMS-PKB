@@ -96,9 +96,9 @@ export default function AccessManagement() {
     mutationFn: async (name: string) => apiRequest("POST", "/api/access/bujks", { name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/access/bujks"] });
-      toast({ title: "BUJK berhasil ditambahkan" });
+      toast({ title: "Kelompok PKB berhasil ditambahkan" });
     },
-    onError: (error: Error) => toast({ title: "BUJK gagal disimpan", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Kelompok PKB gagal disimpan", description: error.message, variant: "destructive" }),
   });
 
   const createInvitation = useMutation({
@@ -148,16 +148,16 @@ export default function AccessManagement() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold">{isAdmin ? "Akun & Akses BUJK" : "Undang Peserta"}</h1>
+        <h1 className="text-2xl font-bold">{isAdmin ? "Akun & Akses PKB" : "Undang Peserta"}</h1>
         <p className="mt-1 text-muted-foreground">
-          {isAdmin ? "Daftarkan BUJK dan undang PIC untuk mengelola undangan pesertanya." : `Undangan peserta untuk ${organizations[0]?.name ?? "BUJK Anda"}.`}
+          {isAdmin ? "Daftarkan kelompok atau organisasi penyelenggara dan undang koordinator untuk mengelola akses peserta PKB." : `Undangan peserta untuk ${organizations[0]?.name ?? "kelompok PKB Anda"}.`}
         </p>
       </div>
       {(organizationError || invitationError) && <p role="alert" className="text-destructive">Data akses gagal dimuat. Muat ulang halaman untuk mencoba kembali.</p>}
 
       {isAdmin && (
         <Card>
-          <CardHeader><CardTitle>Daftarkan BUJK</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Daftarkan kelompok PKB</CardTitle></CardHeader>
           <CardContent>
             <form className="flex flex-wrap gap-3" onSubmit={event => {
               event.preventDefault();
@@ -165,9 +165,9 @@ export default function AccessManagement() {
               const name = String(new FormData(form).get("name") ?? "");
               createOrganization.mutate(name, { onSuccess: () => form.reset() });
             }}>
-              <Label className="sr-only" htmlFor="bujk-name">Nama BUJK</Label>
-              <Input id="bujk-name" name="name" className="min-w-56 flex-1" placeholder="Nama badan usaha" required minLength={2} maxLength={200} />
-              <Button disabled={createOrganization.isPending}>Tambah BUJK</Button>
+              <Label className="sr-only" htmlFor="bujk-name">Nama kelompok atau organisasi PKB</Label>
+              <Input id="bujk-name" name="name" className="min-w-56 flex-1" placeholder="Nama kelompok, asosiasi, atau penyelenggara" required minLength={2} maxLength={200} />
+              <Button disabled={createOrganization.isPending}>Tambah kelompok</Button>
             </form>
           </CardContent>
         </Card>
@@ -175,7 +175,7 @@ export default function AccessManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{isAdmin ? "Undang PIC BUJK" : "Undang peserta baru"}</CardTitle>
+          <CardTitle>{isAdmin ? "Undang koordinator PKB" : "Undang peserta baru"}</CardTitle>
           <CardDescription>Tautan berlaku 7 hari dan hanya dapat digunakan sekali. Penerima membuat kata sandinya sendiri; belum ada pengiriman email otomatis.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -186,9 +186,9 @@ export default function AccessManagement() {
           }}>
             {isAdmin && (
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="invite-bujk">BUJK</Label>
+                <Label htmlFor="invite-bujk">Kelompok PKB</Label>
                 <select id="invite-bujk" name="bujkId" required defaultValue="" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-                  <option value="" disabled>Pilih BUJK</option>
+                  <option value="" disabled>Pilih kelompok</option>
                   {organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
                 </select>
               </div>
@@ -277,7 +277,7 @@ export default function AccessManagement() {
                   <p className="text-xs text-muted-foreground">{account.participantName ?? account.bujkName ?? "Pengelola aplikasi"}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{account.role === "admin" ? "Admin" : account.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</Badge>
+                  <Badge variant="secondary">{account.role === "admin" ? "Admin" : account.role === "bujk_pic" ? "Koordinator PKB" : "Peserta"}</Badge>
                   {account.role !== "admin" && (
                     <>
                       <Badge variant={account.isActive ? "outline" : "destructive"} aria-label={`Status akun ${account.username}: ${account.isActive ? "aktif" : "nonaktif"}`}>

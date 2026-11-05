@@ -16,6 +16,7 @@ import { registerPracticeMissionRoutes } from "./practice-mission-routes";
 import { registerCourseReferenceRoutes } from "./course-reference-routes";
 import { updateCourseLessonReferences } from "./course-reference-store";
 import { registerPublicCatalogRoutes, registerPrivateCatalogRoutes } from "./public-catalog-routes";
+import { LEGACY_BUJK_COURSE_IDS, LEGACY_BUJK_PATH_IDS, LEGACY_BUJK_UNIT_IDS } from "./pkb-catalog";
 import { quizSubmissionFingerprint } from "./quiz-submission-identity";
 import { buildHistoryQuery } from "./account-status-history-query";
 import { 
@@ -216,7 +217,7 @@ export async function registerRoutes(
         .innerJoin(bujksTable, eq(bujksTable.id, bujkInvitationsTable.bujkId))
         .where(eq(bujkInvitationsTable.tokenHash, tokenHash)).limit(1);
       if (!invitation || invitation.acceptedAt || invitationExpired(invitation.expiresAt)) {
-        return res.status(400).json({ message: "Undangan tidak tersedia, sudah digunakan, atau telah kedaluwarsa. Minta undangan baru kepada PIC BUJK." });
+        return res.status(400).json({ message: "Undangan tidak tersedia, sudah digunakan, atau telah kedaluwarsa. Minta undangan baru kepada koordinator PKB." });
       }
       const { acceptedAt: _accepted, ...preview } = invitation;
       res.json(preview);
@@ -307,7 +308,7 @@ export async function registerRoutes(
       }
       const databaseError = error as { code?: string; cause?: { code?: string } } | null;
       if (databaseError?.code === "23505" || databaseError?.cause?.code === "23505") {
-        return res.status(409).json({ message: "Akun atau data peserta sudah tersedia. Hubungi PIC BUJK." });
+        return res.status(409).json({ message: "Akun atau data peserta sudah tersedia. Hubungi koordinator PKB." });
       }
       res.status(500).json({ message: "Undangan tidak dapat diproses." });
     }
@@ -336,7 +337,7 @@ export async function registerRoutes(
           : [];
       res.json(organizations);
     } catch {
-      res.status(500).json({ message: "Daftar BUJK tidak dapat dimuat." });
+      res.status(500).json({ message: "Daftar kelompok PKB tidak dapat dimuat." });
     }
   });
 
@@ -345,7 +346,7 @@ export async function registerRoutes(
       const { name } = z.object({ name: z.string().trim().min(2).max(200) }).parse(req.body);
       const [existing] = await db.select({ id: bujksTable.id }).from(bujksTable)
         .where(sql`lower(${bujksTable.name}) = ${name.toLowerCase()}`).limit(1);
-      if (existing) return res.status(409).json({ message: "Nama BUJK sudah terdaftar." });
+      if (existing) return res.status(409).json({ message: "Nama kelompok PKB sudah terdaftar." });
 
       const organization = {
         id: randomUUID(),
@@ -356,9 +357,9 @@ export async function registerRoutes(
       res.status(201).json(organization);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Nama BUJK harus berisi 2–200 karakter." });
+        return res.status(400).json({ message: "Nama kelompok PKB harus berisi 2–200 karakter." });
       }
-      res.status(500).json({ message: "BUJK tidak dapat disimpan." });
+      res.status(500).json({ message: "Kelompok PKB tidak dapat disimpan." });
     }
   });
 
@@ -468,14 +469,14 @@ export async function registerRoutes(
       const user = req.user as User;
       const role = user.role === "bujk_pic" ? "participant" : (data.role ?? "bujk_pic");
       const bujkId = user.role === "bujk_pic" ? user.bujkId : data.bujkId;
-      if (!bujkId) return res.status(400).json({ message: "Pilih BUJK untuk undangan ini." });
+      if (!bujkId) return res.status(400).json({ message: "Pilih kelompok PKB untuk undangan ini." });
       if (role === "participant" && (!data.participantName || !data.nip || !data.position || !data.unit)) {
         return res.status(400).json({ message: "Nama, NIP, jabatan, dan unit peserta wajib diisi." });
       }
 
       const [organization] = await db.select({ id: bujksTable.id }).from(bujksTable)
         .where(eq(bujksTable.id, bujkId)).limit(1);
-      if (!organization) return res.status(404).json({ message: "BUJK tidak ditemukan." });
+      if (!organization) return res.status(404).json({ message: "Kelompok PKB tidak ditemukan." });
 
       const email = data.email.toLowerCase();
       const [existingUser] = await db.select({ id: users.id }).from(users)
@@ -622,7 +623,7 @@ export async function registerRoutes(
   // ---------- CLUSTERS ----------
   app.get("/api/clusters", async (req, res) => {
     try {
-      const clusters = await storage.getClusters();
+      const clusters = await storage.getClusters(req.query.includeArchived === "true");
       res.json(clusters);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch clusters" });
@@ -684,9 +685,9 @@ export async function registerRoutes(
       const clusterId = req.query.clusterId as string | undefined;
       if (clusterId) {
         const units = await storage.getUnitsByCluster(clusterId);
-        return res.json(units);
+        return res.json(units.filter(unit => req.query.includeArchived === "true" || !LEGACY_BUJK_UNIT_IDS.has(unit.id)));
       }
-      const units = await storage.getUnits();
+      const units = await storage.getUnits(req.query.includeArchived === "true");
       res.json(units);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch units" });
@@ -752,9 +753,11 @@ export async function registerRoutes(
       if (unitId) {
         courses = await storage.getCoursesByUnit(unitId);
       } else {
-        courses = await storage.getCourses();
+        courses = await storage.getCourses(req.query.includeArchived === "true");
       }
-      res.json(courses);
+      res.json(courses
+        .filter(course => req.query.includeArchived === "true" || !LEGACY_BUJK_COURSE_IDS.has(course.id))
+        .map(course => ({ ...course, archived: LEGACY_BUJK_COURSE_IDS.has(course.id) })));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch courses" });
     }
@@ -766,7 +769,7 @@ export async function registerRoutes(
       if (!course) {
         return res.status(404).json({ message: "Course not found" });
       }
-      res.json(course);
+      res.json({ ...course, archived: LEGACY_BUJK_COURSE_IDS.has(course.id) });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch course" });
     }
@@ -933,7 +936,7 @@ export async function registerRoutes(
   app.get("/api/learning-paths", async (req, res) => {
     try {
       const user = req.user as User;
-      let paths = await storage.getLearningPaths();
+      let paths = await storage.getLearningPaths(req.query.includeArchived === "true");
       if (user.role === "participant") {
         const enrollments = user.participantId ? await storage.getEnrollmentsByParticipant(user.participantId) : [];
         const pathIds = new Set(enrollments.map(enrollment => enrollment.learningPathId).filter(Boolean));
@@ -1108,6 +1111,9 @@ export async function registerRoutes(
           .find(enrollment => enrollment.courseId === courseId);
         if (existing) return res.json(existing);
       }
+      if (LEGACY_BUJK_COURSE_IDS.has(courseId) || LEGACY_BUJK_PATH_IDS.has(learningPathId)) {
+        return res.status(409).json({ message: "Kurikulum lama telah diarsipkan. Riwayat tetap tersimpan, tetapi pendaftaran baru tidak tersedia." });
+      }
       const enrollment = await storage.createEnrollment(participantId, courseId, learningPathId);
       res.status(201).json(enrollment);
     } catch (error) {
@@ -1170,7 +1176,7 @@ export async function registerRoutes(
       if (courseId) {
         quizzes = await storage.getQuizzesByCourse(courseId);
       } else {
-        quizzes = await storage.getQuizzes();
+        quizzes = await storage.getQuizzes(req.query.includeArchived === "true");
       }
       if (user.role === "participant") {
         const enrollments = user.participantId ? await storage.getEnrollmentsByParticipant(user.participantId) : [];

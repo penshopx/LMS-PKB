@@ -1,20 +1,18 @@
 ---
 name: LMS product direction
-description: Product decisions for the PUB ASPEKINDO Udemy-style LMS discussion.
+description: Enrollment, history, privacy, and course-result policies after the change to individual PKB learning.
 ---
 
-- Initial learners are association members and construction companies (BUJK).
-- BUJK PICs invite organization participants. Public visitors may also self-register as independent participants, without automatic BUJK association.
+- The former BUJK-first / SIAP Tender pilot direction has been superseded by the individual PKB direction documented in replit.md.
+- Existing courses must be archived with their histories intact. Do not reuse historical course IDs or reinterpret old completion/certificate records as PKB credits.
+- Coordinators invite group participants. Public visitors may also self-register independently, without automatic group association.
 - The landing page must expose upcoming courses and existing recordings without login; registration/login is the entry point for following a course.
-- Learning combines company-assigned required paths with learner-selected elective courses.
-- PICs assign required learning paths to job-role groups and can make individual exceptions.
-- SIAP Tender is the chosen pilot domain; improve the existing Level 2 course rather than duplicate it.
-- Pilot-course materials should mix short videos, reading/checklists, and practical scenarios.
+- Learning combines coordinator-assigned paths with learner-selected elective courses.
 - The LMS issues course-completion certificates only, not formal competency or SKK certificates.
 - Recommended course completion rule: finish all required lessons and pass the post-test when one is configured. A pre-test is diagnostic and does not block completion. Do not require assessor approval as a competency claim for this certificate.
-- PICs may view detailed quiz answers and submitted evidence for learners in their own BUJK. Access is read-only and scoped to that BUJK; private reflection notes remain excluded unless separately approved.
+- Coordinators may view detailed quiz answers and submitted evidence for their own group. Access is read-only and group-scoped; private reflections remain excluded unless separately approved.
 - Essay assessment uses a 0–100 score with a passing score of 60. The user corrected the previous 80% minimum to 60%. Participants who need to improve must repeat the entire post-test, not revise an individual essay.
 
-**Why:** The product should support organization-led construction-business learning while clearly separating course completion from formal competency certification. The essay scoring and full-post-test retake policy were explicitly selected by the user. The user subsequently opened independent registration and requested a publicly browsable course catalog alongside organization invitations.
+**Why:** The user changed the audience from BUJK/construction companies to individual technical construction workers and explicitly chose to archive old course histories intact. Course completion must remain distinct from official credit assessment and competency certification. The essay scoring and full-post-test retake policy were explicitly selected by the user.
 
-**How to apply:** Use these decisions when proposing LMS roles, enrollment flows, course-player behavior, group assignments, progress rules, assessments, and certificate wording. Enforce company data boundaries server-side. Keep open-marketplace, payments, and instructor commissions out of scope unless the user reopens them.
+**How to apply:** Preserve historical meaning when replacing curricula. Keep group privacy boundaries server-side, and do not present internal levels, quiz results, or evidence reviews as official SKPK decisions. Keep payments and instructor commissions out of scope unless requested.

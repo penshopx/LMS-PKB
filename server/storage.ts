@@ -48,6 +48,8 @@ import type {
   Notification,
 } from "@shared/schema";
 import { PKB_CLUSTERS, PKB_COURSES, PKB_LEARNING_PATHS, PKB_PARTICIPANTS, PKB_UNITS } from "./pkb-catalog";
+import { LEGACY_BUJK_CLUSTER_IDS, LEGACY_BUJK_COURSE_IDS, LEGACY_BUJK_PATH_IDS, LEGACY_BUJK_UNIT_IDS } from "./pkb-catalog";
+import { PKB_QUIZZES } from "@shared/pkb-course";
 import { evaluateCourseCompletion } from "@shared/lms-course-rules";
 
 // Sample data imports (replicated from client for server use)
@@ -314,14 +316,14 @@ const initialCourses: ECourse[] = [
 
 export interface IStorage {
   // Clusters
-  getClusters(): Promise<CompetencyCluster[]>;
+  getClusters(includeArchived?: boolean): Promise<CompetencyCluster[]>;
   getCluster(id: string): Promise<CompetencyCluster | undefined>;
   createCluster(data: InsertCluster): Promise<CompetencyCluster>;
   updateCluster(id: string, data: Partial<InsertCluster>): Promise<CompetencyCluster | undefined>;
   deleteCluster(id: string): Promise<boolean>;
   
   // Units
-  getUnits(): Promise<UnitCompetency[]>;
+  getUnits(includeArchived?: boolean): Promise<UnitCompetency[]>;
   getUnit(id: string): Promise<UnitCompetency | undefined>;
   getUnitsByCluster(clusterId: string): Promise<UnitCompetency[]>;
   createUnit(data: InsertUnit): Promise<UnitCompetency>;
@@ -329,7 +331,7 @@ export interface IStorage {
   deleteUnit(id: string): Promise<boolean>;
   
   // Courses
-  getCourses(): Promise<ECourse[]>;
+  getCourses(includeArchived?: boolean): Promise<ECourse[]>;
   getCourse(id: string): Promise<ECourse | undefined>;
   getCoursesByUnit(unitId: string): Promise<ECourse[]>;
   createCourse(data: InsertCourse): Promise<ECourse>;
@@ -351,7 +353,7 @@ export interface IStorage {
   getHeatmapData(): Promise<HeatmapData[]>;
 
   // LMS - Learning Paths
-  getLearningPaths(): Promise<LearningPath[]>;
+  getLearningPaths(includeArchived?: boolean): Promise<LearningPath[]>;
   getLearningPath(id: string): Promise<LearningPath | undefined>;
   createLearningPath(data: InsertLearningPath): Promise<LearningPath>;
   updateLearningPath(id: string, data: Partial<InsertLearningPath>): Promise<LearningPath | undefined>;
@@ -366,7 +368,7 @@ export interface IStorage {
   refreshCourseEnrollmentProgress(id: string): Promise<Enrollment | undefined>;
 
   // LMS - Quizzes
-  getQuizzes(): Promise<Quiz[]>;
+  getQuizzes(includeArchived?: boolean): Promise<Quiz[]>;
   getQuiz(id: string): Promise<Quiz | undefined>;
   getQuizzesByCourse(courseId: string): Promise<Quiz[]>;
   createQuiz(data: InsertQuiz & { questions: Question[] }): Promise<Quiz>;
@@ -470,7 +472,7 @@ export class MemStorage implements IStorage {
     this.participants = new Map(PKB_PARTICIPANTS.map(p => [p.id, p]));
     this.learningPaths = new Map();
     this.enrollments = new Map();
-    this.quizzes = new Map();
+    this.quizzes = new Map(PKB_QUIZZES.map(quiz => [quiz.id, quiz]));
     this.quizAttempts = new Map();
     this.certificates = new Map();
     this.assessors = new Map();
@@ -608,8 +610,8 @@ export class MemStorage implements IStorage {
   }
 
   // Clusters
-  async getClusters(): Promise<CompetencyCluster[]> {
-    return Array.from(this.clusters.values());
+  async getClusters(includeArchived = false): Promise<CompetencyCluster[]> {
+    return Array.from(this.clusters.values()).filter(item => includeArchived || !LEGACY_BUJK_CLUSTER_IDS.has(item.id));
   }
 
   async getCluster(id: string): Promise<CompetencyCluster | undefined> {
@@ -657,8 +659,8 @@ export class MemStorage implements IStorage {
   }
 
   // Units
-  async getUnits(): Promise<UnitCompetency[]> {
-    return Array.from(this.units.values());
+  async getUnits(includeArchived = false): Promise<UnitCompetency[]> {
+    return Array.from(this.units.values()).filter(item => includeArchived || !LEGACY_BUJK_UNIT_IDS.has(item.id));
   }
 
   async getUnit(id: string): Promise<UnitCompetency | undefined> {
@@ -712,8 +714,10 @@ export class MemStorage implements IStorage {
   }
 
   // Courses
-  async getCourses(): Promise<ECourse[]> {
-    return Array.from(this.courses.values());
+  async getCourses(includeArchived = false): Promise<ECourse[]> {
+    return Array.from(this.courses.values())
+      .filter(item => includeArchived || !LEGACY_BUJK_COURSE_IDS.has(item.id))
+      .map(item => ({ ...item, archived: LEGACY_BUJK_COURSE_IDS.has(item.id) }));
   }
 
   async getCourse(id: string): Promise<ECourse | undefined> {
@@ -875,9 +879,9 @@ export class MemStorage implements IStorage {
     const courses = Array.from(this.courses.values());
     
     // Calculate stats
-    const allCompetencies = participants.flatMap(p => p.competencies);
-    const completedLearning = participants.flatMap(p => p.learningHistory.filter(l => l.status === 'completed'));
-    const totalLearning = participants.flatMap(p => p.learningHistory);
+    const allCompetencies = participants.flatMap(p => p.competencies).filter(c => !LEGACY_BUJK_UNIT_IDS.has(c.unitId));
+    const completedLearning = participants.flatMap(p => p.learningHistory.filter(l => l.status === 'completed' && !LEGACY_BUJK_COURSE_IDS.has(l.courseId)));
+    const totalLearning = participants.flatMap(p => p.learningHistory).filter(l => !LEGACY_BUJK_COURSE_IDS.has(l.courseId));
     
     // Level distribution
     const levelCounts: Record<string, number> = { L1: 0, L2: 0, L3: 0, L4: 0 };
@@ -954,8 +958,8 @@ export class MemStorage implements IStorage {
   }
 
   // LMS - Learning Paths
-  async getLearningPaths(): Promise<LearningPath[]> {
-    return Array.from(this.learningPaths.values());
+  async getLearningPaths(includeArchived = false): Promise<LearningPath[]> {
+    return Array.from(this.learningPaths.values()).filter(item => includeArchived || !LEGACY_BUJK_PATH_IDS.has(item.id));
   }
 
   async getLearningPath(id: string): Promise<LearningPath | undefined> {
@@ -1077,8 +1081,8 @@ export class MemStorage implements IStorage {
   }
 
   // LMS - Quizzes
-  async getQuizzes(): Promise<Quiz[]> {
-    return Array.from(this.quizzes.values());
+  async getQuizzes(includeArchived = false): Promise<Quiz[]> {
+    return Array.from(this.quizzes.values()).filter(item => includeArchived || !LEGACY_BUJK_COURSE_IDS.has(item.courseId));
   }
 
   async getQuiz(id: string): Promise<Quiz | undefined> {
@@ -1579,18 +1583,19 @@ export class MemStorage implements IStorage {
   // Analytics
   async getAnalyticsData() {
     const participants = Array.from(this.participants.values());
-    const courses = Array.from(this.courses.values());
-    const units = Array.from(this.units.values());
-    const clusters = Array.from(this.clusters.values());
+    const courses = await this.getCourses();
+    const units = await this.getUnits();
+    const clusters = await this.getClusters();
 
-    // Monthly trend (last 6 months, simulated)
+    // Current-curriculum activity only; legacy history remains in the archive.
     const now = new Date();
+    const records = participants.flatMap(p => p.learningHistory).filter(record => !LEGACY_BUJK_COURSE_IDS.has(record.courseId));
     const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const withinMonth = (value?: string) => Boolean(value && new Date(value) >= d && new Date(value) < end);
       const monthName = d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
-      const baseCompleted = Math.floor(participants.length * 0.3) + i * 2;
-      const baseEnrolled = Math.floor(participants.length * 0.5) + i * 3;
-      return { month: monthName, completions: baseCompleted, enrollments: baseEnrolled };
+      return { month: monthName, completions: records.filter(record => record.status === "completed" && withinMonth(record.completedAt)).length, enrollments: records.filter(record => withinMonth(record.startedAt)).length };
     });
 
     // Level distribution by cluster

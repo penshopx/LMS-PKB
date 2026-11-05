@@ -469,7 +469,7 @@ export default function Competencies() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Kompetensi Teknik Konstruksi</h1>
-          <p className="text-muted-foreground">Kelola domain SIAP dan Kepatuhan untuk bisnis serta tenaga kerja konstruksi</p>
+          <p className="text-muted-foreground">Kelola bidang pembelajaran dan kegiatan PKB tenaga teknik konstruksi. L1–L4 adalah tahapan belajar internal, bukan jenjang jabatan ahli atau hasil sertifikasi.</p>
         </div>
         <div className="flex items-center gap-2">
           <AddClusterDialog onSuccess={() => {}} />

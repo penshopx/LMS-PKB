@@ -119,7 +119,7 @@ export default function LearningPaths() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Jalur Pembelajaran</h1>
-          <p className="text-muted-foreground">Kelola jalur SIAP dan Kepatuhan untuk pengembangan kompetensi konstruksi</p>
+          <p className="text-muted-foreground">Kelola rencana belajar PKB sesuai kebutuhan kompetensi keahlian tenaga teknik konstruksi</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -137,7 +137,7 @@ export default function LearningPaths() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="title">Judul Jalur</Label>
-                    <Input id="title" name="title" placeholder="Contoh: SIAP Tender" required data-testid="input-path-title" />
+                    <Input id="title" name="title" placeholder="Contoh: Pembelajaran Mandiri Teknik Konstruksi" required data-testid="input-path-title" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Deskripsi</Label>

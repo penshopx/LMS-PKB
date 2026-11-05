@@ -34,7 +34,7 @@ import Courses from "@/pages/courses";
 import Participants from "@/pages/participants";
 import Passport from "@/pages/passport";
 import LearningPaths from "@/pages/learning-paths";
-import Assessment from "@/pages/assessment";
+import Assessment from "@/pages/pkb-guidance";
 import Certificates from "@/pages/certificates";
 import Quizzes from "@/pages/quizzes";
 import PracticeMissions from "@/pages/practice-missions";
@@ -52,10 +52,10 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/quizzes": "Quiz Engine",
   "/app/participants": "Peserta",
   "/app/passport": "Competency Passport",
-  "/app/assessment": "Asesmen & LSP",
+  "/app/assessment": "Panduan PKB",
   "/app/certificates": "Sertifikat",
   "/app/analytics": "Analitik & Laporan",
-  "/app/access": "Akun & Undangan BUJK",
+  "/app/access": "Akun & Undangan PKB",
   "/app/practice-missions": "Misi praktik",
   "/app/catalog-settings": "Katalog publik",
 };
@@ -63,6 +63,7 @@ const PAGE_TITLES: Record<string, string> = {
 function AppRouter() {
   const { data: user } = useCurrentUser();
   const [location] = useLocation();
+  if (location === "/app/assessment") return <Assessment />;
   if (user?.role === "participant") {
     if (location === "/app/practice-missions") return <PracticeMissions />;
     return location === "/app/quizzes" ? <Quizzes /> : <ParticipantHome />;
@@ -114,7 +115,7 @@ function UserMenu() {
           <DropdownMenuLabel className="font-normal">
             <p className="text-xs text-muted-foreground">Masuk sebagai</p>
             <p className="font-semibold text-sm truncate" data-testid="text-username">{user?.username}</p>
-            <p className="text-xs text-muted-foreground">{user?.role === "admin" ? "Admin" : user?.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</p>
+            <p className="text-xs text-muted-foreground">{user?.role === "admin" ? "Admin" : user?.role === "bujk_pic" ? "Koordinator PKB" : "Peserta"}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem

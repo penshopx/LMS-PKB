@@ -64,14 +64,23 @@ function AttemptResults({ attempts, quizzes, showAnswers = false }: {
 export function ParticipantHome() {
   const { data: user } = useCurrentUser();
   const [activeCourse, setActiveCourse] = useState<ECourse | null>(null);
-  const { data: courses = [], isLoading, isError } = useQuery<ECourse[]>({ queryKey: ["/api/courses"] });
+  const { data: courses = [], isLoading, isError } = useQuery<ECourse[]>({ queryKey: ["/api/courses?includeArchived=true"] });
   const { data: enrollments = [] } = useQuery<Enrollment[]>({ queryKey: ["/api/enrollments"] });
-  const { data: quizzes = [] } = useQuery<Quiz[]>({ queryKey: ["/api/quizzes"] });
+  const { data: quizzes = [] } = useQuery<Quiz[]>({ queryKey: ["/api/quizzes?includeArchived=true"] });
   const { data: certificates = [] } = useQuery<Certificate[]>({ queryKey: ["/api/certificates"] });
   const { data: attempts = [] } = useQuery<QuizAttempt[]>({
     queryKey: [`/api/participants/${user?.participantId}/quiz-attempts`],
     enabled: Boolean(user?.participantId),
   });
+  const { data: profile } = useQuery<Participant>({
+    queryKey: [`/api/participants/${user?.participantId}`],
+    enabled: Boolean(user?.participantId),
+  });
+  const historicCourseIds = new Set([
+    ...enrollments.map(item => item.courseId),
+    ...(profile?.learningHistory.map(item => item.courseId) ?? []),
+  ]);
+  const archivedCourses = courses.filter(course => course.archived && historicCourseIds.has(course.id));
 
   useEffect(() => {
     const courseId = new URLSearchParams(window.location.search).get("course");
@@ -88,7 +97,7 @@ export function ParticipantHome() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div><h1 className="text-2xl font-bold">Pembelajaran Saya</h1><p className="mt-1 text-muted-foreground">Belajar, lanjutkan progres, dan lihat hasil penilaian akun Anda sendiri.</p></div>
+      <div><h1 className="text-2xl font-bold">PKB Saya</h1><p className="mt-1 text-muted-foreground">Kembangkan kompetensi teknik melalui pembelajaran dan pencatatan kegiatan. Hasil kursus bukan penetapan Angka Kredit resmi.</p><Button asChild variant="ghost" className="px-0"><Link href="/app/assessment">Baca panduan Permen PUPR No. 12 Tahun 2021</Link></Button></div>
       {isError && <p role="alert" className="text-destructive">Kursus gagal dimuat. Muat ulang halaman untuk mencoba kembali.</p>}
       <div className="grid gap-4 sm:grid-cols-3">
         {[["Kursus diikuti", enrollments.filter(item => item.courseId).length], ["Selesai", enrollments.filter(item => item.status === "completed").length], ["Sertifikat", certificates.length]].map(([label, value]) => (
@@ -100,7 +109,7 @@ export function ParticipantHome() {
         <h2 className="text-xl font-semibold">Katalog pembelajaran</h2>
         {isLoading && <p>Memuat kursus...</p>}
         <div className="grid gap-4 md:grid-cols-2">
-          {courses.map(course => {
+          {courses.filter(course => !course.archived).map(course => {
             const enrollment = enrollments.find(item => item.courseId === course.id);
             return (
               <Card key={course.id}>
@@ -114,6 +123,7 @@ export function ParticipantHome() {
           })}
         </div>
       </section>
+      {archivedCourses.length > 0 && <Card><CardHeader><CardTitle>Arsip pembelajaran lama</CardTitle><CardDescription>Riwayat kurikulum BUJK tetap utuh dan tidak dikonversi menjadi kredit PKB.</CardDescription></CardHeader><CardContent className="space-y-3">{archivedCourses.map(course => <div key={course.id} className="rounded-lg border p-3"><p className="font-medium">{course.title}</p><p className="text-sm text-muted-foreground">{enrollments.find(enrollment => enrollment.courseId === course.id)?.progress ?? profile?.learningHistory.find(record => record.courseId === course.id)?.progress ?? 0}% · Arsip</p></div>)}</CardContent></Card>}
       <Card><CardHeader><CardTitle>Hasil penilaian saya</CardTitle></CardHeader><CardContent><AttemptResults attempts={attempts} quizzes={quizzes} /></CardContent></Card>
       {certificates.length > 0 && <Card><CardHeader><CardTitle>Sertifikat saya</CardTitle></CardHeader><CardContent className="space-y-3">{certificates.map(certificate => <div key={certificate.id} className="rounded-lg border p-3"><p className="font-medium">{certificate.title}</p><p className="text-sm text-muted-foreground">{certificate.certificateNumber}</p></div>)}</CardContent></Card>}
       {activeCourse && <CoursePlayerDialog course={activeCourse} open onOpenChange={open => { if (!open) setActiveCourse(null); }} fixedParticipantId={user.participantId} />}
@@ -124,9 +134,9 @@ export function ParticipantHome() {
 export function PicHome() {
   const [participantId, setParticipantId] = useState("");
   const { data: participants = [], isLoading, isError } = useQuery<Participant[]>({ queryKey: ["/api/participants"] });
-  const { data: courses = [] } = useQuery<ECourse[]>({ queryKey: ["/api/courses"] });
+  const { data: courses = [] } = useQuery<ECourse[]>({ queryKey: ["/api/courses?includeArchived=true"] });
   const { data: enrollments = [] } = useQuery<Enrollment[]>({ queryKey: ["/api/enrollments"] });
-  const { data: quizzes = [] } = useQuery<Quiz[]>({ queryKey: ["/api/quizzes"] });
+  const { data: quizzes = [] } = useQuery<Quiz[]>({ queryKey: ["/api/quizzes?includeArchived=true"] });
   const { data: participant } = useQuery<Participant>({
     queryKey: [`/api/participants/${participantId}`],
     enabled: Boolean(participantId),
@@ -139,7 +149,7 @@ export function PicHome() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Pemantauan Peserta BUJK</h1><p className="mt-1 text-muted-foreground">Data hanya dari BUJK Anda. Jawaban dan evidensi bersifat baca-saja; refleksi pribadi tidak ditampilkan.</p></div>
+        <div><h1 className="text-2xl font-bold">Pemantauan Peserta PKB</h1><p className="mt-1 text-muted-foreground">Data hanya dari kelompok yang Anda koordinasikan. Jawaban dan evidensi bersifat baca-saja; refleksi pribadi tidak ditampilkan.</p></div>
         <Button asChild><Link href="/app/access">Undang peserta</Link></Button>
       </div>
       {isError && <p role="alert" className="text-destructive">Data peserta gagal dimuat. Muat ulang halaman untuk mencoba kembali.</p>}

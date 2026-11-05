@@ -321,15 +321,15 @@ export default function Passport() {
   });
 
   const { data: units } = useQuery<UnitCompetency[]>({
-    queryKey: ['/api/units']
+    queryKey: ['/api/units?includeArchived=true']
   });
 
   const { data: courses } = useQuery<ECourse[]>({
-    queryKey: ['/api/courses']
+    queryKey: ['/api/courses?includeArchived=true']
   });
 
   const { data: clusters } = useQuery<CompetencyCluster[]>({
-    queryKey: ['/api/clusters']
+    queryKey: ['/api/clusters?includeArchived=true']
   });
 
   const [selectedParticipant, setSelectedParticipant] = useState<string>("");
@@ -342,7 +342,7 @@ export default function Passport() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Paspor Kompetensi Konstruksi</h1>
-            <p className="text-muted-foreground">Profil kompetensi SIAP dan Kepatuhan individu</p>
+            <p className="text-muted-foreground">Profil dan arsip pembelajaran individu. Kurikulum lama tidak dikonversi menjadi SKPK; L1–L4 bukan jenjang jabatan atau penetapan Angka Kredit resmi.</p>
           </div>
           <Skeleton className="h-10 w-64" />
         </div>
@@ -380,7 +380,7 @@ export default function Passport() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Paspor Kompetensi Konstruksi</h1>
-          <p className="text-muted-foreground">Profil kompetensi SIAP dan Kepatuhan individu</p>
+          <p className="text-muted-foreground">Profil dan arsip pembelajaran individu. Kurikulum lama tidak dikonversi menjadi SKPK; L1–L4 bukan jenjang jabatan atau penetapan Angka Kredit resmi.</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedParticipant || participant.id} onValueChange={setSelectedParticipant}>

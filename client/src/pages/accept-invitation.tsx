@@ -40,7 +40,7 @@ export default function AcceptInvitation({ token }: { token: string }) {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>{accept.isSuccess ? "Akun berhasil dibuat" : "Terima undangan LMS"}</CardTitle>
-          <CardDescription>{accept.isSuccess ? "Gunakan email dan kata sandi yang baru Anda buat untuk masuk." : "Pendaftaran peserta dan PIC dilakukan melalui undangan resmi BUJK."}</CardDescription>
+          <CardDescription>{accept.isSuccess ? "Gunakan email dan kata sandi yang baru Anda buat untuk masuk." : "Pendaftaran peserta dan koordinator melalui undangan kelompok PKB."}</CardDescription>
         </CardHeader>
         <CardContent>
           {accept.isSuccess ? (
@@ -62,7 +62,7 @@ export default function AcceptInvitation({ token }: { token: string }) {
             </div>
           ) : !tokenValid || preview.isError || !preview.data ? (
             <div className="space-y-3">
-              <p role="alert" className="text-sm text-destructive">{preview.error?.message ?? "Tautan undangan tidak valid. Minta tautan baru kepada PIC BUJK."}</p>
+              <p role="alert" className="text-sm text-destructive">{preview.error?.message ?? "Tautan undangan tidak valid. Minta tautan baru kepada koordinator PKB."}</p>
               {tokenValid && <Button variant="outline" onClick={() => preview.refetch()}>Periksa undangan kembali</Button>}
               <Link href="/login" className="block text-sm underline">Sudah punya akun? Masuk</Link>
             </div>
@@ -80,7 +80,7 @@ export default function AcceptInvitation({ token }: { token: string }) {
             }}>
               <div className="rounded-md border bg-muted/40 p-3 text-sm">
                 <p className="font-medium">{preview.data.bujkName}</p>
-                <p>{preview.data.participantName ?? "PIC BUJK"} · {preview.data.role === "bujk_pic" ? "PIC BUJK" : "Peserta"}</p>
+                <p>{preview.data.participantName ?? "Koordinator PKB"} · {preview.data.role === "bujk_pic" ? "Koordinator PKB" : "Peserta"}</p>
                 <p className="mt-1 text-xs text-muted-foreground">Jangan bagikan kata sandi kepada PIC atau orang lain.</p>
               </div>
               <div className="space-y-2">

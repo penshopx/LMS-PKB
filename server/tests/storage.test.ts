@@ -603,9 +603,10 @@ describe("Quizzes", () => {
     expect(found!.id).toBe(quizId);
   });
 
-  it("getQuizzes — includes the new quiz", async () => {
+  it("getQuizzes — keeps archived-course quizzes in history, not the active catalog", async () => {
     const all = await storage.getQuizzes();
-    expect(all.some(q => q.id === quizId)).toBe(true);
+    expect(all.some(q => q.id === quizId)).toBe(false);
+    expect((await storage.getQuizzes(true)).some(q => q.id === quizId)).toBe(true);
   });
 
   it("getQuizzesByCourse — filters by courseId", async () => {

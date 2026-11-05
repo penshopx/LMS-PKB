@@ -203,7 +203,7 @@ function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitC
 
 const templateSteps = [
   { type: "orientation", title: "Orientasi Kompetensi", desc: "Standar, indikator, peran, dan evidensi", placeholder: "Jelaskan kompetensi teknik konstruksi, indikator perilaku, peran, dan kriteria keberhasilan..." },
-  { type: "context", title: "Konteks Usaha Konstruksi", desc: "Kasus badan usaha atau proyek aktual", placeholder: "Tambahkan studi kasus legalitas, sertifikasi, tender, proyek, atau kepatuhan. LKUT hanya boleh digunakan sebagai konteks kebutuhan belajar..." },
+  { type: "context", title: "Konteks Praktik Profesional", desc: "Situasi kerja tenaga teknik konstruksi", placeholder: "Tambahkan skenario yang relevan dengan kompetensi keahlian, tujuan PKB, dan bukti pembelajaran. Jangan memasukkan informasi rahasia proyek..." },
   { type: "microlearning", title: "Regulasi dan Praktik Utama", desc: "Regulasi, video, artikel, dan checklist", placeholder: "Masukkan ringkasan regulasi dan praktik konstruksi yang relevan..." },
   { type: "practice", title: "Praktik Berbasis Pekerjaan", desc: "Tugas pada skenario usaha atau proyek", placeholder: "Jelaskan tugas praktik konstruksi tanpa membuat proses penyusunan atau pelaporan LKUT..." },
   { type: "assessment", title: "Asesmen", desc: "Project, studi kasus, observasi", placeholder: "Tentukan metode asesmen: project, studi kasus, atau observasi..." },
@@ -537,6 +537,10 @@ export default function Courses() {
   const { data: quizzes } = useQuery<Quiz[]>({
     queryKey: ['/api/quizzes']
   });
+  const { data: archivedCourses = [] } = useQuery<ECourse[]>({
+    queryKey: ['/api/courses?includeArchived=true'],
+    select: rows => rows.filter(course => course.archived),
+  });
 
   return (
     <div className="p-6 space-y-6" data-testid="page-courses">
@@ -566,8 +570,9 @@ export default function Courses() {
 
       <Tabs defaultValue="courses" className="w-full">
         <TabsList data-testid="tabs-courses">
-          <TabsTrigger value="courses" data-testid="tab-courses">E-Course Library</TabsTrigger>
-          <TabsTrigger value="template" data-testid="tab-template">Template Builder</TabsTrigger>
+          <TabsTrigger value="courses" data-testid="tab-courses">Katalog PKB</TabsTrigger>
+          <TabsTrigger value="template" data-testid="tab-template">Penyusun Kursus</TabsTrigger>
+          <TabsTrigger value="archive" data-testid="tab-course-archive">Arsip Lama</TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses" className="mt-6">
@@ -602,6 +607,13 @@ export default function Courses() {
           )}
         </TabsContent>
 
+        <TabsContent value="archive" className="mt-6 space-y-4">
+          <p className="text-sm text-muted-foreground">Kurikulum BUJK terdahulu disimpan sebagai arsip. Materi, progres, hasil kuis, dan sertifikat lama tidak diubah menjadi kegiatan atau kredit PKB.</p>
+          {archivedCourses.length === 0 ? <p className="text-sm text-muted-foreground">Tidak ada kursus lama yang diarsipkan.</p> : archivedCourses.map(course => (
+            <Card key={course.id}><CardHeader><CardTitle className="text-lg">{course.title}</CardTitle><CardDescription>{course.description}</CardDescription></CardHeader><CardContent><Badge variant="secondary">Arsip · tidak menerima pendaftaran baru</Badge></CardContent></Card>
+          ))}
+        </TabsContent>
+
         <TabsContent value="template" className="mt-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <CourseBuilderTemplate onStartBuild={() => setShowCreateForm(true)} />
@@ -622,16 +634,16 @@ export default function Courses() {
                 </div>
                 
                 <div className="p-4 rounded-lg bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800">
-                  <h4 className="font-medium text-teal-900 dark:text-teal-100">1 Unit Kompetensi = 1 E-Course</h4>
+                  <h4 className="font-medium text-teal-900 dark:text-teal-100">Kursus sesuai rencana PKB</h4>
                   <p className="text-sm text-teal-700 dark:text-teal-300 mt-1">
-                    Setiap unit kompetensi memiliki paket e-course tersendiri
+                    Pilih kegiatan dan tujuan belajar yang relevan dengan kompetensi keahlian peserta
                   </p>
                 </div>
                 
                 <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
                   <h4 className="font-medium text-amber-900 dark:text-amber-100">Evidence-Based Learning</h4>
                   <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                    Belajar tanpa evidensi bukan berarti kompeten
+                    Bukti belajar mendukung dokumentasi; bukan penetapan kompetensi atau Angka Kredit resmi
                   </p>
                 </div>
                 

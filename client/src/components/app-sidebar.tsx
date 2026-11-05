@@ -11,14 +11,11 @@ import {
   FileQuestion,
   BarChart3,
   LogOut,
-  ExternalLink,
   ClipboardList,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useLogout } from "@/hooks/use-logout";
 import { BrandMark, BRAND_NAME, BRAND_TAGLINE } from "@/components/brand-mark";
-import { GUSTAFTA_HOME_URL } from "@/lib/gustafta";
-import { trackGustaftaLinkClick } from "@/lib/analytics";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   Sidebar,
@@ -96,7 +93,7 @@ const managementMenu = [
 
 const certificationMenu = [
   {
-    title: "Asesmen & LSP",
+    title: "Panduan PKB",
     url: "/app/assessment",
     icon: ClipboardCheck,
   },
@@ -106,12 +103,6 @@ const certificationMenu = [
     icon: FileCheck,
   },
 ];
-
-const ecosystemMenu = {
-  title: "Gustafta",
-  url: GUSTAFTA_HOME_URL,
-  icon: ExternalLink,
-};
 
 function LogoutButton() {
   const logoutMutation = useLogout();
@@ -134,13 +125,14 @@ export function AppSidebar() {
 
   if (user && user.role !== "admin") {
     const items = [
-      { title: user.role === "participant" ? "Pembelajaran Saya" : "Peserta BUJK", url: "/app", icon: BookOpen },
+      { title: user.role === "participant" ? "PKB Saya" : "Peserta PKB", url: "/app", icon: BookOpen },
+      { title: "Panduan PKB", url: "/app/assessment", icon: ClipboardCheck },
       { title: "Misi praktik", url: "/app/practice-missions", icon: ClipboardList },
       ...(user.role === "bujk_pic" ? [{ title: "Undang Peserta", url: "/app/access", icon: Users }] : []),
     ];
     return (
       <Sidebar>
-        <SidebarHeader className="border-b p-4"><div className="flex items-center gap-3"><BrandMark /><div><p className="font-semibold">{BRAND_NAME}</p><p className="text-xs text-muted-foreground">{user.role === "participant" ? "Akun Peserta" : "PIC BUJK"}</p></div></div></SidebarHeader>
+        <SidebarHeader className="border-b p-4"><div className="flex items-center gap-3"><BrandMark /><div><p className="font-semibold">{BRAND_NAME}</p><p className="text-xs text-muted-foreground">{user.role === "participant" ? "Akun Peserta" : "Koordinator PKB"}</p></div></div></SidebarHeader>
         <SidebarContent>
           <SidebarGroup><SidebarGroupLabel>Menu</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>
             {items.map(item => <SidebarMenuItem key={item.url}><SidebarMenuButton asChild isActive={location === item.url}><Link href={item.url}><item.icon className="h-4 w-4" /><span>{item.title}</span></Link></SidebarMenuButton></SidebarMenuItem>)}
@@ -211,7 +203,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Sertifikasi LSP</SidebarGroupLabel>
+          <SidebarGroupLabel>PKB & Sertifikat Kursus</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {certificationMenu.map((item) => (
@@ -232,33 +224,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Ekosistem Kerja</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild data-testid="nav-gustafta">
-                  <a
-                    href={ecosystemMenu.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      trackGustaftaLinkClick({
-                        domain: "all",
-                        destination: "home",
-                        location: "sidebar",
-                      })
-                    }
-                    aria-label="Buka ekosistem Gustafta di tab baru"
-                  >
-                    <ecosystemMenu.icon className="h-4 w-4" />
-                    <span>{ecosystemMenu.title}</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { and, eq, inArray, like, or, sql as drizzleSql } from "drizzle-orm";
 import { db } from "./db";
+import { LEGACY_BUJK_CLUSTER_IDS, LEGACY_BUJK_COURSE_IDS, LEGACY_BUJK_PATH_IDS, LEGACY_BUJK_UNIT_IDS } from "./pkb-catalog";
 import {
   DEFAULT_QUIZ_PASSING_SCORE,
   clustersTable,
@@ -393,9 +394,9 @@ function toNotification(row: typeof notificationsTable.$inferSelect): Notificati
 
 export class DrizzleStorage implements IStorage {
   // Clusters
-  async getClusters(): Promise<CompetencyCluster[]> {
+  async getClusters(includeArchived = false): Promise<CompetencyCluster[]> {
     const rows = await db.select().from(clustersTable);
-    return rows.map(toCluster);
+    return rows.filter(item => includeArchived || !LEGACY_BUJK_CLUSTER_IDS.has(item.id)).map(toCluster);
   }
 
   async getCluster(id: string): Promise<CompetencyCluster | undefined> {
@@ -442,9 +443,9 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Units
-  async getUnits(): Promise<UnitCompetency[]> {
+  async getUnits(includeArchived = false): Promise<UnitCompetency[]> {
     const rows = await db.select().from(unitsTable);
-    return rows.map(toUnit);
+    return rows.filter(item => includeArchived || !LEGACY_BUJK_UNIT_IDS.has(item.id)).map(toUnit);
   }
 
   async getUnit(id: string): Promise<UnitCompetency | undefined> {
@@ -500,9 +501,10 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Courses
-  async getCourses(): Promise<ECourse[]> {
+  async getCourses(includeArchived = false): Promise<ECourse[]> {
     const rows = await db.select().from(coursesTable);
-    return rows.map(toCourse);
+    return rows.filter(item => includeArchived || !LEGACY_BUJK_COURSE_IDS.has(item.id))
+      .map(item => ({ ...toCourse(item), archived: LEGACY_BUJK_COURSE_IDS.has(item.id) }));
   }
 
   async getCourse(id: string): Promise<ECourse | undefined> {
@@ -745,9 +747,9 @@ export class DrizzleStorage implements IStorage {
     const participants = await this.getParticipants();
     const courses = await this.getCourses();
 
-    const allCompetencies = participants.flatMap(p => p.competencies);
-    const completedLearning = participants.flatMap(p => p.learningHistory.filter(l => l.status === "completed"));
-    const totalLearning = participants.flatMap(p => p.learningHistory);
+    const allCompetencies = participants.flatMap(p => p.competencies).filter(c => !LEGACY_BUJK_UNIT_IDS.has(c.unitId));
+    const completedLearning = participants.flatMap(p => p.learningHistory.filter(l => l.status === "completed" && !LEGACY_BUJK_COURSE_IDS.has(l.courseId)));
+    const totalLearning = participants.flatMap(p => p.learningHistory).filter(l => !LEGACY_BUJK_COURSE_IDS.has(l.courseId));
 
     const levelCounts: Record<string, number> = { L1: 0, L2: 0, L3: 0, L4: 0 };
     allCompetencies.forEach(c => { levelCounts[c.currentLevel]++; });
@@ -823,9 +825,9 @@ export class DrizzleStorage implements IStorage {
   }
 
   // LMS - Learning Paths
-  async getLearningPaths(): Promise<LearningPath[]> {
+  async getLearningPaths(includeArchived = false): Promise<LearningPath[]> {
     const rows = await db.select().from(learningPathsTable);
-    return rows.map(toLearningPath);
+    return rows.filter(item => includeArchived || !LEGACY_BUJK_PATH_IDS.has(item.id)).map(toLearningPath);
   }
 
   async getLearningPath(id: string): Promise<LearningPath | undefined> {
@@ -1015,9 +1017,9 @@ export class DrizzleStorage implements IStorage {
   }
 
   // LMS - Quizzes
-  async getQuizzes(): Promise<Quiz[]> {
+  async getQuizzes(includeArchived = false): Promise<Quiz[]> {
     const rows = await db.select().from(quizzesTable);
-    return rows.map(toQuiz);
+    return rows.filter(item => includeArchived || !LEGACY_BUJK_COURSE_IDS.has(item.courseId)).map(toQuiz);
   }
 
   async getQuiz(id: string): Promise<Quiz | undefined> {
@@ -1599,12 +1601,13 @@ export class DrizzleStorage implements IStorage {
     ]);
 
     const now = new Date();
+    const records = participants.flatMap(p => p.learningHistory).filter(record => !LEGACY_BUJK_COURSE_IDS.has(record.courseId));
     const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const withinMonth = (value?: string) => Boolean(value && new Date(value) >= d && new Date(value) < end);
       const monthName = d.toLocaleDateString("id-ID", { month: "short", year: "2-digit" });
-      const baseCompleted = Math.floor(participants.length * 0.3) + i * 2;
-      const baseEnrolled = Math.floor(participants.length * 0.5) + i * 3;
-      return { month: monthName, completions: baseCompleted, enrollments: baseEnrolled };
+      return { month: monthName, completions: records.filter(record => record.status === "completed" && withinMonth(record.completedAt)).length, enrollments: records.filter(record => withinMonth(record.startedAt)).length };
     });
 
     const levelDistributionByCluster = clusters.map(cluster => {

@@ -352,10 +352,10 @@ describe("participant relational persistence", () => {
         title: "Evidence added after onboarding",
       });
 
-      const [migratedParticipant] = await db.select()
+      const [preservedParticipant] = await db.select()
         .from(participantsTable)
         .where(eq(participantsTable.id, "p-001"));
-      expect(migratedParticipant.email).toBe("andi.pratama@example.id");
+      expect(preservedParticipant.email).toBe("andi.pratama@org.go.id");
     } finally {
       await db.delete(evidencesTable).where(eq(evidencesTable.id, evidenceId));
       await db.update(participantsTable).set({
