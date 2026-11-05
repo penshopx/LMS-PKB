@@ -17,3 +17,4 @@
 - [Unconfirmed password changes](unconfirmed-password-changes.md) — transport failures and server errors can follow a committed change; never imply rollback or automatically resend credentials.
 - [Audit substring search performance](audit-search-performance.md) — measure broad and short terms too; indexed LIKE without useful trigrams can be slower than chronological search.
 - [Login wait persistence](login-wait-persistence.md) — keep cooldown hints per tab and account-agnostic; never persist credentials or treat the hint as server authorization.
+- [Portfolio export decisions](portfolio-export-decisions.md) — favor portable preparation documents; missing references must not imply active PKB participation.

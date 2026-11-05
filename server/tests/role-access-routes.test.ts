@@ -153,6 +153,33 @@ afterAll(async () => {
 });
 
 describe("batas akses admin, PIC, dan peserta", () => {
+  it("ekspor hanya untuk peserta sendiri atau kelompok yang dikoordinasikan", async () => {
+    const pathA = `/api/participants/${participantA}/portfolio-export`;
+    const pathB = `/api/participants/${participantB}/portfolio-export`;
+    expect((await request("", pathA)).status).toBe(401);
+    expect((await request("learnerB", pathA)).status).toBe(404);
+    expect((await request("picB", pathA)).status).toBe(404);
+    expect((await request("picA", pathB)).status).toBe(404);
+    expect((await request("learnerA", "/api/participants/missing/portfolio-export")).status).toBe(404);
+    for (const role of ["learnerA", "picA", "admin"]) {
+      const response = await request(role, pathA);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-disposition")).toContain("attachment");
+      expect(response.headers.get("content-type")).toContain("text/html");
+      const html = await response.text();
+      expect(html).toContain("Peserta A");
+      expect(html).not.toContain("Peserta B");
+      expect(html).toContain("Evidensi terbuka untuk PIC");
+      expect(html).toContain(attemptA);
+      expect(html).not.toContain(attemptB);
+      expect(html).toContain("Belum final");
+      expect(html).toContain("bukan SKK maupun keputusan resmi");
+      if (role === "picA") expect(html).not.toContain("Refleksi pribadi rahasia");
+      else expect(html).toContain("Refleksi pribadi rahasia");
+    }
+  });
+
   it("memerlukan login dan mengembalikan identitas peran tanpa sandi", async () => {
     expect((await request("", "/api/participants")).status).toBe(401);
     const me = await (await request("learnerA", "/api/me")).json();

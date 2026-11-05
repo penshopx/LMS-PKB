@@ -53,6 +53,7 @@ import {
 } from "@shared/lms-course-rules";
 
 import { loginAttemptLimiter } from "./login-attempt-limiter";
+import { renderParticipantPortfolio } from "./participant-portfolio";
 
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
@@ -76,6 +77,7 @@ function roleAllowsPath(role: ApplicationRole, method: string, path: string): bo
     /^\/api\/quizzes(?:\/[^/]+)?$/,
     /^\/api\/participants$/,
     /^\/api\/participants\/[^/]+$/,
+    /^\/api\/participants\/[^/]+\/portfolio-export$/,
     /^\/api\/participants\/[^/]+\/quiz-attempts$/,
     /^\/api\/enrollments$/,
     /^\/api\/certificates$/,
@@ -830,6 +832,25 @@ export async function registerRoutes(
       res.json(participants);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch participants" });
+    }
+  });
+
+  app.get("/api/participants/:id/portfolio-export", async (req, res) => {
+    try {
+      const user = req.user as User;
+      const id = req.params.id as string;
+      if (!(await canAccessParticipant(user, id))) {
+        return res.status(404).json({ message: "Peserta tidak ditemukan." });
+      }
+      const data = await storage.getParticipantPortfolio(id);
+      if (!data) return res.status(404).json({ message: "Peserta tidak ditemukan." });
+      const html = renderParticipantPortfolio(data, { includeReflections: user.role !== "bujk_pic" });
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Disposition", 'attachment; filename="portofolio-pkb.html"');
+      res.type("html").send(html);
+    } catch {
+      res.status(500).json({ message: "Ekspor portofolio gagal. Silakan coba kembali." });
     }
   });
 

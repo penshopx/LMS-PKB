@@ -166,6 +166,29 @@ export interface LearningRecord {
   status: "not_started" | "in_progress" | "completed";
 }
 
+/** Read-only export input. No credit totals or official competency decisions. */
+export interface ParticipantPortfolio {
+  participant: Participant;
+  courses: ECourse[];
+  paths: LearningPath[];
+  units: UnitCompetency[];
+  enrollments: Enrollment[];
+  quizzes: Pick<Quiz, "id" | "courseId" | "title">[];
+  attempts: Omit<QuizAttempt, "answers">[];
+  certificates: Certificate[];
+  practices: {
+    id: string;
+    courseId: string | null;
+    title: string;
+    round: number;
+    evidenceText: string;
+    evidenceUrl: string;
+    status: string;
+    feedback: string | null;
+    submittedAt: string;
+  }[];
+}
+
 export interface Evidence {
   id: string;
   unitId: string;

@@ -137,7 +137,7 @@ for (const { route, endpoint } of cases) {
 
         await accounts.signIn(page, target === "b" ? b : pic);
         if (target === "pic") {
-          await expect(page.getByRole("heading", { name: "Pemantauan Peserta BUJK" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Pemantauan Peserta PKB" })).toBeVisible();
           await expect(reminderCard(page)).toHaveCount(0);
         } else {
           await expect(reminderCard(page).getByText(titleB, { exact: true })).toBeVisible();

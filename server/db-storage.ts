@@ -24,6 +24,8 @@ import {
   participantCompetenciesTable,
   evidencesTable,
   learningRecordsTable,
+  missionSubmissionsTable,
+  practiceMissionsTable,
 } from "@shared/schema";
 import type {
   CompetencyCluster,
@@ -570,6 +572,32 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Participants
+  async getParticipantPortfolio(id: string): Promise<import("@shared/schema").ParticipantPortfolio | undefined> {
+    const participant = await this.getParticipant(id);
+    if (!participant) return undefined;
+    const [courses, paths, units, enrollments, quizzes, attempts, certificates, practices] = await Promise.all([
+      this.getCourses(true), this.getLearningPaths(true), this.getUnits(true),
+      this.getEnrollmentsByParticipant(id), this.getQuizzes(true),
+      this.getQuizAttemptsByParticipant(id), this.getCertificatesByParticipant(id),
+      // Deliberately never select privateReflection for an export.
+      db.select({
+        id: missionSubmissionsTable.id, courseId: practiceMissionsTable.courseId,
+        title: practiceMissionsTable.title, round: missionSubmissionsTable.round,
+        evidenceText: missionSubmissionsTable.evidenceText, evidenceUrl: missionSubmissionsTable.evidenceUrl,
+        status: missionSubmissionsTable.status, feedback: missionSubmissionsTable.feedback,
+        submittedAt: missionSubmissionsTable.submittedAt,
+      }).from(missionSubmissionsTable)
+        .innerJoin(practiceMissionsTable, eq(practiceMissionsTable.id, missionSubmissionsTable.missionId))
+        .where(eq(missionSubmissionsTable.participantId, id)),
+    ]);
+    return {
+      participant, courses, paths, units, enrollments,
+      quizzes: quizzes.map(({ id, courseId, title }) => ({ id, courseId, title })),
+      attempts: attempts.map(({ answers: _answers, ...attempt }) => attempt),
+      certificates, practices,
+    };
+  }
+
   async getParticipants(): Promise<Participant[]> {
     const [rows, allComps, allEvs, allLrs] = await Promise.all([
       db.select().from(participantsTable),

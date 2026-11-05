@@ -1,3 +1,4 @@
+import { PortfolioExportButton } from "@/components/portfolio-export-button";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -98,6 +99,7 @@ export function ParticipantHome() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <div><h1 className="text-2xl font-bold">PKB Saya</h1><p className="mt-1 text-muted-foreground">Kembangkan kompetensi teknik melalui pembelajaran dan pencatatan kegiatan. Hasil kursus bukan penetapan Angka Kredit resmi.</p><Button asChild variant="ghost" className="px-0"><Link href="/app/assessment">Baca panduan Permen PUPR No. 12 Tahun 2021</Link></Button></div>
+      <Card><CardHeader><CardTitle>Portofolio pribadi</CardTitle><CardDescription>Unduh kegiatan, hasil pembelajaran, dan daftar bukti dalam HTML yang dapat dicetak atau disimpan sebagai PDF. PKB aktif dan arsip lama dipisahkan. Dokumen bukan SKK maupun keputusan resmi; tidak menghitung atau mengesahkan Angka Kredit/SKPK.</CardDescription></CardHeader><CardContent><PortfolioExportButton participantId={user.participantId} /></CardContent></Card>
       {isError && <p role="alert" className="text-destructive">Kursus gagal dimuat. Muat ulang halaman untuk mencoba kembali.</p>}
       <div className="grid gap-4 sm:grid-cols-3">
         {[["Kursus diikuti", enrollments.filter(item => item.courseId).length], ["Selesai", enrollments.filter(item => item.status === "completed").length], ["Sertifikat", certificates.length]].map(([label, value]) => (
@@ -165,7 +167,7 @@ export function PicHome() {
         <div className="space-y-4">
           {!participant && <Card><CardContent className="py-12 text-center text-muted-foreground">Pilih peserta untuk melihat progres, jawaban, dan evidensi.</CardContent></Card>}
           {participant && <>
-            <Card><CardHeader><CardTitle>{participant.name}</CardTitle><CardDescription>{participant.email} · {participant.unit}</CardDescription></CardHeader></Card>
+            <Card><CardHeader><CardTitle>{participant.name}</CardTitle><CardDescription>{participant.email} · {participant.unit}</CardDescription></CardHeader><CardContent className="space-y-2"><PortfolioExportButton key={participant.id} participantId={participant.id} /><p className="text-sm text-muted-foreground">Ekspor kelompok tidak menyertakan refleksi pribadi. Dokumen bukan SKK maupun keputusan resmi; tidak menghitung atau mengesahkan Angka Kredit/SKPK.</p></CardContent></Card>
             <Card>
               <CardHeader><CardTitle className="text-lg">Progres pembelajaran</CardTitle></CardHeader>
               <CardContent className="space-y-3">

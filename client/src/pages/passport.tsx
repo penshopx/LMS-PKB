@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PortfolioExportButton } from "@/components/portfolio-export-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,8 +26,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  ArrowRight,
-  Download
+  ArrowRight
 } from "lucide-react";
 import { getLevelColor, getStatusColor, CompetencyLevelNames } from "@/lib/data";
 import type { Participant, CompetencyLevelType, UnitCompetency, ECourse, CompetencyCluster } from "@shared/schema";
@@ -395,13 +395,11 @@ export default function Passport() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" data-testid="button-download-passport">
-            <Download className="h-4 w-4 mr-1" />
-            Unduh
-          </Button>
+          <PortfolioExportButton key={participant.id} participantId={participant.id} />
         </div>
       </div>
 
+      <p className="text-sm text-muted-foreground">Unduhan HTML dapat dicetak atau disimpan sebagai PDF melalui browser. PKB aktif dan arsip lama dipisahkan. Dokumen bukan SKK maupun keputusan resmi dan tidak menghitung atau mengesahkan Angka Kredit/SKPK.</p>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Card className="overflow-hidden" data-testid="card-profile">

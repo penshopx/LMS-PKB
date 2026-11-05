@@ -76,6 +76,7 @@ Key features:
 - `/app/quizzes` - Quiz Engine with multiple question types (pilihan ganda, benar/salah, esai)
 - `/app/participants` - Participant management
 - `/app/passport` - Competency Passport
+- Ekspor portofolio tersedia dari paspor admin, beranda peserta, dan detail peserta koordinator. Unduhan HTML dapat dicetak/disimpan sebagai PDF; endpoint `GET /api/participants/:id/portfolio-export` mengikuti batas peserta/kelompok, memisahkan kurikulum aktif, arsip, serta data tanpa acuan. Dokumen bukan SKK/keputusan resmi dan tidak menetapkan Angka Kredit/SKPK. Daftar bukti bukan lampiran berkas; refleksi privat praktik tidak diekspor, dan refleksi bukti peserta tidak dibagikan kepada koordinator.
 - `/app/assessment` - PKB regulatory guidance, available to every signed-in role
 - `/app/certificates` - Certificate issuance and verification with unique codes
 

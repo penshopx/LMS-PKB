@@ -89,7 +89,7 @@ for (const route of ["/app", "/app/practice-missions"]) {
         }
       });
       await accounts.signIn(page, pic);
-      await expect(page.getByRole("heading", { name: "Pemantauan Peserta BUJK" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Pemantauan Peserta PKB" })).toBeVisible();
       await expect(reminderCard(page)).toHaveCount(0);
       const submissionsResponse = page.waitForResponse(response =>
         new URL(response.url()).pathname === "/api/practice-missions/submissions");

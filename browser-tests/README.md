@@ -1,3 +1,12 @@
+## Ekspor portofolio pribadi
+
+Jalankan `npx playwright test --config playwright.portfolio.config.ts` pada preview
+development yang sedang berjalan. Pengujian memakai login normal dengan akun
+sementara, memeriksa unduhan peserta dan koordinator, isi bukti praktik,
+penyembunyian refleksi, penolakan lintas kelompok, serta pemulihan setelah
+kegagalan ekspor. Fixture dibersihkan setelah pengujian. Tangkapan layar dan
+jejak browser tersimpan di `generated-artifacts/portfolio/`.
+
 # Practice reminder browser checks
 
 ## Access history browser checks

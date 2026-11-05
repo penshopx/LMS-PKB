@@ -137,7 +137,7 @@ for (const route of ["/app", "/app/practice-missions"]) {
           }, [reflectionA, reflectionB]);
         } else {
           await expect(page.getByText("Tampilan PIC bersifat baca-saja.", { exact: false })
-            .or(page.getByRole("heading", { name: "Pemantauan Peserta BUJK" }))).toBeVisible();
+            .or(page.getByRole("heading", { name: "Pemantauan Peserta PKB" }))).toBeVisible();
           await assertPrivateDataHidden(page, [reflectionA, reflectionB]);
           expect(reminderRequests).toEqual([]);
         }
