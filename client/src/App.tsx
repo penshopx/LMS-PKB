@@ -38,6 +38,7 @@ import Assessment from "@/pages/pkb-guidance";
 import Certificates from "@/pages/certificates";
 import Quizzes from "@/pages/quizzes";
 import PracticeMissions from "@/pages/practice-missions";
+import LearningProgramsPage from "@/pages/learning-programs";
 import Analytics from "@/pages/analytics";
 import AccessManagement from "@/pages/access";
 import AcceptInvitation from "@/pages/accept-invitation";
@@ -49,6 +50,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/competencies": "Kompetensi",
   "/app/courses": "Pembelajaran",
   "/app/learning-paths": "Jalur Pembelajaran",
+  "/app/learning-programs": "Rencana Belajar PKB",
   "/app/quizzes": "Quiz Engine",
   "/app/participants": "Peserta",
   "/app/passport": "Competency Passport",
@@ -63,6 +65,7 @@ const PAGE_TITLES: Record<string, string> = {
 function AppRouter() {
   const { data: user } = useCurrentUser();
   const [location] = useLocation();
+  if (location === "/app/learning-programs") return <LearningProgramsPage key={user?.id ?? "unknown"} />;
   if (location === "/app/assessment") return <Assessment />;
   if (user?.role === "participant") {
     if (location === "/app/practice-missions") return <PracticeMissions />;
@@ -79,6 +82,7 @@ function AppRouter() {
       <Route path="/app/courses" component={Courses} />
       <Route path="/app/catalog-settings" component={CatalogSettingsPage} />
       <Route path="/app/learning-paths" component={LearningPaths} />
+      <Route path="/app/learning-programs" component={LearningProgramsPage} />
       <Route path="/app/quizzes" component={Quizzes} />
       <Route path="/app/practice-missions" component={PracticeMissions} />
       <Route path="/app/participants" component={Participants} />

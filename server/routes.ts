@@ -13,6 +13,7 @@ import {
 import { db } from "./db";
 import { storage } from "./storage";
 import { registerPracticeMissionRoutes } from "./practice-mission-routes";
+import { ensureLearningProgramReminders, registerLearningProgramRoutes } from "./learning-program-routes";
 import { registerCourseReferenceRoutes } from "./course-reference-routes";
 import { updateCourseLessonReferences } from "./course-reference-store";
 import { registerPublicCatalogRoutes, registerPrivateCatalogRoutes } from "./public-catalog-routes";
@@ -55,6 +56,12 @@ import { loginAttemptLimiter } from "./login-attempt-limiter";
 
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
+  if (method === "GET" && path === "/api/learning-programs") return true;
+  if (role === "participant" && (
+    (method === "POST" && path === "/api/learning-programs") ||
+    (method === "PATCH" && /^\/api\/learning-programs\/[^/]+$/.test(path)) ||
+    (method === "POST" && /^\/api\/learning-programs\/[^/]+\/cancel$/.test(path))
+  )) return true;
   if (method === "POST" && path === "/api/me/password") return true;
   if (method === "GET" && path === "/api/notifications") return true;
   if (method === "PATCH" && /^\/api\/notifications\/(?:read-all|[^/]+\/read)$/.test(path)) return true;
@@ -324,6 +331,7 @@ export async function registerRoutes(
   });
 
   registerPracticeMissionRoutes(app);
+  registerLearningProgramRoutes(app);
   registerPrivateCatalogRoutes(app);
 
   // BUJK ACCESS & INVITATIONS
@@ -796,6 +804,10 @@ export async function registerRoutes(
       }
       res.status(204).send();
     } catch (error) {
+      const cause = error as { code?: string; cause?: { code?: string } };
+      if (cause?.code === "23503" || cause?.cause?.code === "23503") {
+        return res.status(409).json({ message: "Kursus masih digunakan dalam rencana atau riwayat belajar dan tidak dapat dihapus." });
+      }
       res.status(500).json({ message: "Failed to delete course" });
     }
   });
@@ -1833,6 +1845,7 @@ export async function registerRoutes(
   // ---------- NOTIFICATIONS ----------
   app.get("/api/notifications", async (req, res) => {
     try {
+      await ensureLearningProgramReminders(req.user as User);
       const notifications = await storage.getNotifications((req.user as User).id);
       res.json(notifications);
     } catch (error) {

@@ -15,7 +15,8 @@
     "test:password-dialog": "tsx script/check-password-dialog.ts",
     "test:password-dialog-network": "playwright test --config playwright.password-dialog.config.ts",
     "test:practice-reminders": "playwright test --config playwright.practice-reminders.config.ts",
-    "test:access-history": "playwright test --config playwright.access-history.config.ts"
+    "test:access-history": "playwright test --config playwright.access-history.config.ts",
+    "test:learning-programs": "playwright test --config playwright.learning-programs.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

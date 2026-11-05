@@ -105,3 +105,15 @@ graduation, lesson progress and certificates remain unchanged.
 
 Failure screenshots, traces and the HTML report are written under the ignored
 `generated-artifacts/practice-reminders/` directory.
+
+## Rencana Belajar PKB
+
+Run `npm run test:learning-programs` against the running development preview.
+The suite uses disposable admin, participant, and coordinator accounts with
+normal sign-in. It covers group assignment, deadline editing, in-app reminders,
+resuming a real course and saving lesson progress, personal target editing and
+cancellation, persistence after reload, group-scoped monitoring, mobile navigation
+and overflow, and retrying a failed program-list request.
+
+Fixtures are removed in teardown. Screenshots and failure output are stored in
+the ignored `generated-artifacts/learning-programs/` directory.

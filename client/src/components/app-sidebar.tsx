@@ -12,6 +12,7 @@ import {
   BarChart3,
   LogOut,
   ClipboardList,
+  BookOpenCheck,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useLogout } from "@/hooks/use-logout";
@@ -55,6 +56,11 @@ const mainMenu = [
     title: "Jalur Pembelajaran",
     url: "/app/learning-paths",
     icon: Route,
+  },
+  {
+    title: "Rencana Belajar PKB",
+    url: "/app/learning-programs",
+    icon: BookOpenCheck,
   },
   {
     title: "Quiz Engine",
@@ -126,6 +132,7 @@ export function AppSidebar() {
   if (user && user.role !== "admin") {
     const items = [
       { title: user.role === "participant" ? "PKB Saya" : "Peserta PKB", url: "/app", icon: BookOpen },
+      { title: "Rencana Belajar PKB", url: "/app/learning-programs", icon: BookOpenCheck },
       { title: "Panduan PKB", url: "/app/assessment", icon: ClipboardCheck },
       { title: "Misi praktik", url: "/app/practice-missions", icon: ClipboardList },
       ...(user.role === "bujk_pic" ? [{ title: "Undang Peserta", url: "/app/access", icon: Users }] : []),

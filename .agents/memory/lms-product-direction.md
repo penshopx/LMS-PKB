@@ -8,6 +8,7 @@ description: Enrollment, history, privacy, and course-result policies after the 
 - Coordinators invite group participants. Public visitors may also self-register independently, without automatic group association.
 - The landing page must expose upcoming courses and existing recordings without login; registration/login is the entry point for following a course.
 - Learning combines coordinator-assigned paths with learner-selected elective courses.
+- Supplemental course targets reuse existing completion rather than implicitly requiring a retake. Personal targets are private planning aids; only assigned programs belong in group monitoring.
 - The LMS issues course-completion certificates only, not formal competency or SKK certificates.
 - Recommended course completion rule: finish all required lessons and pass the post-test when one is configured. A pre-test is diagnostic and does not block completion. Do not require assessor approval as a competency claim for this certificate.
 - Coordinators may view detailed quiz answers and submitted evidence for their own group. Access is read-only and group-scoped; private reflections remain excluded unless separately approved.
@@ -16,3 +17,5 @@ description: Enrollment, history, privacy, and course-result policies after the 
 **Why:** The user changed the audience from BUJK/construction companies to individual technical construction workers and explicitly chose to archive old course histories intact. Course completion must remain distinct from official credit assessment and competency certification. The essay scoring and full-post-test retake policy were explicitly selected by the user.
 
 **How to apply:** Preserve historical meaning when replacing curricula. Keep group privacy boundaries server-side, and do not present internal levels, quiz results, or evidence reviews as official SKPK decisions. Keep payments and instructor commissions out of scope unless requested.
+
+**Why (learning targets):** The Ruangkerja-inspired planning feature is intended to improve follow-through, not redefine course completion or expand coordinator oversight into a learner's private planning. A new deadline must not silently turn prior completion into an unfinished obligation.

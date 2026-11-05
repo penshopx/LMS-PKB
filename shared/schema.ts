@@ -1145,6 +1145,30 @@ export const notificationsTable = pgTable("notifications", {
   createdAt: text("created_at").notNull(),
 });
 
+export const learningProgramsTable = pgTable("learning_programs", {
+  id: varchar("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  courseId: varchar("course_id").notNull().references(() => coursesTable.id, { onDelete: "restrict" }),
+  dueDate: varchar("due_date", { length: 10 }).notNull(),
+  source: text("source").notNull().$type<"assigned" | "personal">(),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+  canceledAt: text("canceled_at"),
+}, table => [
+  index("idx_learning_programs_due_date").on(table.dueDate),
+  check("learning_programs_source_check", sql`${table.source} IN ('assigned', 'personal')`),
+]);
+
+export const learningProgramMembersTable = pgTable("learning_program_members", {
+  id: varchar("id").primaryKey(),
+  programId: varchar("program_id").notNull().references(() => learningProgramsTable.id, { onDelete: "cascade" }),
+  participantId: varchar("participant_id").notNull().references(() => participantsTable.id, { onDelete: "cascade" }),
+}, table => [
+  uniqueIndex("idx_learning_program_member_unique").on(table.programId, table.participantId),
+  index("idx_learning_program_members_participant").on(table.participantId),
+]);
+
 // --------------------------------------------
 // RELATIONAL TABLES (replaces JSONB arrays in participantsTable)
 // --------------------------------------------

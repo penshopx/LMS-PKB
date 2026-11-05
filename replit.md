@@ -72,6 +72,7 @@ Key features:
 - `/app/competencies` - Competency cluster and unit management
 - `/app/courses` - Katalog dan builder pembelajaran dengan template 6 langkah
 - `/app/learning-paths` - Learning paths with enrollment and progress tracking
+- `/app/learning-programs` - Rencana Belajar PKB: target kursus pribadi, penugasan kelompok bertenggat, pengingat dalam aplikasi, dan pemantauan tindak lanjut
 - `/app/quizzes` - Quiz Engine with multiple question types (pilihan ganda, benar/salah, esai)
 - `/app/participants` - Participant management
 - `/app/passport` - Competency Passport
