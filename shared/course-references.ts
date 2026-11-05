@@ -49,6 +49,30 @@ export const referenceUseDisclaimer =
   "Rujukan ini untuk pembelajaran, bukan keputusan kepatuhan atau sertifikasi formal. Catatan relevansi adalah interpretasi pembelajaran. Naskah resmi dan status berlaku terkini belum diverifikasi melalui sumber resmi daring.";
 
 export function baselineLessonReferences(unitId: string): LessonReference[] {
+  if (unitId.startsWith("pkb-degree") || unitId.startsWith("pkb-short-course") || unitId.startsWith("pkb-formal-training")) return [{
+    sourceId: "PKB-12-2021", pageStart: 30, pageEnd: 31,
+    note: "Lampiran nilai dasar dan kelengkapan bukti pendidikan/pelatihan formal; angka resmi tidak dihitung oleh kursus.",
+  }];
+  if (unitId.startsWith("pkb-self-learning") || unitId.startsWith("pkb-work-assignment")) return [{
+    sourceId: "PKB-12-2021", pageStart: 31, pageEnd: 32,
+    note: "Lampiran pembelajaran nonformal dan contoh bukti; penilaian Angka Kredit mengikuti proses resmi.",
+  }];
+  if (unitId.startsWith("pkb-meeting")) return [{
+    sourceId: "PKB-12-2021", pageStart: 32, pageEnd: 33,
+    note: "Lampiran nilai dasar partisipasi dan kepanitiaan pertemuan profesi.",
+  }];
+  if (unitId.startsWith("pkb-competition") || unitId.startsWith("pkb-presentation") || unitId.startsWith("pkb-teaching")) return [{
+    sourceId: "PKB-12-2021", pageStart: 33, pageEnd: 35,
+    note: "Lampiran kegiatan kompetisi, paparan, karya, dan pengajaran; bukti perlu ditelaah sesuai jenis kegiatan.",
+  }];
+  if (unitId.startsWith("pkb-film") || unitId.startsWith("pkb-product")) return [{
+    sourceId: "PKB-12-2021", pageStart: 36, pageEnd: 37,
+    note: "Lampiran paparan film, gelar karya, pengenalan produk, dan ziarah arsitektur.",
+  }];
+  if (unitId.startsWith("pkb-expert") || unitId.startsWith("pkb-association") || unitId.startsWith("pkb-award") || unitId.startsWith("pkb-other")) return [{
+    sourceId: "PKB-12-2021", pageStart: 38, pageEnd: 39,
+    note: "Lampiran unsur penunjang dan kegiatan utama lainnya; jangan menyamakan pencatatan belajar dengan penetapan resmi.",
+  }];
   if (unitId.startsWith("legal-")) return [{
     sourceId: "PU-6-2025", pageStart: 11, pageEnd: 26,
     note: "Konteks standar kegiatan usaha dan pengawasan. LKUT hanya konteks kebutuhan belajar, bukan layanan pelaporan dalam LMS.",

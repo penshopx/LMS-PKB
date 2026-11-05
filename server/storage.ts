@@ -47,7 +47,7 @@ import type {
   Achievement,
   Notification,
 } from "@shared/schema";
-import { PUB_CLUSTERS, PUB_COURSES, PUB_LEARNING_PATHS, PUB_PARTICIPANTS, PUB_UNITS } from "./pub-catalog";
+import { PKB_CLUSTERS, PKB_COURSES, PKB_LEARNING_PATHS, PKB_PARTICIPANTS, PKB_UNITS } from "./pkb-catalog";
 import { evaluateCourseCompletion } from "@shared/lms-course-rules";
 
 // Sample data imports (replicated from client for server use)
@@ -464,10 +464,10 @@ export class MemStorage implements IStorage {
   private notifications: Map<string, Notification>;
 
   constructor() {
-    this.clusters = new Map(PUB_CLUSTERS.map(c => [c.id, c]));
-    this.units = new Map(PUB_UNITS.map(u => [u.id, u]));
-    this.courses = new Map(PUB_COURSES.map(c => [c.id, c]));
-    this.participants = new Map(PUB_PARTICIPANTS.map(p => [p.id, p]));
+    this.clusters = new Map(PKB_CLUSTERS.map(c => [c.id, c]));
+    this.units = new Map(PKB_UNITS.map(u => [u.id, u]));
+    this.courses = new Map(PKB_COURSES.map(c => [c.id, c]));
+    this.participants = new Map(PKB_PARTICIPANTS.map(p => [p.id, p]));
     this.learningPaths = new Map();
     this.enrollments = new Map();
     this.quizzes = new Map();
@@ -604,7 +604,7 @@ export class MemStorage implements IStorage {
     };
     this.assessors.set(sampleAssessor.id, sampleAssessor);
 
-    PUB_LEARNING_PATHS.forEach(path => this.learningPaths.set(path.id, path));
+    PKB_LEARNING_PATHS.forEach(path => this.learningPaths.set(path.id, path));
   }
 
   // Clusters
