@@ -118,6 +118,12 @@ export function NotificationCenter() {
                         queryKey: [`/api/courses/${discussion[1]}/discussions`],
                       });
                     }
+                    if (notif.link === "/app/discussion-reports") {
+                      void queryClient.resetQueries({
+                        predicate: query => typeof query.queryKey[0] === "string"
+                          && query.queryKey[0].startsWith("/api/discussion-reports?"),
+                      });
+                    }
                     setOpen(false);
                     setLocation(notif.link);
                   }

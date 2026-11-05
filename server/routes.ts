@@ -58,6 +58,8 @@ import { renderParticipantPortfolio } from "./participant-portfolio";
 
 function roleAllowsPath(role: ApplicationRole, method: string, path: string): boolean {
   if (role === "admin") return true;
+  if (role === "participant" && method === "GET" && path === "/api/discussion-reports") return true;
+  if (role === "participant" && method === "POST" && /^\/api\/discussions\/[^/]+\/reports$/.test(path)) return true;
   if (method === "GET" && /^\/api\/courses\/[^/]+\/discussions$/.test(path)) return true;
   if (role === "participant" && method === "POST" && (
     /^\/api\/courses\/[^/]+\/discussions$/.test(path) ||

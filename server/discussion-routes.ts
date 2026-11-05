@@ -7,8 +7,9 @@ import { requireRole } from "./auth";
 import {
   coursesTable, discussionThreadsTable as threads, discussionRepliesTable as replies,
   enrollmentsTable, participantsTable, users, bujksTable, notificationsTable, type User,
+  discussionReportsTable as reports,
 } from "@shared/schema";
-import { questionInput, replyInput, moderationInput, type DiscussionView } from "@shared/discussions";
+import { questionInput, replyInput, moderationInput, reportInput, reportStatus, reportHandlingInput, type DiscussionView, type DiscussionReport } from "@shared/discussions";
 
 class DiscussionError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -82,6 +83,95 @@ async function notify(conn: Connection, thread: typeof threads.$inferSelect, act
 }
 
 export function registerDiscussionRoutes(app: Express) {
+  app.post("/api/discussions/:threadId/reports", requireRole("participant"), handle(async (req, res) => {
+    const data = reportInput.parse(req.body);
+    const user = req.user as User;
+    const id = randomUUID();
+    await db.transaction(async tx => {
+      // Serialize each reporter's quota across processes and concurrent requests.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, user.id)).for("no key update");
+      await tx.select({ id: threads.id }).from(threads).where(eq(threads.id, req.params.threadId)).for("update");
+      const thread = await threadAccess(tx, user, req.params.threadId);
+      if (thread.hidden) throw new DiscussionError(409, "Konten sudah disembunyikan oleh admin.");
+      if (data.replyId) {
+        const [reply] = await tx.select().from(replies).where(and(eq(replies.id, data.replyId), eq(replies.threadId, thread.id))).for("update");
+        if (!reply) throw new DiscussionError(404, "Balasan tidak ditemukan.");
+        if (reply.hidden) throw new DiscussionError(409, "Konten sudah disembunyikan oleh admin.");
+      }
+      const targetKey = data.replyId ? `reply:${data.replyId}` : `thread:${thread.id}`;
+      const [existing] = await tx.select({ id: reports.id }).from(reports)
+        .where(and(eq(reports.reporterId, user.id), eq(reports.targetKey, targetKey)));
+      if (existing) throw new DiscussionError(409, "Anda sudah melaporkan konten ini. Lihat status di Laporan saya.");
+      const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(reports)
+        .where(and(eq(reports.reporterId, user.id), sql`${reports.createdAt} > ${new Date(Date.now() - 3600000).toISOString()}`));
+      if (count >= 5) throw new DiscussionError(429, "Maksimal 5 laporan per jam. Silakan coba kembali nanti.");
+      const now = new Date().toISOString();
+      await tx.insert(reports).values({
+        id, threadId: thread.id, replyId: data.replyId ?? null, reporterId: user.id,
+        targetKey, reason: data.reason, createdAt: now, updatedAt: now,
+      });
+      // Reports never use the group-discussion notification fan-out.
+      const admins = await tx.select({ id: users.id }).from(users).where(and(eq(users.role, "admin"), eq(users.isActive, true)));
+      if (admins.length) await tx.insert(notificationsTable).values(admins.map(admin => ({
+        id: randomUUID(), userId: admin.id, type: "info", category: "learning",
+        title: "Laporan diskusi baru", message: "Ada laporan privat untuk ditinjau oleh admin.",
+        link: "/app/discussion-reports", createdAt: now,
+      })));
+    });
+    res.status(201).json({ id });
+  }));
+
+  app.get("/api/discussion-reports", requireRole("participant", "admin"), handle(async (req, res) => {
+    const query = z.object({
+      status: z.union([reportStatus, z.literal("all")]).default("all"),
+      page: z.coerce.number().int().min(1).max(100000).default(1),
+    }).strict().parse(req.query);
+    const user = req.user as User;
+    const isAdmin = user.role === "admin";
+    // Own history remains readable after a membership change, but never returns
+    // original content or a course link that could disclose a former group.
+    const rows = await db.select({
+      report: reports, courseId: threads.courseId, threadTitle: threads.title,
+      threadBody: threads.body, threadHidden: threads.hidden,
+      replyBody: replies.body, replyHidden: replies.hidden, reporterName: users.username,
+    }).from(reports).innerJoin(threads, eq(threads.id, reports.threadId))
+      .innerJoin(users, eq(users.id, reports.reporterId))
+      .leftJoin(replies, eq(replies.id, reports.replyId))
+      .where(and(isAdmin ? sql`true` : eq(reports.reporterId, user.id),
+        query.status === "all" ? sql`true` : eq(reports.status, query.status)))
+      .orderBy(desc(reports.createdAt), desc(reports.id)).limit(31).offset((query.page - 1) * 30);
+    const result: DiscussionReport[] = rows.slice(0, 30).map(row => ({
+      id: row.report.id, threadId: row.report.threadId, replyId: row.report.replyId,
+      reason: row.report.reason, status: row.report.status, adminNote: row.report.adminNote,
+      createdAt: row.report.createdAt, updatedAt: row.report.updatedAt,
+      courseId: isAdmin ? row.courseId : null, threadTitle: isAdmin ? row.threadTitle : null,
+      targetBody: isAdmin ? (row.report.replyId ? row.replyBody : row.threadBody) : null,
+      targetHidden: isAdmin ? (row.threadHidden || Boolean(row.replyHidden)) : null,
+      reporterName: isAdmin ? row.reporterName : null,
+    }));
+    res.json({ reports: result, isAdmin, hasMore: rows.length > 30 });
+  }));
+
+  app.patch("/api/discussion-reports/:id", requireRole("admin"), handle(async (req, res) => {
+    const data = reportHandlingInput.parse(req.body);
+    await db.transaction(async tx => {
+      const [report] = await tx.select().from(reports).where(eq(reports.id, req.params.id)).for("update");
+      if (!report) throw new DiscussionError(404, "Laporan tidak ditemukan.");
+      if (report.status === data.status && (report.adminNote ?? "") === data.adminNote) return;
+      const now = new Date().toISOString();
+      await tx.update(reports).set({
+        status: data.status, adminNote: data.adminNote || null,
+        handledBy: (req.user as User).id, updatedAt: now,
+      }).where(eq(reports.id, report.id));
+      await tx.insert(notificationsTable).values({
+        id: randomUUID(), userId: report.reporterId, type: "info", category: "learning",
+        title: "Status laporan diskusi diperbarui", message: "Admin memperbarui penanganan laporan Anda. Buka laporan untuk melihat status.",
+        link: "/app/discussion-reports", createdAt: now,
+      });
+    });
+    res.json({ success: true });
+  }));
+
   app.get("/api/courses/:courseId/discussions", handle(async (req, res) => {
     const user = req.user as User;
     const access = await courseAccess(db, user, req.params.courseId);

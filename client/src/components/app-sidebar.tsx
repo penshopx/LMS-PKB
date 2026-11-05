@@ -13,6 +13,7 @@ import {
   LogOut,
   ClipboardList,
   BookOpenCheck,
+  Flag,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useLogout } from "@/hooks/use-logout";
@@ -41,6 +42,11 @@ const mainMenu = [
     title: "Analitik & Laporan",
     url: "/app/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "Laporan diskusi",
+    url: "/app/discussion-reports",
+    icon: Flag,
   },
   {
     title: "Kompetensi",
@@ -132,6 +138,7 @@ export function AppSidebar() {
   if (user && user.role !== "admin") {
     const items = [
       { title: user.role === "participant" ? "PKB Saya" : "Peserta PKB", url: "/app", icon: BookOpen },
+      ...(user.role === "participant" ? [{ title: "Laporan diskusi", url: "/app/discussion-reports", icon: Flag }] : []),
       { title: "Rencana Belajar PKB", url: "/app/learning-programs", icon: BookOpenCheck },
       { title: "Panduan PKB", url: "/app/assessment", icon: ClipboardCheck },
       { title: "Misi praktik", url: "/app/practice-missions", icon: ClipboardList },

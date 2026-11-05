@@ -203,3 +203,113 @@ test("old notification links reauthorize group membership without revealing cach
     await adminContext.close();
   }
 });
+
+test("normal login: privately report question and reply, admin handles report, coordinator cannot read", async ({ page }) => {
+  const title = "Topik untuk laporan privat browser";
+  const reason = `Alasan privat peserta ${tag}: mohon tinjau relevansi pertanyaan.`;
+  const replyReason = `Alasan privat balasan ${tag}: perlu pemeriksaan informasi sensitif.`;
+  await login(page, "learner");
+  const created = await page.request.post(`/api/courses/${courseId}/discussions`, {
+    data: { title, body: "Konteks teknis yang diperiksa melalui laporan privat." },
+  });
+  expect(created.status()).toBe(201);
+  const { id: threadId } = await created.json();
+  expect((await page.request.post(`/api/discussions/${threadId}/replies`, {
+    data: { body: "Balasan teknis yang perlu ditinjau secara privat." },
+  })).status()).toBe(201);
+  await openForum(page);
+  const thread = page.locator(`#thread-${threadId}`);
+  await thread.getByRole("button", { name: `Laporkan pertanyaan: ${title}`, exact: true }).click();
+  await expect(page.getByRole("button", { name: "Kirim laporan", exact: true })).toBeDisabled();
+  await page.getByLabel("Alasan laporan", { exact: true }).fill(reason);
+  await page.getByRole("button", { name: "Kirim laporan", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Laporan terkirim", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Selesai", exact: true }).click();
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  await thread.getByRole("button", { name: `Laporkan pertanyaan: ${title}`, exact: true }).click();
+  await page.getByLabel("Alasan laporan", { exact: true }).fill(reason);
+  await page.getByRole("button", { name: "Kirim laporan", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Anda sudah melaporkan konten ini");
+  await page.getByRole("button", { name: "Batal", exact: true }).click();
+  await thread.getByRole("button", { name: `Laporkan tanggapan dari ${names.learner}`, exact: true }).click();
+  await page.getByLabel("Alasan laporan", { exact: true }).fill(replyReason);
+  await page.getByRole("button", { name: "Kirim laporan", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Laporan terkirim", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Selesai", exact: true }).click();
+  await page.getByRole("link", { name: "Lihat laporan saya", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Laporan saya", exact: true })).toBeVisible();
+  await expect(page.getByText(reason, { exact: true })).toBeVisible();
+  await expect(page.getByText(replyReason, { exact: true })).toBeVisible();
+  await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "generated-artifacts/discussions/mobile-own-reports.jpg", fullPage: true });
+  await logout(page);
+  await login(page, "admin");
+  await page.goto("/app/discussion-reports");
+  await expect(page.getByRole("heading", { name: "Laporan diskusi", exact: true })).toBeVisible();
+  const reportCard = page.locator(".shadcn-card").filter({ has: page.getByText(reason, { exact: true }) });
+  await expect(reportCard.getByText("Konteks teknis yang diperiksa melalui laporan privat.", { exact: true })).toBeVisible();
+  await reportCard.getByRole("combobox").selectOption("resolved");
+  await expect(reportCard.getByRole("button", { name: "Simpan peninjauan", exact: true })).toBeDisabled();
+  await reportCard.getByRole("textbox").fill("Telah diperiksa, konten tetap relevan dan dapat dipertahankan.");
+  await reportCard.getByRole("button", { name: "Simpan peninjauan", exact: true }).click();
+  await expect(reportCard.locator("div").filter({ hasText: /^Selesai$/ })).toBeVisible();
+  await page.getByRole("button", { name: "Ditinjau", exact: true }).click();
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Selesai", exact: true }).click();
+  await expect(page.getByText(reason, { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "generated-artifacts/discussions/mobile-admin-reports.jpg", fullPage: true });
+  await reportCard.getByRole("link", { name: "Buka diskusi", exact: true }).click();
+  await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await logout(page);
+  await login(page, "learner");
+  await page.goto("/app/discussion-reports");
+  await expect(page.getByText("Telah diperiksa, konten tetap relevan dan dapat dipertahankan.", { exact: true })).toBeVisible();
+  // Opening a report notice on the same route must hide old report bodies while
+  // the real server rechecks authorization, not just reuse cached history.
+  let release!: () => void;
+  let received!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { received = resolve; });
+  await page.route("**/api/discussion-reports?**", async route => {
+    const response = await route.fetch();
+    received();
+    await gate;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.getByTestId("button-notifications").click();
+    await page.getByText("Status laporan diskusi diperbarui", { exact: true }).first().click();
+    await requested;
+    await expect(page.getByRole("status", { name: "Memuat laporan" })).toBeVisible();
+    await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  } finally {
+    release();
+    // Drain in-flight route handlers before installing the next interceptor.
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  await expect(page.getByText(reason, { exact: true })).toBeVisible();
+  await page.route("**/api/discussion-reports?**", route => route.fulfill({
+    status: 500, contentType: "application/json", body: JSON.stringify({ message: "Koneksi laporan gagal untuk pengujian." }),
+  }));
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Laporan belum dapat dimuat", exact: true })).toBeVisible();
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  await page.unroute("**/api/discussion-reports?**");
+  await page.getByRole("button", { name: "Coba lagi", exact: true }).click();
+  await expect(page.getByText(reason, { exact: true })).toBeVisible();
+  await logout(page);
+  await login(page, "pic");
+  await openForum(page);
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Laporkan/ })).toHaveCount(0);
+  expect((await page.request.get("/api/discussion-reports")).status()).toBe(403);
+  await page.goto("/app/discussion-reports");
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+  await logout(page);
+  await login(page, "other");
+  await page.goto("/app/discussion-reports");
+  await expect(page.getByText("Belum ada laporan", { exact: true })).toBeVisible();
+  await expect(page.getByText(reason, { exact: true })).toHaveCount(0);
+});

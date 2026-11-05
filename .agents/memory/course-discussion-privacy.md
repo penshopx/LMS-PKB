@@ -14,3 +14,9 @@ Require new authorization on forum entry and every notification navigation, incl
 **Why:** Group membership can change independently of the account's identity record. Server authorization on new requests does not prevent a client cache from redisplaying a former group's content without a request.
 
 **How to apply:** Override long-lived global query defaults for permission-sensitive forum views. Revalidate on entry, thread-route changes, focus/reconnect, and same-route notification clicks; discard superseded requests and avoid rendering old bodies during revalidation or after access errors. Browser tests must keep the runtime through membership changes and gate authentic responses to check the loading boundary, not just the final page.
+
+Reporting is a private channel to admin, not a new coordinator permission or a public moderation comment. Keep report reasons and handling notes out of group notifications and public moderation reasons, including when taking action on reported content.
+
+**Why:** The user requires that only admin and the reporter can read reports; the existing coordinator role must remain read-only without report access.
+
+**How to apply:** Authorize report submission against current enrollment, group/private scope, and visibility. Report history is not authorization to retrieve the original content; membership changes must not make historical report links a way to reopen former-group content.

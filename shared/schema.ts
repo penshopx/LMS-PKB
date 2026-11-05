@@ -1195,6 +1195,26 @@ export const discussionRepliesTable = pgTable("discussion_replies", {
   createdAt: text("created_at").notNull(),
 }, table => [index("discussion_replies_thread_idx").on(table.threadId)]);
 
+export const discussionReportsTable = pgTable("discussion_reports", {
+  id: varchar("id").primaryKey(),
+  threadId: varchar("thread_id").notNull().references(() => discussionThreadsTable.id, { onDelete: "cascade" }),
+  replyId: varchar("reply_id").references(() => discussionRepliesTable.id, { onDelete: "cascade" }),
+  reporterId: varchar("reporter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetKey: text("target_key").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("open").$type<"open" | "reviewing" | "resolved" | "dismissed">(),
+  adminNote: text("admin_note"),
+  handledBy: varchar("handled_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, table => [
+  uniqueIndex("discussion_reports_reporter_target_idx").on(table.reporterId, table.targetKey),
+  index("discussion_reports_queue_idx").on(table.status, table.createdAt),
+  index("discussion_reports_reporter_time_idx").on(table.reporterId, table.createdAt),
+  check("discussion_reports_status_check", sql`${table.status} IN ('open', 'reviewing', 'resolved', 'dismissed')`),
+  check("discussion_reports_target_check", sql`${table.targetKey} = CASE WHEN ${table.replyId} IS NULL THEN 'thread:' || ${table.threadId} ELSE 'reply:' || ${table.replyId} END`),
+]);
+
 export const learningProgramsTable = pgTable("learning_programs", {
   id: varchar("id").primaryKey(),
   title: text("title").notNull(),

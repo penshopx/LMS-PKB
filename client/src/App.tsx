@@ -40,6 +40,7 @@ import Quizzes from "@/pages/quizzes";
 import PracticeMissions from "@/pages/practice-missions";
 import LearningProgramsPage from "@/pages/learning-programs";
 import CourseDiscussions from "@/pages/course-discussions";
+import DiscussionReportsPage from "@/pages/discussion-reports";
 import Analytics from "@/pages/analytics";
 import AccessManagement from "@/pages/access";
 import AcceptInvitation from "@/pages/accept-invitation";
@@ -61,6 +62,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/access": "Akun & Undangan PKB",
   "/app/practice-missions": "Misi praktik",
   "/app/catalog-settings": "Katalog publik",
+  "/app/discussion-reports": "Laporan diskusi",
 };
 
 function AppRouter() {
@@ -70,6 +72,11 @@ function AppRouter() {
   if (discussionMatch) {
     const courseId = decodeURIComponent(discussionMatch[1]);
     return <CourseDiscussions key={`${courseId}:${user?.id ?? "unknown"}:${user?.role ?? "unknown"}:${user?.bujkId ?? ""}:${user?.participantId ?? ""}`} courseId={courseId} />;
+  }
+  if (location === "/app/discussion-reports") {
+    return user?.role === "bujk_pic"
+      ? <NotFound />
+      : <DiscussionReportsPage key={`${user?.id ?? "unknown"}:${user?.role ?? "unknown"}`} />;
   }
   if (location === "/app/learning-programs") return <LearningProgramsPage key={user?.id ?? "unknown"} />;
   if (location === "/app/assessment") return <Assessment />;

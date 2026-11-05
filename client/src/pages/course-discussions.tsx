@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, MessageSquareText, Send, ShieldCheck, ThumbsUp, UsersRound } from "lucide-react";
+import { ArrowLeft, Flag, MessageSquareText, Send, ShieldCheck, ThumbsUp, UsersRound } from "lucide-react";
 import type { DiscussionThread, DiscussionView } from "@shared/discussions";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
+import { DiscussionReportDialog } from "@/components/discussion-report-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,9 +54,14 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
   const [body, setBody] = useState("");
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ threadId: string; replyId?: string; label: string } | null>(null);
   const [moderationReason, setModerationReason] = useState("");
   const [formError, setFormError] = useState("");
   const requestedThread = new URLSearchParams(search).get("thread");
+
+  useEffect(() => {
+    if (discussionQuery.isFetching) setReportTarget(null);
+  }, [discussionQuery.isFetching]);
 
   useEffect(() => {
     if (view) return;
@@ -63,6 +69,7 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
     setBody("");
     setReplyDrafts({});
     setModerationTarget(null);
+    setReportTarget(null);
     setModerationReason("");
     setFormError("");
   }, [view]);
@@ -181,6 +188,12 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
             <span>{view.threads.length} topik dalam ruang ini</span>
             {view.isAdmin && <Badge variant="secondary" className="ml-1 gap-1"><ShieldCheck className="h-3 w-3" />Admin</Badge>}
           </div>
+          {(view.canPost || view.isAdmin) && (
+            <Link href="/app/discussion-reports" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline">
+              <Flag className="h-4 w-4" aria-hidden="true" />
+              {view.isAdmin ? "Tinjau laporan diskusi" : "Lihat laporan saya"}
+            </Link>
+          )}
         </div>
       </header>
 
@@ -280,6 +293,16 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
                       {thread.hidden ? "Pulihkan" : "Moderasi"}
                     </Button>
                   )}
+                  {view.canPost && !thread.hidden && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setReportTarget({ threadId: thread.id, label: thread.title })}
+                      aria-label={`Laporkan pertanyaan: ${thread.title}`}
+                    >
+                      <Flag className="mr-2 h-3.5 w-3.5" />Laporkan
+                    </Button>
+                  )}
                 </div>
                 {thread.hidden && thread.moderationReason && (
                   <p className="mt-3 rounded-lg bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
@@ -326,6 +349,16 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
                                     {reply.hidden ? "Pulihkan" : "Moderasi"}
                                   </Button>
                                 </>
+                              )}
+                              {view.canPost && !thread.hidden && !reply.hidden && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setReportTarget({ threadId: thread.id, replyId: reply.id, label: `${thread.title} — tanggapan` })}
+                                  aria-label={`Laporkan tanggapan dari ${reply.authorName}`}
+                                >
+                                  <Flag className="mr-1.5 h-3.5 w-3.5" />Laporkan
+                                </Button>
                               )}
                             </div>
                           </div>
@@ -413,6 +446,12 @@ export default function CourseDiscussions({ courseId }: { courseId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {view.canPost && (
+        <DiscussionReportDialog
+          target={reportTarget}
+          onOpenChange={open => { if (!open) setReportTarget(null); }}
+        />
+      )}
     </div>
   );
 }

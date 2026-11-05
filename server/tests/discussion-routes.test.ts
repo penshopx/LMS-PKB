@@ -11,6 +11,7 @@ import { runMigrations } from "../db-migrate";
 import {
   bujksTable, discussionThreadsTable as threads, discussionRepliesTable as replies,
   enrollmentsTable, learningProgramsTable, notificationsTable, participantsTable, users, type ApplicationRole,
+  discussionReportsTable as reports,
 } from "@shared/schema";
 import type { DiscussionView } from "@shared/discussions";
 
@@ -121,6 +122,110 @@ describe("Course discussion privacy and persistence", () => {
     expect((await view("a")).threads.some(t => t.id === privateId)).toBe(false);
     await db.update(participantsTable).set({ bujkId: null }).where(eq(participantsTable.id, user!.participantId!));
   });
+  it("keeps reports private, validates targets, serializes duplicates and restricts handling", async () => {
+    const reportPath = `/api/discussions/${threadId}/reports`;
+    const reason = "Alasan sensitif privat yang tidak boleh dibagikan ke kelompok.";
+    expect((await request("", reportPath, "POST", { reason })).status).toBe(401);
+    for (const role of ["picA", "picB", "admin"]) {
+      expect((await request(role, reportPath, "POST", { reason })).status).toBe(403);
+    }
+    for (const role of ["b", "solo", "otherSolo"]) {
+      expect((await request(role, reportPath, "POST", { reason })).status).toBe(404);
+    }
+    expect((await request("unenrolled", reportPath, "POST", { reason })).status).toBe(403);
+    expect((await request("a", reportPath, "POST", { reason: "pendek" })).status).toBe(400);
+    expect((await request("a", reportPath, "POST", { reason: "x".repeat(1001) })).status).toBe(400);
+    expect((await request("a", reportPath, "POST", { reason, reporterId: ids.peer })).status).toBe(400);
+    const privateReply = (await view("admin")).threads.find(t => t.id === privateId)!.replies[0].id;
+    expect((await request("a", reportPath, "POST", { reason, replyId: privateReply })).status).toBe(404);
+    const results = await Promise.all(Array.from({ length: 4 }, () => request("a", reportPath, "POST", { reason })));
+    expect(results.map(r => r.status).sort()).toEqual([201, 409, 409, 409]);
+    const reportId = (await results.find(r => r.status === 201)!.json()).id;
+    const replyReport = await request("a", reportPath, "POST", { reason, replyId });
+    expect(replyReport.status).toBe(201);
+    expect((await request("solo", `/api/discussions/${privateId}/reports`, "POST", { reason })).status).toBe(201);
+    expect((await request("otherSolo", `/api/discussions/${privateId}/reports`, "POST", { reason })).status).toBe(404);
+    for (const role of ["picA", "picB"]) expect((await request(role, "/api/discussion-reports")).status).toBe(403);
+    for (const role of ["peer", "b", "otherSolo"]) {
+      expect((await (await request(role, "/api/discussion-reports")).json()).reports).toEqual([]);
+    }
+    const own = await (await request("a", "/api/discussion-reports")).json();
+    expect(own.isAdmin).toBe(false);
+    expect(own.reports).toHaveLength(2);
+    for (const report of own.reports) {
+      expect(report.reason).toBe(reason);
+      for (const field of ["threadTitle", "targetBody", "reporterName", "courseId", "targetHidden"]) expect(report[field]).toBeNull();
+    }
+    const admin = await (await request("admin", "/api/discussion-reports?status=open&page=1")).json();
+    expect(admin.reports.find((r: { id: string }) => r.id === reportId).targetBody).toContain("beton");
+    expect((await request("admin", "/api/discussion-reports?status=invalid")).status).toBe(400);
+    expect((await request("admin", "/api/discussion-reports?page=0")).status).toBe(400);
+    for (const role of ["a", "peer", "picA"]) expect((await request(role, `/api/discussion-reports/${reportId}`, "PATCH", { status: "resolved", adminNote: "Sudah ditinjau." })).status).toBe(403);
+    expect((await request("admin", `/api/discussion-reports/${randomUUID()}`, "PATCH", { status: "reviewing" })).status).toBe(404);
+    expect((await request("admin", `/api/discussion-reports/${reportId}`, "PATCH", { status: "resolved" })).status).toBe(400);
+    for (const status of ["reviewing", "resolved", "open", "dismissed"]) {
+      expect((await request("admin", `/api/discussion-reports/${reportId}`, "PATCH", { status, adminNote: "Catatan privat fasilitator." })).status).toBe(200);
+      const updated = await (await request("a", `/api/discussion-reports?status=${status}`)).json();
+      expect(updated.reports.some((r: { id: string; status: string }) => r.id === reportId && r.status === status)).toBe(true);
+    }
+    const [author] = await db.select().from(users).where(eq(users.id, ids.a));
+    await db.update(participantsTable).set({ bujkId: groups[1] }).where(eq(participantsTable.id, author.participantId!));
+    try {
+      expect((await request("a", reportPath, "POST", { reason })).status).toBe(404);
+      const history = await (await request("a", "/api/discussion-reports")).json();
+      expect(history.reports).toHaveLength(2);
+      expect(history.reports.every((r: { targetBody: string | null }) => r.targetBody === null)).toBe(true);
+    } finally {
+      await db.update(participantsTable).set({ bujkId: groups[0] }).where(eq(participantsTable.id, author.participantId!));
+    }
+    expect(JSON.stringify(await view("peer"))).not.toContain(reason);
+    const notices = await db.select().from(notificationsTable).where(eq(notificationsTable.link, "/app/discussion-reports"));
+    const relevant = notices.filter(n => Object.values(ids).includes(n.userId));
+    expect(relevant.length).toBeGreaterThan(0);
+    expect(relevant.every(n => [ids.admin, ids.a].includes(n.userId))).toBe(true);
+    expect(JSON.stringify(relevant)).not.toContain(reason);
+  });
+
+  it("limits report spam across concurrent requests and persists the quota", async () => {
+    const targets: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const result = await request("a", path(), "POST", { title: `Topik quota ${i}`, body: "Konteks teknis untuk pengujian batas laporan." });
+      targets.push((await result.json()).id);
+    }
+    const results = await Promise.all(targets.map(id => request("a", `/api/discussions/${id}/reports`, "POST", { reason: "Konten perlu diperiksa fasilitator." })));
+    // Two earlier reports already consumed this reporter's hourly quota.
+    expect(results.filter(r => r.status === 201)).toHaveLength(3);
+    expect(results.filter(r => r.status === 429)).toHaveLength(4);
+    const failed = targets[results.findIndex(r => r.status === 429)];
+    expect((await request("a", `/api/discussions/${failed}/reports`, "POST", { reason: "Masih dalam batas jam yang sama." })).status).toBe(429);
+    await db.update(reports).set({ createdAt: new Date(Date.now() - 3601000).toISOString() }).where(eq(reports.reporterId, ids.a));
+    expect((await request("a", `/api/discussions/${failed}/reports`, "POST", { reason: "Sesudah waktu pembatasan berakhir." })).status).toBe(201);
+    expect((await request("a", `/api/discussions/${threadId}/reports`, "POST", { reason: "Laporan yang sudah ditutup tidak boleh berulang." })).status).toBe(409);
+  });
+
+  it("paginates report histories without mixing other reporters and filters persisted status", async () => {
+    const now = new Date().toISOString();
+    const fixtures = Array.from({ length: 32 }, () => ({ id: randomUUID(), reportId: randomUUID() }));
+    // Disposable fixtures exercise the bounded read endpoint, not the write quota.
+    await db.insert(replies).values(fixtures.map(row => ({
+      id: row.id, threadId: privateId, authorId: ids.solo, body: "Konten privat fixture halaman.", createdAt: now,
+    })));
+    await db.insert(reports).values(fixtures.map(row => ({
+      id: row.reportId, threadId: privateId, replyId: row.id, reporterId: ids.solo,
+      targetKey: `reply:${row.id}`, reason: "Alasan privat fixture halaman.", createdAt: now, updatedAt: now,
+      status: "reviewing" as const,
+    })));
+    const first = await (await request("solo", "/api/discussion-reports?status=reviewing&page=1")).json();
+    const second = await (await request("solo", "/api/discussion-reports?status=reviewing&page=2")).json();
+    expect(first.reports).toHaveLength(30); expect(first.hasMore).toBe(true);
+    expect(second.reports).toHaveLength(2); expect(second.hasMore).toBe(false);
+    expect(new Set([...first.reports, ...second.reports].map(r => r.id)).size).toBe(32);
+    const admin = await (await request("admin", "/api/discussion-reports?status=reviewing&page=2")).json();
+    expect(admin.reports.map((r: { id: string }) => r.id)).toEqual(second.reports.map((r: { id: string }) => r.id));
+    expect((await (await request("otherSolo", "/api/discussion-reports?page=2")).json()).reports).toEqual([]);
+    await db.delete(replies).where(inArray(replies.id, fixtures.map(row => row.id)));
+  });
+
   it("allows only admin moderation and helpful marks; redacts hidden content", async () => {
     const mark = `/api/discussion-replies/${replyId}/helpful`;
     for (const role of ["a", "peer", "picA", "b"]) expect((await request(role, mark, "PATCH", { helpful: true })).status).toBe(403);
@@ -129,6 +234,7 @@ describe("Course discussion privacy and persistence", () => {
     const moderation = `/api/discussion-replies/${replyId}/moderation`;
     expect((await request("admin", moderation, "PATCH", { hidden: true, reason: "" })).status).toBe(400);
     expect((await request("admin", moderation, "PATCH", { hidden: true, reason: "Perlu peninjauan sumber teknis." })).status).toBe(200);
+    expect((await request("a", `/api/discussions/${threadId}/reports`, "POST", { reason: "Balasan yang telah disembunyikan.", replyId })).status).toBe(409);
     for (const role of ["a", "peer", "picA"]) {
       const reply = (await view(role)).threads.find(t => t.id === threadId)!.replies[0];
       expect(reply.body).toBe(""); expect(reply.hidden).toBe(true); expect(reply.helpful).toBe(false);
@@ -139,6 +245,7 @@ describe("Course discussion privacy and persistence", () => {
     const root = `/api/discussions/${threadId}/moderation`;
     expect((await request("a", root, "PATCH", { hidden: true, reason: "Tidak diizinkan" })).status).toBe(403);
     expect((await request("admin", root, "PATCH", { hidden: true, reason: "Pertanyaan sedang ditinjau." })).status).toBe(200);
+    expect((await request("a", `/api/discussions/${threadId}/reports`, "POST", { reason: "Pertanyaan yang telah disembunyikan." })).status).toBe(409);
     const hidden = (await view("picA")).threads.find(t => t.id === threadId)!;
     expect(hidden.title).toBe("Pertanyaan disembunyikan"); expect(hidden.body).toBe(""); expect(hidden.replies).toEqual([]);
     for (const role of ["peer", "admin"]) expect((await request(role, `/api/discussions/${threadId}/replies`, "POST", { body: "Ditutup" })).status).toBe(409);
@@ -154,7 +261,7 @@ describe("Course discussion privacy and persistence", () => {
     expect(new Set(forThread(privateId).map(n => n.userId))).toEqual(new Set([ids.solo, ids.admin]));
     for (const n of notices) {
       expect(n.message).not.toContain("beton"); expect(n.message).not.toContain("privat admin");
-      expect(n.link).toMatch(/^\/app\/discussions\//);
+      expect(n.link).toMatch(/^\/app\/(?:discussions\/|discussion-reports$)/);
     }
     const [user] = await db.select().from(users).where(eq(users.id, ids.peer));
     await db.update(participantsTable).set({ bujkId: groups[1] }).where(eq(participantsTable.id, user!.participantId!));
@@ -181,6 +288,9 @@ describe("Course discussion privacy and persistence", () => {
       const reply = await request("admin", `/api/discussions/${id}/replies`, "POST", { body: "Tanggapan fasilitator." });
       expect(reply.status).toBe(201);
       const replyId = (await reply.json()).id;
+      const report = await request("a", `/api/discussions/${id}/reports`, "POST", { reason: "Pengujian penghapusan laporan bersama kursus." });
+      expect(report.status).toBe(201);
+      const reportId = (await report.json()).id;
       const program = await request("admin", "/api/learning-programs", "POST", {
         title: "Rencana yang menahan penghapusan", description: "", courseId: course.id,
         dueDate: "2099-12-31", participantIds: [author.participantId!], groupIds: [],
@@ -192,6 +302,7 @@ describe("Course discussion privacy and persistence", () => {
       expect((await request("admin", `/api/courses/${course.id}`, "DELETE")).status).toBe(409);
       expect(await db.select().from(threads).where(eq(threads.id, id))).toHaveLength(1);
       expect(await db.select().from(replies).where(eq(replies.id, replyId))).toHaveLength(1);
+      expect(await db.select().from(reports).where(eq(reports.id, reportId))).toHaveLength(1);
       expect(await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, enrollment.id))).toHaveLength(1);
       expect(await db.select().from(notificationsTable)
         .where(eq(notificationsTable.link, `/app/discussions/${course.id}?thread=${id}`))).toEqual(existingNotices);
@@ -202,6 +313,7 @@ describe("Course discussion privacy and persistence", () => {
       expect(await storage.getCourse(course.id)).toBeUndefined();
       expect(await db.select().from(threads).where(eq(threads.id, id))).toHaveLength(0);
       expect(await db.select().from(replies).where(eq(replies.id, replyId))).toHaveLength(0);
+      expect(await db.select().from(reports).where(eq(reports.id, reportId))).toHaveLength(0);
       expect(await db.select().from(enrollmentsTable).where(eq(enrollmentsTable.id, enrollment.id))).toHaveLength(0);
       expect(await db.select().from(notificationsTable)
         .where(eq(notificationsTable.link, `/app/discussions/${course.id}?thread=${id}`))).toHaveLength(0);
