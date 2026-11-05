@@ -2,7 +2,7 @@ import express from "express";
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  baselineLessonReferences, lessonReferenceSchema, lessonReferencesSchema,
+  baselineLessonReferences, lessonReferenceSchema, lessonReferencesSchema, referenceDocuments,
   updateLessonReferencesSchema,
 } from "../../shared/course-references";
 import { registerCourseReferenceRoutes, type ReferenceUpdateResult } from "../course-reference-routes";
@@ -11,6 +11,19 @@ import { PUB_COURSES } from "../pub-catalog";
 const sample = { sourceId: "PU-6-2025" as const, pageStart: 29, note: "Konteks pembelajaran" };
 
 describe("lesson reference validation and baseline", () => {
+  it("registers the PKB 12/2021 regulation and validates its PDF page range", () => {
+    expect(referenceDocuments[0]).toMatchObject({
+      id: "PKB-12-2021",
+      title: expect.stringContaining("Pelaksanaan Pengembangan Keprofesian Berkelanjutan"),
+      pages: 42,
+    });
+    expect(lessonReferenceSchema.safeParse({
+      sourceId: "PKB-12-2021", pageStart: 42, note: "Rujukan PKB",
+    }).success).toBe(true);
+    expect(lessonReferenceSchema.safeParse({
+      sourceId: "PKB-12-2021", pageStart: 43, note: "Di luar dokumen",
+    }).success).toBe(false);
+  });
   it("accepts ranges and normalizes optional notes without claiming official verification", () => {
     expect(lessonReferenceSchema.parse({ ...sample, pageEnd: 34, section: "  PUB  " }).section).toBe("PUB");
     expect(lessonReferencesSchema.parse([])).toEqual([]);

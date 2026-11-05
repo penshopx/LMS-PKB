@@ -192,7 +192,7 @@ export default function Login() {
       </div>
 
       <footer className="text-center py-4 text-xs text-muted-foreground">
-        Pembelajaran bisnis konstruksi untuk kompetensi kontraktor dan tenaga kerja konstruksi
+        PKB ASDAMKINDO · Kompetensi Teknik Konstruksi
       </footer>
     </div>
   );

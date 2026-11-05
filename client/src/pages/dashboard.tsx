@@ -133,7 +133,7 @@ export default function Dashboard() {
     <div className="p-6 space-y-6" data-testid="page-dashboard">
       <div>
         <h1 className="text-2xl font-bold">Dashboard Kompetensi</h1>
-        <p className="text-muted-foreground">Pantau kompetensi kontraktor dan tenaga kerja konstruksi pada seluruh domain PUB-ASPEKINDO</p>
+        <p className="text-muted-foreground">Pantau perkembangan kompetensi teknik konstruksi di PKB ASDAMKINDO</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

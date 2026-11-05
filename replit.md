@@ -1,8 +1,8 @@
-# LMS PUB ASPEKINDO - Pembelajaran Bisnis Konstruksi
+# PKB ASDAMKINDO - Kompetensi Teknik Konstruksi
 
 ## Overview
 
-LMS PUB ASPEKINDO adalah platform Pembelajaran Bisnis Konstruksi untuk memperkuat kompetensi kontraktor dan mendukung pengembangan tenaga kerja konstruksi. Materi utamanya mengikuti konteks Pengembangan Usaha Berkelanjutan pada Permen PUPR Nomor 7 Tahun 2024.
+PKB ASDAMKINDO adalah platform Pengembangan Keprofesian Berkelanjutan untuk memperkuat kompetensi teknik tenaga kerja konstruksi. Acuan regulasi utama adalah Permen PUPR Nomor 12 Tahun 2021 tentang Pelaksanaan Pengembangan Keprofesian Berkelanjutan.
 
 Ruang lingkup katalog:
 - **SIAP Legalitas dan Perizinan**
@@ -30,15 +30,15 @@ mempertahankan pilihan admin, termasuk daftar rujukan yang sengaja dikosongkan.
 - Materi diskusi **Implementasi Permen PU No. 6 Tahun 2025** menjadi referensi
   konteks perizinan, PUB, SBU, pengawasan, dan kepatuhan; bukan naskah hukum
   primer atau izin menerapkan seluruh ketentuan slide secara otomatis.
-- **Permendagri No. 7 Tahun 2024** membahas Barang Milik Daerah, **bukan Permen
-  PUPR No. 7 Tahun 2024 tentang PUB**. Jangan menyamakan keduanya.
+- **Permendagri No. 7 Tahun 2024** membahas Barang Milik Daerah; jangan
+  menyamakannya dengan Permen PUPR Nomor 12 Tahun 2021 tentang PKB.
 - Kutip sumber dan halaman; periksa gambar/tabel pada PDF asli serta naskah
   resmi terbaru sebelum menjadikannya aturan aplikasi. Pertahankan batas LMS
   dan sertifikat penyelesaian kursus; jangan menambahkan layanan LKUT/SBU/SKK
   hanya karena topik itu disebut dalam sumber.
 
 Key features:
-- **PUB-ASPEKINDO Competency Framework**: Domain SIAP dan Kepatuhan dengan cluster/unit yang tetap dapat dikelola
+- **Kompetensi Teknik Konstruksi**: Domain belajar dan unit kompetensi yang tetap dapat dikelola
 - **Pembelajaran 6 langkah**: Orientation, Context, Microlearning, Practice, Assessment, Reflection
 - **4-Level Progression**: L1 (Awareness) → L2 (Application) → L3 (Mastery) → L4 (Strategic)
 - **Evidence-based Assessment**: Track and document competency evidence

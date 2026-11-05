@@ -89,7 +89,7 @@ export function GustaftaEcosystem({
             Dari belajar ke pekerjaan nyata
           </h2>
           <p className={compact ? "text-sm text-muted-foreground" : "text-muted-foreground max-w-3xl mx-auto"}>
-            LMS PUB ASPEKINDO memperkuat pembelajaran dan kompetensi. Gustafta membantu melanjutkan
+            PKB ASDAMKINDO memperkuat kompetensi teknik konstruksi. Gustafta membantu melanjutkan
             langkah kerja pada legalitas, sertifikasi, tender, dan proyek.
           </p>
         </div>

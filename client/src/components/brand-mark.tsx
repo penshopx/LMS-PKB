@@ -1,7 +1,7 @@
 import { Building2, HardHat } from "lucide-react";
 
-export const BRAND_NAME = "LMS PUB ASPEKINDO";
-export const BRAND_TAGLINE = "LMS Bisnis Kontraktor";
+export const BRAND_NAME = "PKB ASDAMKINDO";
+export const BRAND_TAGLINE = "Kompetensi Teknik Konstruksi";
 
 type BrandMarkProps = {
   size?: "sm" | "md" | "lg";

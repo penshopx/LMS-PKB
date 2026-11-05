@@ -236,7 +236,7 @@ export const PUB_UNITS: UnitCompetency[] = [
     clusterId: "cluster-smap",
     code: "SMAP-02",
     name: "Identifikasi Risiko Penyuapan",
-    description: "Kemampuan mengidentifikasi, menilai, memprioritaskan, dan memitigasi risiko penyuapan dalam proses bisnis konstruksi.",
+    description: "Kemampuan mengidentifikasi, menilai, memprioritaskan, dan memitigasi risiko penyuapan dalam kegiatan jasa konstruksi.",
     indicators: progressionIndicators("risiko penyuapan", "penilaian dan mitigasi risiko", "kerangka pengendalian risiko penyuapan"),
   },
   {

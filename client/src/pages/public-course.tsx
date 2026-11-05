@@ -104,7 +104,7 @@ export default function PublicCourse() {
           </>
         )}
       </main>
-      <footer className="border-t border-slate-200 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">PUB ASPEKINDO · Pembelajaran bisnis konstruksi</footer>
+      <footer className="border-t border-slate-200 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">PKB ASDAMKINDO · Kompetensi Teknik Konstruksi</footer>
     </div>
   );
 }

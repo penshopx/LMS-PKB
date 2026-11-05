@@ -264,7 +264,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Settings className="h-3 w-3" />
-          <span>LMS PUB ASPEKINDO · LMS Bisnis Kontraktor</span>
+          <span>PKB ASDAMKINDO · Kompetensi Teknik Konstruksi</span>
         </div>
         <LogoutButton />
       </SidebarFooter>

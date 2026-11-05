@@ -2,6 +2,13 @@ import { z } from "zod";
 
 export const referenceDocuments = [
   {
+    id: "PKB-12-2021",
+    title: "Permen PUPR No. 12 Tahun 2021 — Pelaksanaan Pengembangan Keprofesian Berkelanjutan",
+    kind: "Salinan peraturan",
+    pages: 42,
+    caution: "Salinan PDF terlampir. Periksa naskah resmi dan status perubahan terbaru sebelum menjadikan ketentuan sebagai validasi otomatis.",
+  },
+  {
     id: "PU-6-2025",
     title: "Implementasi Permen PU No. 6 Tahun 2025",
     kind: "Materi diskusi",
@@ -13,12 +20,12 @@ export const referenceDocuments = [
     title: "Permendagri No. 7 Tahun 2024 — Barang Milik Daerah",
     kind: "Salinan peraturan",
     pages: 140,
-    caution: "Bukan Permen PUPR No. 7 Tahun 2024 tentang PUB. Baca bersama aturan induk dan perubahan terbaru; teks OCR dapat keliru.",
+    caution: "Mengatur Barang Milik Daerah, bukan Pengembangan Keprofesian Berkelanjutan. Baca bersama aturan induk dan perubahan terbaru; teks OCR dapat keliru.",
   },
 ] as const;
 
 export const lessonReferenceSchema = z.object({
-  sourceId: z.enum(["PU-6-2025", "DAGRI-7-2024"]),
+  sourceId: z.enum(["PKB-12-2021", "PU-6-2025", "DAGRI-7-2024"]),
   pageStart: z.number().int().min(1),
   pageEnd: z.number().int().min(1).optional(),
   section: z.string().trim().max(200).optional(),

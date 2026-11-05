@@ -64,7 +64,7 @@ export default function Register() {
         <section className="relative hidden min-h-[34rem] overflow-hidden rounded-[1.75rem] bg-[#0d2a45] p-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div aria-hidden="true" className="absolute -right-28 -top-28 h-96 w-96 rounded-full border border-sky-200/25" />
           <div aria-hidden="true" className="absolute -right-8 top-[-2rem] h-64 w-64 rounded-full border border-sky-200/25" />
-          <div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Akses publik</p><h1 className="mt-5 max-w-md text-4xl font-bold leading-tight">Belajar praktik bisnis konstruksi, dengan ruang yang tetap terjaga.</h1><p className="mt-5 max-w-md leading-7 text-slate-300">Buat akun pembelajar mandiri untuk menjelajahi kursus yang dibuka oleh PUB ASPEKINDO.</p></div>
+          <div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Akses publik</p><h1 className="mt-5 max-w-md text-4xl font-bold leading-tight">Kembangkan kompetensi teknik konstruksi secara berkelanjutan.</h1><p className="mt-5 max-w-md leading-7 text-slate-300">Buat akun pembelajar mandiri untuk menjelajahi kursus PKB ASDAMKINDO.</p></div>
           <div className="relative space-y-3">
             {["Ringkasan kursus dapat dijelajahi publik", "Materi belajar tetap tersedia setelah masuk", "Data organisasi tidak ditampilkan di katalog"].map((text, index) => <div key={text} className="flex items-center gap-3 rounded-xl bg-white/8 p-4"><span className="font-mono text-sm text-sky-300">0{index + 1}</span><span className="text-sm text-slate-100">{text}</span></div>)}
           </div>

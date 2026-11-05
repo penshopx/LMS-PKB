@@ -82,7 +82,7 @@ export default function Analytics() {
     <div className="p-6 space-y-6" data-testid="page-analytics">
       <div>
         <h1 className="text-2xl font-bold">Analitik & Laporan</h1>
-        <p className="text-muted-foreground">Visualisasi perkembangan pembelajaran bisnis konstruksi pada seluruh domain PUB-ASPEKINDO</p>
+        <p className="text-muted-foreground">Visualisasi perkembangan pembelajaran kompetensi teknik konstruksi di PKB ASDAMKINDO</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

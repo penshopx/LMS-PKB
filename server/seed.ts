@@ -178,7 +178,7 @@ export async function seedDatabase() {
     await synchronizeParticipantRelations(
       new Set(existingParticipants.map(participant => participant.id)),
     );
-    console.log("[seed] PUB-ASPEKINDO baseline catalog synchronized.");
+    console.log("[seed] PKB ASDAMKINDO baseline catalog synchronized.");
     return;
   }
 

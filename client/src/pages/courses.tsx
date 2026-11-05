@@ -202,7 +202,7 @@ function CourseCard({ course, units, quizzes }: { course: ECourse; units?: UnitC
 }
 
 const templateSteps = [
-  { type: "orientation", title: "Orientasi Kompetensi", desc: "Standar, indikator, peran, dan evidensi", placeholder: "Jelaskan kompetensi bisnis konstruksi, indikator perilaku, peran, dan kriteria keberhasilan..." },
+  { type: "orientation", title: "Orientasi Kompetensi", desc: "Standar, indikator, peran, dan evidensi", placeholder: "Jelaskan kompetensi teknik konstruksi, indikator perilaku, peran, dan kriteria keberhasilan..." },
   { type: "context", title: "Konteks Usaha Konstruksi", desc: "Kasus badan usaha atau proyek aktual", placeholder: "Tambahkan studi kasus legalitas, sertifikasi, tender, proyek, atau kepatuhan. LKUT hanya boleh digunakan sebagai konteks kebutuhan belajar..." },
   { type: "microlearning", title: "Regulasi dan Praktik Utama", desc: "Regulasi, video, artikel, dan checklist", placeholder: "Masukkan ringkasan regulasi dan praktik konstruksi yang relevan..." },
   { type: "practice", title: "Praktik Berbasis Pekerjaan", desc: "Tugas pada skenario usaha atau proyek", placeholder: "Jelaskan tugas praktik konstruksi tanpa membuat proses penyusunan atau pelaporan LKUT..." },
@@ -542,8 +542,8 @@ export default function Courses() {
     <div className="p-6 space-y-6" data-testid="page-courses">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">LMS PUB ASPEKINDO</h1>
-          <p className="text-muted-foreground">LMS Bisnis Kontraktor · Bangun dan kelola pembelajaran berbasis kompetensi</p>
+          <h1 className="text-2xl font-bold">PKB ASDAMKINDO</h1>
+          <p className="text-muted-foreground">Kompetensi Teknik Konstruksi · Bangun dan kelola pembelajaran berkelanjutan</p>
         </div>
         <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
           <DialogTrigger asChild>

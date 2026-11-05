@@ -89,7 +89,7 @@ export default function Landing() {
     <div className="min-h-[100dvh] bg-[#f4f8fc] text-[#142c45] dark:bg-[#081827] dark:text-slate-100">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-[#f7fbff]/95 backdrop-blur dark:border-slate-700 dark:bg-[#0a1b2b]/95">
         <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-4 sm:px-7">
-          <Link href="/" className="flex items-center gap-3" aria-label="Beranda PUB ASPEKINDO">
+          <Link href="/" className="flex items-center gap-3" aria-label="Beranda PKB ASDAMKINDO">
             <BrandMark size="md" />
             <span className="hidden flex-col sm:flex"><strong className="text-sm leading-tight">{BRAND_NAME}</strong><span className="text-[11px] text-slate-500 dark:text-slate-400">{BRAND_TAGLINE}</span></span>
           </Link>
@@ -112,9 +112,10 @@ export default function Landing() {
           </div>
           <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-7 sm:py-24 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:py-28">
             <div>
-              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-200/25 bg-sky-100/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-sky-100"><span className="h-1.5 w-1.5 rounded-full bg-sky-300" />Ruang belajar PUB ASPEKINDO</p>
-              <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">Bisnis konstruksi tumbuh dari <span className="text-[#83c8ff]">kompetensi yang tepat.</span></h1>
-              <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">Pembelajaran praktis untuk BUJK dan tenaga kerja konstruksi—kini juga terbuka bagi siapa pun yang ingin memahami usaha jasa konstruksi.</p>
+              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-200/25 bg-sky-100/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-sky-100"><span className="h-1.5 w-1.5 rounded-full bg-sky-300" />PKB ASDAMKINDO</p>
+              <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">Kompetensi teknik konstruksi tumbuh dari <span className="text-[#83c8ff]">pembelajaran berkelanjutan.</span></h1>
+              <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">Pembelajaran praktis untuk tenaga kerja konstruksi dan siapa pun yang ingin mengembangkan kompetensi teknik konstruksi.</p>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-sky-100">Acuan: Permen PUPR No. 12 Tahun 2021 tentang Pelaksanaan Pengembangan Keprofesian Berkelanjutan.</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <a href="#katalog" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#78c5ff] px-5 py-3.5 font-semibold text-[#0c2a46] transition-colors hover:bg-[#a0d8ff]">Jelajahi katalog <ArrowRight className="h-4 w-4" /></a>
                 <Link href="/register" className="inline-flex items-center justify-center rounded-lg border border-white/30 px-5 py-3.5 font-semibold text-white hover:bg-white/10">Buat akun pembelajar</Link>
