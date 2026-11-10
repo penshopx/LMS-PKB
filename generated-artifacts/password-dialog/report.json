@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "Save disabled for empty fields",
+    "11 characters: inline length error, Save disabled, Enter does not submit",
+    "Boundary spaces do not count toward the minimum; valid padded passwords remain untrimmed",
+    "Identical password: visible inline error and disabled Save on mobile, no horizontal overflow",
+    "password123456: policy error and disabled Save",
+    "Mismatched confirmation: inline error and disabled Save",
+    "Escape and outside click close the dialog; reopened fields are cleared",
+    "129 characters: browser limits typing to 128; direct API bypass is rejected",
+    "128 characters: enabled Save, successful UI save, correct stored credential, automatic close",
+    "Normal logout and subsequent login with the 128-character password succeed"
+  ],
+  "runtimeErrors": []
+}
