@@ -10,3 +10,8 @@ dist/
 node_modules/
 .env
 dist/
+attached_assets/
+generated-artifacts/
+dist/
+node_modules/
+.env
