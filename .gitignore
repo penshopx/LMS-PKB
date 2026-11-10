@@ -7,3 +7,6 @@ vite.config.ts.*
 /generated-artifacts/node_modules/
 .env
 dist/
+node_modules/
+.env
+dist/
