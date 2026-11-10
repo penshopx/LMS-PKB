@@ -4,4 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
-/generated-artifacts/
+/generated-artifacts/node_modules/
+.env
+dist/
